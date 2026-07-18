@@ -5,6 +5,11 @@
  * It does not manipulate or load data in any way. Its sole responsibility is to set the
  * next hash name and dispatch an event with the route.
  *
+ * Events:
+ *  -   app:route-changed
+ *
+ * Listenters:
+ *  -   hashchange
  */
 (function () {
   //   All available routes
