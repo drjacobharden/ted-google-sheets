@@ -28,6 +28,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // TODO: Remove later. Currently for compatibility while we migrate to routing.
+  function showTab(name) {
+    window.AppRouter.navigate(name);
+  }
+
   function renderRoute(name) {
     screens.forEach((screen) => {
       screen.hidden = screen.dataset.screen !== name;
@@ -83,9 +88,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  navItems.forEach((item) =>
-    item.addEventListener("click", () => renderRoute(item.dataset.tab)),
-  );
+  //  Listens for a click on a navigation button and routes to its associated route
+  document.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-tab]");
+    if (!item) return;
+
+    event.preventDefault();
+    window.AppRouter.navigate(item.dataset.tab);
+  });
+
+  //  Listen for the change in route from router.js and render the route's data.
+  window.addEventListener("app:route-changed", (event) => {
+    renderRoute(event.detail.route);
+  });
+
   document.querySelectorAll("[data-nav-section-toggle]").forEach((toggle) =>
     toggle.addEventListener("click", () => {
       const section = toggle.closest("[data-nav-section]");
@@ -469,6 +485,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.BudgetUI = {
     renderRoute,
+    showTab,
     loadTransactions,
     initializeData,
     updateConnectionUI,
@@ -480,4 +497,6 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   updateConnectionUI();
   if (!window.OnboardingUI?.isBlocking()) initializeData();
+
+  window.AppRouter.start();
 });
