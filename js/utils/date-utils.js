@@ -27,10 +27,27 @@ const monthFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+const monthNames = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const shortMonthNames = monthNames.map((name) => name.slice(0, 3));
+
 window.DateUtils = {
   toISODate,
   fromISODate,
   longDateFormatter,
   monthFormatter,
   shortDateFormatter,
+  shortMonthNames,
 };
