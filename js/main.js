@@ -28,7 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function showTab(name) {
+  function renderRoute(name) {
     screens.forEach((screen) => {
       screen.hidden = screen.dataset.screen !== name;
     });
@@ -39,6 +39,14 @@ document.addEventListener("DOMContentLoaded", () => {
         ? item.setAttribute("aria-current", "page")
         : item.removeAttribute("aria-current");
     });
+
+    enterRoute(name);
+    updateNavigationSection(name);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function enterRoute(name) {
     if ((name === "transactions" || name === "dashboard") && !state.loaded)
       loadTransactions();
     if (name === "dashboard" || name.startsWith("investment-"))
@@ -54,6 +62,9 @@ document.addEventListener("DOMContentLoaded", () => {
       loadSettings();
       window.UserUI?.load();
     }
+  }
+
+  function updateNavigationSection(name) {
     const activeNav = document.querySelector(`.nav-item[data-tab="${name}"]`);
     const activeSection = activeNav?.closest("[data-nav-section]");
     if (activeSection) {
@@ -70,11 +81,10 @@ document.addEventListener("DOMContentLoaded", () => {
             ?.setAttribute("aria-expanded", "false");
         });
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   navItems.forEach((item) =>
-    item.addEventListener("click", () => showTab(item.dataset.tab)),
+    item.addEventListener("click", () => renderRoute(item.dataset.tab)),
   );
   document.querySelectorAll("[data-nav-section-toggle]").forEach((toggle) =>
     toggle.addEventListener("click", () => {
@@ -458,7 +468,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   window.BudgetUI = {
-    showTab,
+    renderRoute,
     loadTransactions,
     initializeData,
     updateConnectionUI,
