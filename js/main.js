@@ -1,4 +1,43 @@
 document.addEventListener("DOMContentLoaded", () => {
+  let unmountCurrentRoute = null;
+  let referenceDataPromise;
+
+  // Mount the template for the route provided.
+  //  - 1: unmount the currently mounted route if it exists
+  //  - 2: find the template for the new route (error if no template exists)
+  //  - 3: if the template exists, mount its content inside the outlet
+  //  - 4: get the module for the route and mount its associated data and listeners
+  //  - 5: set the unmount to the current route's unmount function so that all listeners can be removed when navigating away
+  function mountTemplate(name) {
+    unmountCurrentRoute?.();
+
+    const outlet = document.getElementById("route-outlet");
+    const template = document.getElementById(`route-${name}`);
+
+    if (!template) {
+      console.error(`Missing template for route: ${name}`);
+      return;
+    }
+
+    outlet.replaceChildren(template.content.cloneNode(true));
+
+    const screen = outlet.querySelector("[data-screen]");
+
+    const routeModules = {
+      categories: window.CategoryRoute,
+      vendors: window.VendorRoute,
+      people: window.PeopleRoute,
+    };
+
+    const routeModule = routeModules[name];
+    routeModule?.mount(screen);
+
+    unmountCurrentRoute = () => {
+      routeModule?.unmount();
+      outlet.replaceChildren();
+    };
+  }
+
   const state = { transactions: [], search: "", type: "all", loaded: false };
   let activeRange = { start: "", end: "", preset: "all" };
 
@@ -47,13 +86,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
     enterRoute(name);
     updateNavigationSection(name);
+    mountTemplate(name);
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function enterRoute(name) {
-    if ((name === "transactions" || name === "dashboard") && !state.loaded)
-      loadTransactions();
+  async function enterRoute(name) {
+    if (name === "dashboard") {
+      await ensureReferenceData();
+
+      await Promise.all([
+        state.loaded ? undefined : loadTransactions(),
+        window.InvestmentUI?.load?.(),
+      ]);
+    }
+
+    if (name === "transactions" && !state.loaded) {
+      await ensureReferenceData();
+      await loadTransactions();
+    }
+
+    if (name.startsWith("investment-")) {
+      await window.InvestmentUI?.load?.();
+    }
+
     if (name === "dashboard" || name.startsWith("investment-"))
       window.InvestmentUI?.load();
     if (name === "new-transaction")
@@ -319,17 +375,28 @@ document.addEventListener("DOMContentLoaded", () => {
     settingsMessage.textContent = "";
   }
 
-  async function initializeData() {
-    try {
-      await window.BudgetAPI.loadReferenceData();
-    } catch (error) {
-      window.dispatchEvent(
-        new CustomEvent("budget:api-warning", {
-          detail: `Couldn’t refresh lists: ${error.message}`,
-        }),
+  function ensureReferenceData() {
+    if (!referenceDataPromise) {
+      referenceDataPromise = window.BudgetAPI.loadReferenceData().catch(
+        (error) => {
+          referenceDataPromise = null;
+
+          window.dispatchEvent(
+            new CustomEvent("budget:api-warning", {
+              detail: `Couldn’t refresh lists: ${error.message}`,
+            }),
+          );
+
+          throw error;
+        },
       );
     }
-    await Promise.all([loadTransactions(), window.InvestmentUI?.load?.()]);
+
+    return referenceDataPromise;
+  }
+
+  async function initializeData() {
+    await ensureReferenceData();
   }
 
   settingsForm.addEventListener("submit", (event) => {

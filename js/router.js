@@ -11,7 +11,12 @@
  * Listenters:
  *  -   hashchange
  */
+
 (function () {
+  const DEFAULT_ROUTE = "transactions";
+  const loadedScripts = new Map();
+  let unmountCurrentRoute = null;
+
   //   All available routes
   const routes = new Set([
     "dashboard",
@@ -29,7 +34,42 @@
     "investment-update",
   ]);
 
-  const DEFAULT_ROUTE = "transactions";
+  // The names of the routes and their associated scripts and modules
+  const routeConfig = {
+    categories: {
+      template: "route-categories",
+      script: "js/routes/categories.js",
+      module: () => window.CategoryRoute,
+    },
+
+    vendors: {
+      template: "route-vendors",
+      script: "js/routes/vendors.js",
+      module: () => window.VendorRoute,
+    },
+  };
+
+  function loadScript(path) {
+    if (loadedScripts.has(path)) {
+      return loadedScripts.get(path);
+    }
+
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+
+      script.src = path;
+      script.onload = resolve;
+      script.onerror = () => {
+        loadedScripts.delete(path);
+        reject(new Error(`Could not load ${path}`));
+      };
+
+      document.head.append(script);
+    });
+
+    loadedScripts.set(path, promise);
+    return promise;
+  }
 
   //   removes the hash from the current hash route to check that it is a valid route
   function currentRoute() {
