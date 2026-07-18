@@ -192,7 +192,7 @@ const dateRangePickerTemplate = () =>
 
     handleEvent(event) {
       if (event.type === "click") {
-        if (event.currentTarget === document && this.contains(event.target)) {
+        if (event.target === document && this.contains(event.target)) {
           return;
         }
 
@@ -202,11 +202,7 @@ const dateRangePickerTemplate = () =>
       }
     }
 
-    clickNum = 0;
-
     #handleClick(event) {
-      this.clickNum += 1;
-
       // Outside element click closes popover
       if (!this.contains(event.target)) {
         this.#close();
