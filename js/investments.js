@@ -312,6 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderMonthList() {
     const month =
       document.getElementById("investment-entry-month").value || currentMonth;
+
     const syncItems = window.BudgetAPI.getSyncItems().filter(
       (item) =>
         item.source === "investmentMonth" && item.record.month === month,
