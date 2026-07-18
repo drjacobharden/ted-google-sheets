@@ -204,7 +204,7 @@ const monthPickerTemplate = ({ alignmentClass }) => `
 
     handleEvent(event) {
       if (event.type === "click") {
-        if (event.target === document && !this.contains(event.target)) {
+        if (event.currentTarget === document && !this.contains(event.target)) {
           console.log("do nothing");
           return;
         }
