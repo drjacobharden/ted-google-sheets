@@ -1,0 +1,1683 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A private, local-first budget tracker connected to Google Sheets."
+    />
+    <title>My Finance</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/shell.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/month-pickers.css" />
+    <link rel="stylesheet" href="css/date-picker.css" />
+    <link rel="stylesheet" href="css/onboarding.css" />
+    <link rel="stylesheet" href="css/branding.css" />
+    <link rel="stylesheet" href="css/navigation-bar.css" />
+    <link rel="stylesheet" href="css/toast.css" />
+    <link rel="stylesheet" href="css/responsiveness.css" />
+
+    <!-- Component imports -->
+    <script src="js/components/date-picker.js" defer></script>
+    <script src="js/components/currency-input.js" defer></script>
+    <script src="js/components/close-button.js" defer></script>
+    <script src="js/components/month-picker.js" defer></script>
+    <script src="js/components/date-range-picker.js" defer></script>
+
+    <!-- Screen imports -->
+    <!-- TODO: Put screen imports here -->
+  </head>
+  <body>
+    <main class="app-shell">
+      <!-- NAVIGATION BAR -->
+      <aside class="sidebar">
+        <!-- Logo at the top left -->
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg
+              width="100%"
+              height="100%"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 11V15M18 9V13M17 4C19.4487 4 20.7731 4.37476 21.4321 4.66544C21.5199 4.70415 21.5638 4.72351 21.6904 4.84437C21.7663 4.91682 21.9049 5.12939 21.9405 5.22809C22 5.39274 22 5.48274 22 5.66274V16.4111C22 17.3199 22 17.7743 21.8637 18.0079C21.7251 18.2454 21.5914 18.3559 21.3319 18.4472C21.0769 18.5369 20.562 18.438 19.5322 18.2401C18.8114 18.1017 17.9565 18 17 18C14 18 11 20 7 20C4.55129 20 3.22687 19.6252 2.56788 19.3346C2.48012 19.2958 2.43624 19.2765 2.3096 19.1556C2.23369 19.0832 2.09512 18.8706 2.05947 18.7719C2 18.6073 2 18.5173 2 18.3373L2 7.58885C2 6.68009 2 6.2257 2.13628 5.99214C2.2749 5.75456 2.40859 5.64412 2.66806 5.55281C2.92314 5.46305 3.43803 5.56198 4.46783 5.75985C5.18862 5.89834 6.04348 6 7 6C10 6 13 4 17 4ZM14.5 12C14.5 13.3807 13.3807 14.5 12 14.5C10.6193 14.5 9.5 13.3807 9.5 12C9.5 10.6193 10.6193 9.5 12 9.5C13.3807 9.5 14.5 10.6193 14.5 12Z"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <span>My Finance</span>
+        </div>
+        <!-- Top portion of the nav bar -->
+        <nav class="sidebar-nav" aria-label="Primary navigation">
+          <button
+            class="nav-item active"
+            type="button"
+            aria-current="page"
+            data-tab="dashboard"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M3 13h8V3H3v10Zm10 8h8V11h-8v10ZM3 21h8v-6H3v6Zm10-12h8V3h-8v6Z"
+              />
+            </svg>
+            <span>Dashboard</span>
+          </button>
+
+          <div class="nav-section" data-nav-section="budgeting">
+            <button
+              class="nav-section-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="budgeting-navigation"
+              data-nav-section-toggle="budgeting"
+            >
+              <span>Budgeting</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m8 10 4 4 4-4" />
+              </svg>
+            </button>
+            <div class="nav-submenu" id="budgeting-navigation">
+              <button
+                class="nav-item nav-subitem"
+                type="button"
+                data-tab="transactions"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5" />
+                </svg>
+                <span>Transactions</span>
+              </button>
+              <button
+                class="nav-item nav-subitem"
+                type="button"
+                data-tab="categories"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 4h7l9 9-7 7-9-9V4Z" />
+                  <circle cx="8" cy="8" r="1" />
+                </svg>
+                <span>Categories</span>
+              </button>
+              <button
+                class="nav-item nav-subitem"
+                type="button"
+                data-tab="vendors"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 9h16v12H4zM3 9l2-6h14l2 6M8 21v-6h8v6" />
+                </svg>
+                <span>Vendors</span>
+              </button>
+              <button
+                class="nav-item nav-subitem"
+                type="button"
+                data-tab="people"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="9" cy="7" r="4" />
+                  <path
+                    d="M2 21v-2a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v2M17 11a4 4 0 0 1 5 4v2"
+                  />
+                </svg>
+                <span>People</span>
+              </button>
+              <button
+                class="nav-item nav-subitem nav-action-item"
+                type="button"
+                data-tab="new-transaction"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 8v8M8 12h8" />
+                </svg>
+                <span>New transaction</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="nav-section" data-nav-section="investments">
+            <button
+              class="nav-section-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="investment-navigation"
+              data-nav-section-toggle="investments"
+            >
+              <span>Investments</span
+              ><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m8 10 4 4 4-4" />
+              </svg>
+            </button>
+            <div class="nav-submenu" id="investment-navigation">
+              <button
+                class="nav-item nav-subitem"
+                type="button"
+                data-tab="investment-overview"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 20h18M5 17l4-5 4 3 6-9M16 6h3v3" />
+                </svg>
+
+                <span>Overview</span>
+              </button>
+              <button
+                class="nav-item nav-subitem"
+                type="button"
+                data-tab="investment-accounts"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 6h16v14H4zM7 6V3h10v3M8 11h8" />
+                </svg>
+                <span>Accounts</span>
+              </button>
+              <button
+                class="nav-item nav-subitem"
+                type="button"
+                data-tab="investment-balances"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 20h16M6 16V9M12 16V4M18 16v-5" />
+                </svg>
+                <span>Balance history</span>
+              </button>
+              <button
+                class="nav-item nav-subitem nav-action-item"
+                type="button"
+                data-tab="investment-update"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 8v8M8 12h8" />
+                </svg>
+                <span>Update balances</span>
+              </button>
+            </div>
+          </div>
+        </nav>
+        <!-- Bottom portion  -->
+        <div class="nav-footer">
+          <button class="nav-item" type="button" data-tab="sync">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M20.453 12.893C20.1752 15.5029 18.6964 17.9487 16.2494 19.3614C12.1839 21.7086 6.98539 20.3157 4.63818 16.2502L4.38818 15.8172M3.54613 11.107C3.82393 8.49711 5.30272 6.05138 7.74971 4.63862C11.8152 2.29141 17.0137 3.68434 19.3609 7.74983L19.6109 8.18285M3.49316 18.0661L4.22521 15.334L6.95727 16.0661M17.0424 7.93401L19.7744 8.66606L20.5065 5.93401"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span>Sync</span>
+            <span class="nav-sync-badge" id="sync-nav-badge" hidden>0</span>
+          </button>
+          <button class="nav-item" type="button" data-tab="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12.0005 15C13.6573 15 15.0005 13.6569 15.0005 12C15.0005 10.3431 13.6573 9 12.0005 9C10.3436 9 9.00049 10.3431 9.00049 12C9.00049 13.6569 10.3436 15 12.0005 15Z"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M9.28957 19.3711L9.87402 20.6856C10.0478 21.0768 10.3313 21.4093 10.6902 21.6426C11.0492 21.8759 11.4681 22.0001 11.8962 22C12.3244 22.0001 12.7433 21.8759 13.1022 21.6426C13.4612 21.4093 13.7447 21.0768 13.9185 20.6856L14.5029 19.3711C14.711 18.9047 15.0609 18.5159 15.5029 18.26C15.9477 18.0034 16.4622 17.8941 16.9729 17.9478L18.4029 18.1C18.8286 18.145 19.2582 18.0656 19.6396 17.8713C20.021 17.6771 20.3379 17.3763 20.5518 17.0056C20.766 16.635 20.868 16.2103 20.8455 15.7829C20.823 15.3555 20.677 14.9438 20.4251 14.5978L19.5785 13.4344C19.277 13.0171 19.1159 12.5148 19.1185 12C19.1184 11.4866 19.281 10.9864 19.5829 10.5711L20.4296 9.40778C20.6814 9.06175 20.8275 8.65007 20.85 8.22267C20.8725 7.79528 20.7704 7.37054 20.5562 7C20.3423 6.62923 20.0255 6.32849 19.644 6.13423C19.2626 5.93997 18.833 5.86053 18.4074 5.90556L16.9774 6.05778C16.4667 6.11141 15.9521 6.00212 15.5074 5.74556C15.0645 5.48825 14.7144 5.09736 14.5074 4.62889L13.9185 3.31444C13.7447 2.92317 13.4612 2.59072 13.1022 2.3574C12.7433 2.12408 12.3244 1.99993 11.8962 2C11.4681 1.99993 11.0492 2.12408 10.6902 2.3574C10.3313 2.59072 10.0478 2.92317 9.87402 3.31444L9.28957 4.62889C9.0825 5.09736 8.73245 5.48825 8.28957 5.74556C7.84479 6.00212 7.33024 6.11141 6.81957 6.05778L5.38513 5.90556C4.95946 5.86053 4.52987 5.93997 4.14844 6.13423C3.76702 6.32849 3.45014 6.62923 3.23624 7C3.02206 7.37054 2.92002 7.79528 2.94251 8.22267C2.96499 8.65007 3.11103 9.06175 3.36291 9.40778L4.20957 10.5711C4.51151 10.9864 4.67411 11.4866 4.67402 12C4.67411 12.5134 4.51151 13.0137 4.20957 13.4289L3.36291 14.5922C3.11103 14.9382 2.96499 15.3499 2.94251 15.7773C2.92002 16.2047 3.02206 16.6295 3.23624 17C3.45036 17.3706 3.76727 17.6712 4.14864 17.8654C4.53001 18.0596 4.95949 18.1392 5.38513 18.0944L6.81513 17.9422C7.3258 17.8886 7.84034 17.9979 8.28513 18.2544C8.72966 18.511 9.08134 18.902 9.28957 19.3711Z"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span>Settings</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- CONTENT AREA -->
+      <section class="workspace">
+        <!-- Toast -->
+        <div class="app-notice" id="app-notice" role="status" hidden>
+          <span id="app-notice-text"></span>
+          <button
+            id="dismiss-app-notice"
+            type="button"
+            aria-label="Dismiss notification"
+          >
+            ×
+          </button>
+        </div>
+        <!-- Profile button on top right -->
+        <header class="topbar">
+          <button
+            class="profile-button"
+            type="button"
+            data-tab="settings"
+            aria-label="Open settings"
+          >
+            <span
+              class="profile-monogram"
+              id="profile-monogram"
+              aria-hidden="true"
+              >?
+            </span>
+            <span class="profile-copy">
+              <strong id="profile-name">Choose user</strong>
+              <small>Settings</small>
+            </span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m8 10 4 4 4-4" />
+            </svg>
+          </button>
+        </header>
+
+        <!-- Main content area -->
+        <div class="content">
+          <!-- Dashboard tab -->
+          <section class="screen" data-screen="dashboard">
+            <div class="page-heading">
+              <p class="eyebrow">Household overview</p>
+              <h1>Dashboard</h1>
+              <p class="heading-copy">
+                Budget surplus and paycheck investing without double-counting
+                manual transfers.
+              </p>
+            </div>
+            <div class="month-range-filter" data-month-range></div>
+            <div
+              class="summary-grid dashboard-summary"
+              id="dashboard-summary"
+              aria-label="Savings summary"
+            ></div>
+            <div class="investment-layout">
+              <section class="ledger-card chart-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Investment balance</h2>
+                    <p>Latest reported balances over time</p>
+                  </div>
+                </div>
+                <div id="dashboard-trend" class="investment-chart"></div>
+              </section>
+              <section class="ledger-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Savings breakdown</h2>
+                    <p>Manual transfers are shown but not added twice.</p>
+                  </div>
+                </div>
+                <div id="dashboard-breakdown" class="breakdown-list"></div>
+              </section>
+            </div>
+          </section>
+          <!-- Transaction list tab -->
+          <section class="screen" data-screen="transactions" hidden>
+            <div class="page-heading heading-row">
+              <div>
+                <p class="eyebrow">Overview</p>
+                <h1>Transactions</h1>
+              </div>
+              <button
+                class="primary-button compact"
+                type="button"
+                data-tab="new-transaction"
+              >
+                <span aria-hidden="true">+</span> Add transaction
+              </button>
+            </div>
+
+            <date-range-picker preset="week"></date-range-picker>
+            <div class="summary-grid" aria-label="Budget summary">
+              <article class="summary-card balance-card">
+                <div class="summary-icon" aria-hidden="true">
+                  <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M6 16C6 18.2091 7.79086 20 10 20H14C16.2091 20 18 18.2091 18 16C18 13.7909 16.2091 12 14 12H10C7.79086 12 6 10.2091 6 8C6 5.79086 7.79086 4 10 4H14C16.2091 4 18 5.79086 18 8M12 2V22"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <p>Net balance</p>
+                  <strong id="summary-balance">$0.00</strong>
+                </div>
+              </article>
+              <article class="summary-card">
+                <div class="summary-icon income-icon" aria-hidden="true">
+                  <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M7 17L17 7M17 7H7M17 7V17"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <p>Income</p>
+                  <strong id="summary-income">$0.00</strong>
+                </div>
+              </article>
+              <article class="summary-card">
+                <div class="summary-icon expense-icon" aria-hidden="true">
+                  <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M7 7L17 17M17 17V7M17 17H7"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <p>Spent</p>
+                  <strong id="summary-expenses">$0.00</strong>
+                </div>
+              </article>
+            </div>
+
+            <div class="ledger-card">
+              <div class="table-header">
+                <div>
+                  <h2>Activity</h2>
+                  <p id="transaction-count">0 transactions</p>
+                </div>
+                <div class="toolbar">
+                  <label class="search-field">
+                    <span class="sr-only">Search transactions</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="11" cy="11" r="6.5" />
+                      <path d="m16 16 4 4" />
+                    </svg>
+                    <input
+                      id="transaction-search"
+                      type="search"
+                      placeholder="Search"
+                    />
+                  </label>
+                  <label>
+                    <span class="sr-only">Filter by type</span>
+                    <select id="type-filter" class="filter-select">
+                      <option value="all">All types</option>
+                      <option value="expense">Expenses</option>
+                      <option value="income">Income</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div
+                id="transaction-state"
+                class="transaction-state"
+                aria-live="polite"
+              >
+                <div class="spinner" aria-hidden="true"></div>
+                <p>Loading your transactions…</p>
+              </div>
+
+              <div class="table-wrap" id="transaction-table-wrap" hidden>
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Date</th>
+                      <th scope="col">Category</th>
+                      <th scope="col">Vendor</th>
+                      <th scope="col">Assignment</th>
+                      <th scope="col">Note</th>
+                      <th scope="col" class="amount-cell">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="transaction-list"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+          <!-- Categories tab -->
+          <section class="screen" data-screen="categories" hidden>
+            <div class="page-heading heading-row">
+              <div>
+                <p class="eyebrow">Organize spending</p>
+                <h1>Categories</h1>
+                <p class="heading-copy">
+                  Manage the labels used to organize your transactions.
+                </p>
+              </div>
+            </div>
+
+            <div class="category-layout">
+              <section
+                class="category-panel"
+                aria-labelledby="category-list-title"
+              >
+                <div class="table-header">
+                  <div>
+                    <h2 id="category-list-title">All categories</h2>
+                    <p id="category-count">0 categories</p>
+                  </div>
+                </div>
+                <div
+                  class="category-list"
+                  id="category-list"
+                  aria-live="polite"
+                ></div>
+              </section>
+
+              <form class="add-category-card" id="category-form" novalidate>
+                <h2>Add a category</h2>
+                <p>Create a reusable category for future expenses.</p>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input
+                    name="categoryName"
+                    type="text"
+                    maxlength="50"
+                    placeholder="e.g. Subscriptions"
+                    required
+                  />
+                </label>
+                <p class="category-form-message" aria-live="polite"></p>
+                <button class="primary-button" type="submit">
+                  Add category
+                </button>
+              </form>
+            </div>
+          </section>
+          <!-- Vendors tab -->
+          <section class="screen" data-screen="vendors" hidden>
+            <div class="page-heading heading-row">
+              <div>
+                <p class="eyebrow">Track payees</p>
+                <h1>Vendors</h1>
+                <p class="heading-copy">
+                  Manage the people and businesses attached to your
+                  transactions.
+                </p>
+              </div>
+            </div>
+
+            <div class="category-layout">
+              <section
+                class="category-panel"
+                aria-labelledby="vendor-list-title"
+              >
+                <div class="table-header">
+                  <div>
+                    <h2 id="vendor-list-title">All vendors</h2>
+                    <p id="vendor-count">0 vendors</p>
+                  </div>
+                  <label class="search-field entity-search-field">
+                    <span class="sr-only">Search vendors</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="11" cy="11" r="6.5" />
+                      <path d="m16 16 4 4" />
+                    </svg>
+                    <input
+                      id="vendor-search"
+                      type="search"
+                      placeholder="Search vendors"
+                    />
+                  </label>
+                </div>
+                <div
+                  class="category-list"
+                  id="vendor-list"
+                  aria-live="polite"
+                ></div>
+              </section>
+              <form class="add-category-card" id="vendor-form" novalidate>
+                <h2>Add a vendor</h2>
+                <p>Create a reusable vendor for future transactions.</p>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input
+                    name="vendorName"
+                    type="text"
+                    maxlength="80"
+                    placeholder="e.g. Local Market"
+                    required
+                  />
+                </label>
+                <p class="vendor-form-message" aria-live="polite"></p>
+                <button class="primary-button" type="submit">Add vendor</button>
+              </form>
+            </div>
+          </section>
+          <!-- People tab -->
+          <section class="screen" data-screen="people" hidden>
+            <div class="page-heading heading-row">
+              <div>
+                <p class="eyebrow">View assignments</p>
+                <h1>People</h1>
+                <p class="heading-copy">
+                  See how spending breaks down across your household.
+                </p>
+              </div>
+            </div>
+
+            <div class="category-layout">
+              <section
+                class="category-panel"
+                aria-labelledby="people-list-title"
+              >
+                <div class="table-header">
+                  <div>
+                    <h2 id="people-list-title">Household assignments</h2>
+                    <p id="people-count">1 assignment</p>
+                  </div>
+                </div>
+                <div
+                  class="category-list"
+                  id="people-list"
+                  aria-live="polite"
+                ></div>
+              </section>
+
+              <form class="add-category-card" id="people-form" novalidate>
+                <h2>Add a person</h2>
+                <p>Add a member to your household.</p>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input
+                    name="personName"
+                    type="text"
+                    maxlength="80"
+                    placeholder="e.g. Alex"
+                    required
+                  />
+                </label>
+                <p class="people-form-message" aria-live="polite"></p>
+                <button class="primary-button" type="submit">Add person</button>
+              </form>
+            </div>
+          </section>
+          <!-- Entity drill down tab -->
+          <section class="screen" data-screen="entity-detail" hidden>
+            <div class="page-heading heading-row">
+              <div>
+                <button
+                  class="back-button"
+                  id="entity-detail-back"
+                  type="button"
+                >
+                  ← Back
+                </button>
+                <p class="eyebrow" id="entity-detail-eyebrow">Details</p>
+                <h1 id="entity-detail-title">Entity</h1>
+              </div>
+              <button
+                class="primary-button compact"
+                id="edit-entity"
+                type="button"
+              >
+                Edit entity
+              </button>
+            </div>
+            <date-range-picker preset="month"></date-range-picker>
+            <div
+              class="summary-grid entity-summary-grid"
+              id="entity-summary-grid"
+              aria-label="Entity summary"
+            ></div>
+            <div class="ledger-card">
+              <div class="table-header">
+                <div>
+                  <h2>Activity</h2>
+                  <p id="entity-transaction-count">0 transactions</p>
+                </div>
+              </div>
+              <div
+                class="transaction-state"
+                id="entity-transaction-state"
+              ></div>
+              <div class="table-wrap" id="entity-transaction-table-wrap" hidden>
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Date</th>
+                      <th scope="col">Category</th>
+                      <th scope="col">Vendor</th>
+                      <th scope="col">Assignment</th>
+                      <th scope="col">Note</th>
+                      <th scope="col" class="amount-cell">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="entity-transaction-list"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+          <!-- Sync tab -->
+          <section class="screen" data-screen="sync" hidden>
+            <div class="page-heading">
+              <p class="eyebrow">Background activity</p>
+              <h1>Sync</h1>
+              <p class="heading-copy">
+                Review changes waiting to be saved to your Google Sheet.
+              </p>
+            </div>
+            <div class="sync-card">
+              <div class="table-header">
+                <div>
+                  <h2>Changes</h2>
+                  <p id="sync-screen-summary">All changes are saved.</p>
+                </div>
+                <button
+                  class="secondary-button compact"
+                  id="retry-all-sync"
+                  type="button"
+                  hidden
+                >
+                  Retry all now
+                </button>
+              </div>
+              <div class="sync-empty" id="sync-empty">
+                <div class="empty-symbol" aria-hidden="true">✓</div>
+                <h3>Everything is up to date</h3>
+                <p>New changes will appear here while they are syncing.</p>
+              </div>
+              <div class="sync-list" id="sync-list" aria-live="polite"></div>
+            </div>
+          </section>
+          <!-- Settings tab -->
+          <section class="screen" data-screen="settings" hidden>
+            <div class="page-heading">
+              <p class="eyebrow">Preferences</p>
+              <h1>Settings</h1>
+              <p class="heading-copy">
+                Manage your profile and connect this app to Google Sheets.
+              </p>
+            </div>
+
+            <div class="settings-grid">
+              <form
+                class="settings-card user-settings-card"
+                id="user-form"
+                novalidate
+              >
+                <div class="settings-card-heading">
+                  <div>
+                    <h2>User profile</h2>
+                    <p>Choose who is using this copy of the app.</p>
+                  </div>
+                  <span
+                    class="profile-monogram settings-monogram"
+                    id="settings-monogram"
+                    aria-hidden="true"
+                    >?</span
+                  >
+                </div>
+
+                <label class="form-field">
+                  <span>Active user</span>
+                  <select id="user-switcher" name="activeUser">
+                    <option value="">Choose a user</option>
+                  </select>
+                  <small
+                    >Users connected to the same Sheet are available on every
+                    computer.</small
+                  >
+                </label>
+
+                <input name="userId" type="hidden" />
+                <div class="user-name-fields">
+                  <label class="form-field">
+                    <span>First name</span>
+                    <input
+                      name="firstName"
+                      type="text"
+                      maxlength="80"
+                      autocomplete="given-name"
+                      required
+                    />
+                  </label>
+                  <label class="form-field">
+                    <span>Last name</span>
+                    <input
+                      name="lastName"
+                      type="text"
+                      maxlength="80"
+                      autocomplete="family-name"
+                      required
+                    />
+                  </label>
+                </div>
+
+                <p class="user-form-message" aria-live="polite"></p>
+                <div class="form-actions left-aligned">
+                  <button class="secondary-button" id="new-user" type="button">
+                    Add another user
+                  </button>
+                  <button class="primary-button" id="save-user" type="submit">
+                    Add user
+                  </button>
+                </div>
+              </form>
+
+              <form class="settings-card" id="connection-form">
+                <div class="settings-card-heading">
+                  <div>
+                    <h2>Google Apps Script</h2>
+                    <p>
+                      Copy the production <strong>Web app URL</strong> from your
+                      Apps Script deployment, then paste it here.
+                    </p>
+                  </div>
+                  <span class="mode-badge" data-connection-label
+                    >Local mode</span
+                  >
+                </div>
+
+                <label class="form-field">
+                  <span>Web app URL</span>
+                  <input
+                    name="endpoint"
+                    type="url"
+                    placeholder="https://script.google.com/macros/s/…/exec"
+                  />
+                  <small
+                    >Keep this URL private. Leave it blank to use browser
+                    storage while developing.</small
+                  >
+                </label>
+
+                <p class="settings-message" aria-live="polite"></p>
+                <div class="form-actions left-aligned">
+                  <button
+                    class="secondary-button"
+                    id="copy-connection"
+                    type="button"
+                    disabled
+                  >
+                    Copy connection URL
+                  </button>
+                  <button
+                    class="secondary-button"
+                    id="test-connection"
+                    type="button"
+                  >
+                    Test connection
+                  </button>
+                  <button class="primary-button" type="submit">
+                    Save settings
+                  </button>
+                </div>
+              </form>
+
+              <aside class="contract-card">
+                <p class="eyebrow">Expected API</p>
+                <h2>Apps Script contract</h2>
+                <p>
+                  The frontend sends normalized transaction and entity actions:
+                </p>
+                <dl>
+                  <div>
+                    <dt>GET</dt>
+                    <dd><code>?action=health</code></dd>
+                  </div>
+                  <div>
+                    <dt>GET</dt>
+                    <dd><code>?action=listTransactions</code></dd>
+                  </div>
+                  <div>
+                    <dt>POST</dt>
+                    <dd>
+                      <code>add/update Transactions</code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>GET</dt>
+                    <dd><code>?action=listUsers</code></dd>
+                  </div>
+                  <div>
+                    <dt>POST</dt>
+                    <dd><code>addUser / updateUser</code></dd>
+                  </div>
+                  <div>
+                    <dt>GET</dt>
+                    <dd>
+                      <code
+                        >listCategories / listVendors / listAssignments</code
+                      >
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>POST</dt>
+                    <dd><code>addEntities / update / archive entity</code></dd>
+                  </div>
+                </dl>
+                <p class="contract-note">
+                  List responses can be a JSON array or
+                  <code>{ "data": [...] }</code>.
+                </p>
+              </aside>
+            </div>
+          </section>
+          <!-- New transaction tab -->
+          <section class="screen" data-screen="new-transaction" hidden>
+            <div class="page-heading">
+              <p class="eyebrow">Record activity</p>
+              <h1>New transaction</h1>
+              <p class="heading-copy">
+                Add a transaction to your budget ledger.
+              </p>
+            </div>
+
+            <form class="transaction-form" novalidate>
+              <fieldset class="type-toggle">
+                <legend>Transaction type</legend>
+                <label>
+                  <input type="radio" name="type" value="expense" checked />
+                  <span>Expense</span>
+                </label>
+                <label>
+                  <input type="radio" name="type" value="income" />
+                  <span>Income</span>
+                </label>
+              </fieldset>
+
+              <div class="form-grid">
+                <currency-input></currency-input>
+                <date-picker name="transaction-date"></date-picker>
+
+                <div class="form-field category-form-field">
+                  <span>Category</span>
+                  <select class="category-select" name="category" required>
+                    <option value="">Select a category</option>
+                  </select>
+                  <div class="inline-category" id="inline-category" hidden>
+                    <label for="inline-category-name">New category name</label>
+                    <div class="inline-category-row">
+                      <input
+                        id="inline-category-name"
+                        type="text"
+                        maxlength="50"
+                        placeholder="e.g. Subscriptions"
+                      />
+                      <div class="inline-entity-actions">
+                        <button
+                          class="inline-cancel-button"
+                          id="cancel-inline-category"
+                          type="button"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          class="secondary-button"
+                          id="save-inline-category"
+                          type="button"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                    <p class="inline-category-message" aria-live="polite"></p>
+                  </div>
+                </div>
+
+                <div class="form-field vendor-form-field">
+                  <span id="vendor-combobox-label">Vendor</span>
+                  <div class="vendor-combobox" id="vendor-combobox">
+                    <input name="vendor" type="hidden" />
+                    <input
+                      id="vendor-combobox-input"
+                      type="text"
+                      maxlength="80"
+                      autocomplete="off"
+                      placeholder="Type a vendor name"
+                      role="combobox"
+                      aria-labelledby="vendor-combobox-label"
+                      aria-autocomplete="list"
+                      aria-expanded="false"
+                      aria-controls="vendor-combobox-list"
+                    />
+                    <div
+                      class="vendor-combobox-list"
+                      id="vendor-combobox-list"
+                      role="listbox"
+                      hidden
+                    ></div>
+                  </div>
+                  <p class="inline-vendor-message" aria-live="polite"></p>
+                </div>
+
+                <div class="form-field assignment-form-field">
+                  <span>Assignment</span>
+                  <select name="assignment" required>
+                    <option value="Shared">Shared</option>
+                  </select>
+                  <div class="inline-person" id="inline-person" hidden>
+                    <label for="inline-person-name">New household member</label>
+                    <div class="inline-person-row">
+                      <input
+                        id="inline-person-name"
+                        type="text"
+                        maxlength="80"
+                        placeholder="e.g. Alex"
+                      />
+                      <div class="inline-entity-actions">
+                        <button
+                          class="inline-cancel-button"
+                          id="cancel-inline-person"
+                          type="button"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          class="secondary-button"
+                          id="save-inline-person"
+                          type="button"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                    <p class="inline-person-message" aria-live="polite"></p>
+                  </div>
+                </div>
+
+                <label class="form-field">
+                  <span>Note <small>(optional)</small></span>
+                  <input
+                    name="notes"
+                    type="text"
+                    maxlength="160"
+                    placeholder="Add a short note"
+                  />
+                </label>
+              </div>
+
+              <div
+                id="transaction-sync-status"
+                class="transaction-sync-status"
+                aria-live="polite"
+              >
+                <span id="transaction-sync-text">All changes saved</span>
+                <div
+                  id="transaction-sync-actions"
+                  class="transaction-sync-actions"
+                  hidden
+                >
+                  <button
+                    id="view-sync-from-form"
+                    class="inline-cancel-button"
+                    type="button"
+                  >
+                    View Sync
+                  </button>
+                </div>
+              </div>
+              <p class="form-message" aria-live="polite"></p>
+              <div class="form-actions">
+                <button
+                  class="secondary-button"
+                  type="button"
+                  data-tab="transactions"
+                >
+                  Cancel
+                </button>
+                <button class="primary-button" type="submit">
+                  Add transaction
+                </button>
+              </div>
+            </form>
+          </section>
+          <!-- Investment overview tab -->
+          <section class="screen" data-screen="investment-overview" hidden>
+            <div class="page-heading">
+              <p class="eyebrow">Long-term savings</p>
+              <h1>Investment overview</h1>
+              <p class="heading-copy">
+                Balances, contributions, and contribution-adjusted growth for
+                retirement planning.
+              </p>
+            </div>
+            <div class="month-range-filter" data-month-range></div>
+            <div class="summary-grid" id="investment-summary"></div>
+            <section class="ledger-card chart-card">
+              <div class="table-header">
+                <div>
+                  <h2>Balance trend</h2>
+                  <p id="investment-coverage">No investment history yet.</p>
+                </div>
+              </div>
+              <div id="investment-trend" class="investment-chart"></div>
+              <div
+                id="investment-allocation"
+                class="investment-allocation"
+                aria-label="Investment allocation"
+              ></div>
+            </section>
+          </section>
+          <!-- Investment accounts tab -->
+          <section class="screen" data-screen="investment-accounts" hidden>
+            <div class="page-heading heading-row">
+              <div>
+                <p class="eyebrow">Investments</p>
+                <h1>Accounts</h1>
+                <p class="heading-copy">
+                  Manage the investment accounts included in household
+                  reporting.
+                </p>
+              </div>
+            </div>
+            <div class="investment-layout">
+              <section class="ledger-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Accounts</h2>
+                    <p id="investment-account-count">0 accounts</p>
+                  </div>
+                </div>
+                <div id="investment-account-list" class="category-list"></div>
+              </section>
+
+              <form class="add-category-card" id="investment-account-form">
+                <h2>Add an account</h2>
+                <p>Create a record of the accounts you invest into.</p>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input
+                    name="name"
+                    type="text"
+                    maxlength="80"
+                    placeholder="e.g. Roth IRA"
+                    required
+                  />
+                </label>
+                <label class="form-field">
+                  <span>Source</span>
+                  <select name="source" required>
+                    <option value="manual">Manual transfer</option>
+                    <option value="paycheck">Paycheck deduction</option>
+                  </select></label
+                >
+
+                <p class="form-footnote">
+                  Paycheck deductions are considered when calculating your total
+                  savings. Manual transfers are not because they come from
+                  savings already counted in income minus spending.
+                </p>
+                <button class="primary-button" type="submit">
+                  Add account
+                </button>
+                <p class="settings-message" role="status"></p>
+              </form>
+            </div>
+          </section>
+          <!-- Investment balances tab -->
+          <section class="screen" data-screen="investment-balances" hidden>
+            <div class="page-heading heading-row">
+              <div>
+                <p class="eyebrow">Investments</p>
+                <h1>Balance history</h1>
+                <p class="heading-copy">
+                  Review every reported account balance and contribution.
+                </p>
+              </div>
+              <button
+                class="secondary-button compact"
+                id="open-investment-import"
+                type="button"
+              >
+                Import history
+              </button>
+            </div>
+            <section class="ledger-card">
+              <div class="table-header">
+                <div>
+                  <h2>Monthly snapshots</h2>
+                  <p id="investment-history-count">0 snapshots</p>
+                </div>
+              </div>
+              <div class="table-wrap" id="investment-history-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th>Account</th>
+                      <th>Source</th>
+                      <th>Contribution</th>
+                      <th class="amount-cell">Ending balance</th>
+                    </tr>
+                  </thead>
+                  <tbody id="investment-history-body"></tbody>
+                </table>
+              </div>
+              <div id="investment-history-empty" class="investment-empty">
+                No monthly balances have been recorded.
+              </div>
+            </section>
+          </section>
+          <!-- Investment update balances tab -->
+          <section class="screen" data-screen="investment-update" hidden>
+            <div class="page-heading">
+              <p class="eyebrow">Investments</p>
+              <h1>Update balances</h1>
+              <p class="heading-copy">
+                Select an account to record its ending balance, contributions,
+                and withdrawals.
+              </p>
+            </div>
+            <section class="ledger-card investment-entry-card">
+              <div class="table-header">
+                <div>
+                  <h2>Monthly update</h2>
+                  <p>
+                    Click an account to edit its month-ending balance and
+                    itemized investment flows.
+                  </p>
+                </div>
+                <div class="investment-period-controls">
+                  <month-picker
+                    id="investment-entry-month"
+                    label="Reporting month"
+                    alignment="right"
+                  ></month-picker>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="investment-grid">
+                  <thead>
+                    <tr>
+                      <th>Account</th>
+                      <th>Ending balance</th>
+                      <th>Net contribution</th>
+                      <th>Entries</th>
+                    </tr>
+                  </thead>
+                  <tbody id="investment-month-list"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <!-- Transaction editor sidebar -->
+    <div class="drawer-overlay" id="transaction-drawer-backdrop" hidden>
+      <aside
+        class="transaction-drawer"
+        id="transaction-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="transaction-drawer-title"
+        tabindex="-1"
+      >
+        <header class="transaction-drawer-header">
+          <div>
+            <p class="eyebrow">Transaction details</p>
+            <h2 id="transaction-drawer-title">Edit transaction</h2>
+          </div>
+          <close-button id="close-transaction-drawer"></close-button>
+        </header>
+        <form
+          id="transaction-edit-form"
+          class="transaction-edit-form"
+          novalidate
+        >
+          <fieldset class="type-toggle">
+            <legend>Transaction type</legend>
+            <label
+              ><input type="radio" name="type" value="expense" /><span
+                >Expense</span
+              ></label
+            >
+            <label
+              ><input type="radio" name="type" value="income" /><span
+                >Income</span
+              ></label
+            >
+          </fieldset>
+          <div class="drawer-form-grid">
+            <currency-input></currency-input>
+            <date-picker name="date"></date-picker>
+
+            <label class="form-field"
+              ><span>Category</span
+              ><select name="categoryId" required></select
+            ></label>
+            <label class="form-field" id="edit-vendor-field"
+              ><span>Vendor</span
+              ><select name="vendorId" required></select
+            ></label>
+            <label class="form-field"
+              ><span>Assignment</span
+              ><select name="assignmentId" required></select
+            ></label>
+            <label class="form-field"
+              ><span>Note <small>(optional)</small></span
+              ><textarea name="notes" maxlength="1000" rows="3"></textarea>
+            </label>
+          </div>
+          <p
+            class="form-message"
+            id="transaction-edit-message"
+            aria-live="polite"
+          ></p>
+          <footer class="transaction-drawer-actions">
+            <button
+              class="secondary-button"
+              id="cancel-transaction-edit"
+              type="button"
+            >
+              Cancel
+            </button>
+            <button class="primary-button" type="submit">Save changes</button>
+          </footer>
+          <div class="transaction-metadata">
+            <p>
+              <span>Transaction ID</span><code id="transaction-edit-id"></code
+              ><button id="copy-transaction-id" type="button">Copy</button>
+            </p>
+            <p id="transaction-created-footnote"></p>
+          </div>
+        </form>
+      </aside>
+    </div>
+    <!-- Entity editor sidebar -->
+    <div class="drawer-overlay" id="entity-drawer-backdrop" hidden>
+      <aside
+        class="transaction-drawer"
+        id="entity-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="entity-drawer-title"
+        tabindex="-1"
+      >
+        <header class="transaction-drawer-header">
+          <div>
+            <p class="eyebrow">Edit details</p>
+            <h2 id="entity-drawer-title">Edit entity</h2>
+          </div>
+          <button
+            class="drawer-close"
+            id="close-entity-drawer"
+            type="button"
+            aria-label="Close entity editor"
+          >
+            ×
+          </button>
+        </header>
+        <form id="entity-edit-form" novalidate>
+          <div class="drawer-form-grid">
+            <label class="form-field"
+              ><span>Name</span
+              ><input name="name" type="text" maxlength="80" required
+            /></label>
+          </div>
+          <p class="form-message" aria-live="polite"></p>
+          <footer class="transaction-drawer-actions">
+            <button
+              class="secondary-button"
+              id="cancel-entity-edit"
+              type="button"
+            >
+              Cancel</button
+            ><button class="primary-button" type="submit">Save changes</button>
+          </footer>
+        </form>
+      </aside>
+    </div>
+    <!-- Investment account right sidebar -->
+    <div
+      class="transaction-drawer-backdrop"
+      id="investment-account-drawer-backdrop"
+      hidden
+    >
+      <aside
+        class="transaction-drawer"
+        id="investment-account-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="investment-account-drawer-title"
+        tabindex="-1"
+      >
+        <header class="transaction-drawer-header">
+          <div>
+            <p class="eyebrow">Account details</p>
+            <h2 id="investment-account-drawer-title">
+              Edit investment account
+            </h2>
+          </div>
+          <button
+            class="drawer-close"
+            id="close-investment-account-drawer"
+            type="button"
+            aria-label="Close account editor"
+          >
+            ×
+          </button>
+        </header>
+        <form id="investment-account-edit-form">
+          <div class="drawer-form-grid">
+            <label class="form-field"
+              ><span>Name</span><input name="name" required /></label
+            ><label class="form-field"
+              ><span>Source</span
+              ><select name="source" required>
+                <option value="manual">Manual transfer</option>
+                <option value="paycheck">Paycheck deduction</option>
+              </select></label
+            >
+          </div>
+          <p class="form-footnote">
+            Paycheck deductions count toward Total savings. Manual transfers
+            allocate savings that the budget has already counted.
+          </p>
+          <div id="investment-account-history" class="account-history"></div>
+          <p class="form-message" role="status"></p>
+          <footer class="transaction-drawer-actions">
+            <button class="secondary-button" type="button" data-account-archive>
+              Archive</button
+            ><button class="secondary-button" type="button" data-account-cancel>
+              Cancel</button
+            ><button class="primary-button" type="submit">Save changes</button>
+          </footer>
+        </form>
+      </aside>
+    </div>
+    <!-- Investment contribution right sidebar -->
+    <div
+      class="transaction-drawer-backdrop"
+      id="investment-month-drawer-backdrop"
+      hidden
+    >
+      <aside
+        class="transaction-drawer investment-month-drawer"
+        id="investment-month-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="investment-month-drawer-title"
+        tabindex="-1"
+      >
+        <header class="transaction-drawer-header">
+          <div>
+            <p class="eyebrow">Monthly investment update</p>
+            <h2 id="investment-month-drawer-title">Account · Month</h2>
+          </div>
+          <button
+            class="drawer-close"
+            id="close-investment-month-drawer"
+            type="button"
+            aria-label="Close monthly investment editor"
+          >
+            ×
+          </button>
+        </header>
+        <form id="investment-month-form" novalidate>
+          <section
+            class="investment-month-conflict"
+            id="investment-month-conflict"
+            hidden
+            aria-live="polite"
+          >
+            <p class="eyebrow">Sync conflict</p>
+            <h3>Google Sheets changed this month</h3>
+            <div class="investment-conflict-comparison">
+              <article>
+                <span>Google Sheet</span
+                ><strong id="investment-month-sheet-balance">$0</strong
+                ><small id="investment-month-sheet-flow"
+                  >$0 net contribution</small
+                >
+              </article>
+              <article>
+                <span>Your draft</span
+                ><strong id="investment-month-draft-balance">$0</strong
+                ><small id="investment-month-draft-flow"
+                  >$0 net contribution</small
+                >
+              </article>
+            </div>
+            <p>
+              Review the editable draft below, use the Sheet values, or save
+              your changes against the latest version.
+            </p>
+            <button
+              class="secondary-button compact"
+              id="investment-month-use-sheet"
+              type="button"
+            >
+              Use Sheet values
+            </button>
+          </section>
+          <label class="form-field"
+            ><span>Ending balance</span
+            ><input
+              name="balance"
+              type="number"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              required
+          /></label>
+          <section
+            class="investment-flow-section"
+            aria-labelledby="investment-contributions-title"
+          >
+            <div>
+              <h3 id="investment-contributions-title">Contributions</h3>
+              <p>Enter each contribution as a positive amount.</p>
+            </div>
+            <div
+              class="investment-flow-list"
+              id="investment-contribution-list"
+            ></div>
+            <button
+              class="text-button"
+              id="add-investment-contribution"
+              type="button"
+            >
+              + Add another contribution
+            </button>
+          </section>
+          <section
+            class="investment-flow-section"
+            aria-labelledby="investment-withdrawals-title"
+          >
+            <div>
+              <h3 id="investment-withdrawals-title">Withdrawals</h3>
+              <p>
+                Enter withdrawals as positive amounts. They are stored as
+                negative flows.
+              </p>
+            </div>
+            <div
+              class="investment-flow-list"
+              id="investment-withdrawal-list"
+            ></div>
+            <button
+              class="text-button"
+              id="add-investment-withdrawal"
+              type="button"
+            >
+              + Add another withdrawal
+            </button>
+          </section>
+          <dl class="investment-flow-totals">
+            <div>
+              <dt>Contributions</dt>
+              <dd id="investment-gross-contributions">$0</dd>
+            </div>
+            <div>
+              <dt>Withdrawals</dt>
+              <dd id="investment-total-withdrawals">$0</dd>
+            </div>
+            <div>
+              <dt>Net contribution</dt>
+              <dd id="investment-net-contribution">$0</dd>
+            </div>
+          </dl>
+          <p
+            class="form-message"
+            id="investment-month-message"
+            role="status"
+          ></p>
+          <footer class="transaction-drawer-actions">
+            <button
+              class="secondary-button"
+              id="cancel-investment-month"
+              type="button"
+            >
+              Cancel</button
+            ><button class="primary-button" type="submit">
+              Save monthly update
+            </button>
+          </footer>
+        </form>
+      </aside>
+    </div>
+    <!-- Import modal -->
+    <div class="overlay" id="investment-import-overlay" hidden>
+      <section
+        class="onboarding-dialog import-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="investment-import-title"
+      >
+        <header class="page-heading" style="margin-bottom: 24px">
+          <p class="eyebrow">Historical data</p>
+          <h1>Import investment history</h1>
+          <p class="heading-copy">
+            Paste CSV or tab-separated rows. Existing account-month records are
+            shown as updates before import.
+          </p>
+        </header>
+
+        <label class="form-field">
+          <span>CSV or pasted table</span>
+          <textarea
+            id="investment-import-text"
+            rows="9"
+            placeholder="Account,Source,Month,Balance,Contribution,Notes"
+          ></textarea>
+        </label>
+        <div id="investment-import-preview" class="import-preview"></div>
+        <p
+          id="investment-import-message"
+          class="settings-message"
+          role="status"
+        ></p>
+        <footer class="onboarding-actions">
+          <button
+            class="secondary-button"
+            id="cancel-investment-import"
+            type="button"
+          >
+            Cancel</button
+          ><button
+            class="secondary-button"
+            id="preview-investment-import"
+            type="button"
+          >
+            Preview</button
+          ><button
+            class="primary-button"
+            id="confirm-investment-import"
+            type="button"
+            disabled
+          >
+            Import rows
+          </button>
+        </footer>
+      </section>
+    </div>
+    <!-- Toast notifications -->
+    <div
+      class="toast-stack"
+      id="toast-stack"
+      aria-live="polite"
+      aria-atomic="false"
+    ></div>
+    <!-- Onboarding modal -->
+    <div class="overlay" id="onboarding-overlay" hidden>
+      <section
+        class="onboarding-dialog"
+        id="onboarding-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
+        aria-describedby="onboarding-description"
+        tabindex="-1"
+      >
+        <header class="onboarding-header">
+          <div class="onboarding-header-row">
+            <div class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M12 3.25c-4.83 0-8.75 3.92-8.75 8.75S7.17 20.75 12 20.75 20.75 16.83 20.75 12 16.83 3.25 12 3.25Z"
+                />
+                <path
+                  d="M7.5 12h9M12 7.5v9"
+                  fill="none"
+                  stroke="white"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+            <div>
+              <p class="eyebrow">Welcome to My Finance</p>
+              <h1 id="onboarding-title">Set up your budget</h1>
+            </div>
+          </div>
+          <div>
+            <p id="onboarding-description">
+              Getting started requires connecting your app to a private Google
+              Sheet.
+            </p>
+          </div>
+        </header>
+
+        <ol
+          class="onboarding-stepper"
+          id="onboarding-stepper"
+          aria-label="Setup progress"
+          hidden
+        ></ol>
+        <div class="onboarding-content" id="onboarding-content"></div>
+        <p
+          class="onboarding-message"
+          id="onboarding-message"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <footer class="onboarding-actions" id="onboarding-actions" hidden>
+          <button class="secondary-button" id="onboarding-back" type="button">
+            Back
+          </button>
+          <button class="primary-button" id="onboarding-next" type="button">
+            Continue
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- Scripts: Utils and API must be listed first! -->
+    <script src="js/utils/app-utils.js"></script>
+    <script src="js/utils/date-utils.js"></script>
+
+    <script src="js/api.js"></script>
+
+    <script src="js/investments-api.js"></script>
+    <script src="js/onboarding.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/vendors.js"></script>
+    <script src="js/people.js"></script>
+    <script src="js/entity-detail.js"></script>
+    <script src="js/entity-editor.js"></script>
+    <script src="js/form.js"></script>
+    <script src="js/transaction-editor.js"></script>
+    <script src="js/sync.js"></script>
+    <script src="js/investments.js"></script>
+  </body>
+</html>

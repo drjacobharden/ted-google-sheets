@@ -1,0 +1,37 @@
+/* 
+The wrapper around the logo and title in the top left corner of the screen
+    - Uses a flex display with a horizontal row layout
+    - Items are aligned horizontally along their midline
+    - There is a 14 pixel gap between the logo and text
+    - The container has a minimum height of 92 pixels but can grow if needed
+    - There is no padding vertically and 28 pixels of padding horizontally
+    - There is a 1 pixel border at the bottom
+    - The font size for the title is 21 pixels with a semibold 700 weight and a tight letter spacing
+*/
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 92px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* 
+Wrapper around the logo icon
+    - Uses a 38 x 38 pixel box (the icon is 24 x 24 so this gives some space around it)
+    - It cannot grow or shrink and renders at its defined size
+    - The icon is placed in the center of the box
+    - The fill color on the icon is the accent color. If using a stroke based icon, change "fill" to "color"
+*/
+.brand-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  fill: var(--accent);
+}

@@ -1,0 +1,280 @@
+/* 
+The container for the navigation side bar on the left hand side.
+    - Uses a flex display with a vertical column layout
+    - Items cannot overflow outside the container and will be clipped
+    - It uses the sidebar background token from tokens.css for its color
+    - It has a small 1 pixel wide border on the right side
+*/
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--sidebar-background);
+  border-right: 1px solid var(--border);
+}
+
+/* 
+The area underneath the app title containing the navigation buttons
+    - Uses a flex display with a vertical column layout
+    - Items are spaced out with 6 pixels between them
+    - Has 20 pixels of padding vertically and 16 pixels of padding horizontally
+*/
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 20px 16px;
+}
+
+/* 
+The navigation button box
+    - Uses a flex display with a horizontal row layout
+    - Stretches its width to take up 100% of the available horizontal space
+    - Has a minimum height of 52 pixels but can grow larger if necessary
+    - Aligns items in the box on their midline
+    - Spaces items out horizontally by 14 pixels
+    - Has no padding vertically and 18 pixels of padding horizontally
+    - Uses a small rounded corner with no border
+    - By default, will have a transparent background
+        - Will change on hover via the state modifier
+    - Text inside the button will be 15 pixels in size and a medium weight
+    - Text inside aligns to the left hand side
+    - When the background and text colors change, they animate with a 160 millisecond transition
+
+The active state is triggered when it is clicked and the tab associated with the button is focused
+    - The background and inner text colors change to a darker version
+
+The hover state is triggered whenever the mouse pointer hovers over the button
+    - The background changes from transparent to a muted light accent color
+*/
+.nav-item {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.nav-item:hover {
+  background: var(--accent-soft-muted);
+}
+
+.nav-item.active {
+  color: var(--accent-dark-muted);
+  background: var(--accent-soft);
+}
+
+/* 
+The base style for the icon in a navigation button. Submenu buttons will modify this via their own styling below.
+    - Size is 22 x 22 pixels
+    - Then icon cannot grow or shrink and renders initially as its fixed size.
+    - The stroke width is 1.7 pixels wide
+    - The free ends of the icon are rounded
+
+The active state is triggered when it is clicked and the tab associated with the button is focused
+    - The icon color goes to the dark accent color
+*/
+.nav-item svg {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: var(--accent-muted);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-item.active svg {
+  stroke: var(--accent-dark);
+}
+
+/* 
+A cluster of navigation buttons underneath a toggle (ie Budgeting and Investments)
+    - Uses a grid layout with both columns and rows
+    - Spaces items out by 4 pixels both horizontally and vertically
+    - Has 4 pixels of separation from elements above it via the margin top
+*/
+.nav-section {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* 
+The toggle button that expands or collapses the section of navigation buttons
+    - Uses a flex display with a horizontal row layout
+    - Stretches to fill 100% of the available space
+    - Has a minimum hieght of 36 pixels but can grow larger if needed
+    - Aligns items horizontally along their midline
+    - Places items at the edges of the container and then puts equal space between them
+    - Has no vertical padding but 18 pixels of horizontal padding
+    - Has no border or background
+    - Items inside the toggle use the dark accent color by default
+        - Will change on hover
+    - Text inside will be 11 pixels in size with a bold 800 font and a small letter spacing
+    - Text inside is aligned to the left hand side
+    - Text inside will be made uppercase
+
+Hover state
+    - The color will change from the default accent-dark to the primary text color
+*/
+.nav-section-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.nav-section-toggle:hover {
+  color: var(--text);
+}
+
+/* 
+The toggle icon on the right side of the toggle
+    - The size is 16 x 16 pixels
+    - It has no background
+    - The stroke (outline) inherits the color from the nav-section-toggle color prop
+    - The free ends of the svg are round
+    - The stroke width is 2 pixels wide
+    - It will animate its transition over 160 milliseconds
+
+When the nav section moves into the collapsed state, the icon will rotate
+    - 90 degree rotation
+*/
+.nav-section-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  transition: transform 160ms ease;
+}
+
+.nav-section.collapsed .nav-section-toggle svg {
+  transform: rotate(-90deg);
+}
+
+/* 
+The inner container holding under the toggle holding each of the navigation buttons
+    - Uses a grid layout with both columns and rows
+    - Separates items both horizontally and vertically with a 3 pixel gap
+
+When the nav section moves into the collapsed state, the submenu disappears
+    - Display transitions to none to make the menu disappear
+*/
+.nav-submenu {
+  display: grid;
+  gap: 3px;
+}
+
+.nav-section.collapsed .nav-submenu {
+  display: none;
+}
+
+/* 
+The buttons inside the column under the toggle. Inherits the styling from the nav-item overwrites the properties listed.
+    - The minimum height is reduced from 52 pixels to 44 pixels
+    - The padding on the left side of the button is increased to 28 pixels to create a more pushed in effect under the menu
+    - The font size is reduced to 14 pixels
+*/
+.nav-subitem {
+  min-height: 44px;
+  padding-left: 28px;
+  font-size: 14px;
+}
+
+/* 
+The icon inside the submenu button
+    - The size is reduced from 22 x 22 to 20 x 20 so it appears slightly smaller
+*/
+.nav-subitem svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* 
+The action buttons at the bottom of the submenu that tell the user to do something (ie Add a transaction).
+Inherits the nav-item and nav-subitem styles and overwrites the listed props.
+    - The text color changes to the dark accent
+    - The text is a semibold 700 font
+*/
+.nav-action-item {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+/* 
+The icon for the nav action buttons.
+Inherits the nav-item svg and nav-subitem svg styles and overwrites the listed props.
+    - The stroke color changes to the dark accent
+*/
+.nav-action-item svg {
+  stroke: var(--accent-dark);
+}
+
+/* 
+The footer section of the navigation bar holding the settings and sync buttons
+    - The auto on margin-top pushes it down to the bottom
+    - Pads the top and bottom by 18 pixels and the sides by 16 pixels
+    - Has a 1 pixel wide border at the top
+*/
+.nav-footer {
+  margin-top: auto;
+  padding: 18px 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* 
+The number that appears on the right side of the sync button when items are syncing
+    - Has a minimum width of 22 pixels but can grow wider
+    - Auto on margin-left pushes it all the way over to the right side
+    - Has a 2 pixel vertical padding and 7 pixel horizontal padding
+    - Fully rounded pill shape via the border-radius being so high
+    - The color of the text inside is the inverse text color
+    - The font size is 11 pixels and a semibold 750 font weight
+    - The text aligns itself to the center
+    - By default, the background is the standard accent color
+        - The failed state makes this the danger color
+*/
+.nav-sync-badge {
+  min-width: 22px;
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--inverse-text);
+  font-size: 11px;
+  font-weight: 750;
+  text-align: center;
+  background: var(--accent);
+}
+
+.nav-sync-badge.failed {
+  background: var(--danger);
+}

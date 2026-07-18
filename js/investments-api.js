@@ -1,0 +1,217 @@
+(function () {
+  const KEYS = Object.freeze({
+    accounts: "myFinance.investmentAccounts.v1",
+    balances: "myFinance.investmentBalances.v1",
+    contributions: "myFinance.investmentContributions.v1",
+    monthOutbox: "myFinance.investmentMonthOutbox.v1",
+    accountOutbox: "myFinance.investmentAccountOutbox.v1",
+    legacySnapshotsV2: "myFinance.investmentSnapshots.v2",
+    legacySnapshotsV1: "myFinance.investmentSnapshots.v1",
+    legacyOutboxV2: "myFinance.investmentSnapshotOutbox.v2",
+    legacyOutboxV1: "myFinance.investmentSnapshotOutbox.v1",
+  });
+  const RETRY_DELAYS = [2000, 5000, 15000, 30000, 60000];
+  let syncPromise = null;
+  let retryTimer = null;
+
+  const read = (key) => { try { const value = JSON.parse(localStorage.getItem(key)); return Array.isArray(value) ? value : []; } catch { return []; } };
+  const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+  const uuid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`;
+  const now = () => new Date().toISOString();
+  const offline = () => typeof navigator !== "undefined" && navigator.onLine === false;
+  const emit = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
+  const activeUser = () => window.BudgetAPI.getActiveUser();
+  const endpoint = () => window.BudgetAPI.getConfig().endpoint;
+  const monthKey = (accountId, month) => `${accountId}|${month}`;
+
+  async function request(action, body) {
+    const url = endpoint();
+    if (!url) throw new Error("No Apps Script URL is configured.");
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action, ...body }), redirect: "follow" });
+    if (!response.ok) throw new Error(`Request failed (${response.status}).`);
+    const payload = await response.json();
+    if (payload?.ok === false) { const error = new Error(payload.error || "The Sheet returned an error."); error.isApiError = true; throw error; }
+    return payload?.data ?? payload;
+  }
+
+  function migrateAccount(account) {
+    return { id: account.id, name: account.name, source: ["paycheck", "manual"].includes(account.source) ? account.source : "manual", active: account.active !== false, createdAt: account.createdAt, updatedAt: account.updatedAt };
+  }
+  function migrateBalance(record) {
+    return { id: record.id, accountId: record.accountId, month: record.month, balance: Number(record.balance || 0), notes: record.notes || "", createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
+  }
+  function migrateContribution(record) {
+    return { id: record.id, accountId: record.accountId, month: record.month, amount: Number(record.amount || 0), createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
+  }
+  function legacyContribution(snapshot) {
+    if (snapshot.contribution !== undefined) return Number(snapshot.contribution || 0);
+    return Number(snapshot.employeeContribution || 0) + Number(snapshot.employerContribution || 0) + Number(snapshot.manualContribution || 0) - Number(snapshot.withdrawals || 0);
+  }
+  function derivedContributionId(id) {
+    const compact = String(id).replace(/-/g, "").split("");
+    if (compact.length !== 32) return uuid();
+    compact[0] = ((parseInt(compact[0], 16) + 1) % 16).toString(16); compact[12] = "4"; compact[16] = "8";
+    return `${compact.slice(0, 8).join("")}-${compact.slice(8, 12).join("")}-${compact.slice(12, 16).join("")}-${compact.slice(16, 20).join("")}-${compact.slice(20).join("")}`;
+  }
+  function monthFromSnapshot(snapshot) {
+    if (!snapshot) return null;
+    const balance = migrateBalance(snapshot);
+    const amount = legacyContribution(snapshot);
+    const contributions = amount === 0 ? [] : [migrateContribution({ ...snapshot, id: derivedContributionId(snapshot.id), amount })];
+    return { accountId: snapshot.accountId, month: snapshot.month, balance, contributions };
+  }
+  function migrateAccountOutbox(items) {
+    return items.map((item) => ({ ...item, status: item.status === "syncing" ? "pending" : item.status, nextRetryAt: item.status === "syncing" ? 0 : item.nextRetryAt, record: migrateAccount(item.record) }));
+  }
+  function migrateMonthOutbox(items) {
+    return items.map((item) => ({ ...item, status: item.status === "syncing" ? "pending" : item.status, nextRetryAt: item.status === "syncing" ? 0 : item.nextRetryAt, revision: Math.max(1, Number(item.revision) || 1), draft: normalizeMonth(item.draft), base: normalizeMonth(item.base), current: normalizeMonth(item.current) }));
+  }
+  function normalizeMonth(value) {
+    if (!value) return null;
+    return { accountId: value.accountId, month: value.month, balance: value.balance ? migrateBalance(value.balance) : null, contributions: (value.contributions || []).map(migrateContribution) };
+  }
+  function migrateLocalStorage() {
+    if (localStorage.getItem(KEYS.balances) === null) {
+      const snapshots = read(KEYS.legacySnapshotsV2).length ? read(KEYS.legacySnapshotsV2) : read(KEYS.legacySnapshotsV1);
+      write(KEYS.balances, snapshots.map(migrateBalance));
+      write(KEYS.contributions, snapshots.flatMap((snapshot) => monthFromSnapshot(snapshot).contributions));
+    }
+    if (localStorage.getItem(KEYS.contributions) === null) write(KEYS.contributions, []);
+    if (localStorage.getItem(KEYS.monthOutbox) === null) {
+      const legacy = read(KEYS.legacyOutboxV2).length ? read(KEYS.legacyOutboxV2) : read(KEYS.legacyOutboxV1);
+      const migrated = legacy.map((item) => ({
+        id: item.record.id, accountId: item.record.accountId, month: item.record.month,
+        draft: monthFromSnapshot(item.record), base: monthFromSnapshot(item.base), current: monthFromSnapshot(item.current),
+        status: item.status === "syncing" ? "pending" : item.status, attempts: item.attempts || 0,
+        nextRetryAt: item.status === "syncing" ? 0 : item.nextRetryAt || 0, error: item.error || "", failureCode: item.failureCode || "", revision: Math.max(1, Number(item.revision) || 1),
+      }));
+      write(KEYS.monthOutbox, migrated);
+      const localBalances = read(KEYS.balances).map(migrateBalance); const localContributions = read(KEYS.contributions).map(migrateContribution);
+      migrated.filter((item) => item.failureCode === "conflict" && item.current).forEach((item) => applyMonthToArrays(localBalances, localContributions, item.current));
+      write(KEYS.balances, localBalances); write(KEYS.contributions, localContributions);
+    }
+    [KEYS.legacySnapshotsV2, KEYS.legacySnapshotsV1, KEYS.legacyOutboxV2, KEYS.legacyOutboxV1].forEach((key) => localStorage.removeItem(key));
+  }
+  migrateLocalStorage();
+
+  function accounts() { return read(KEYS.accounts).map(migrateAccount).sort((a, b) => a.name.localeCompare(b.name)); }
+  function balances() { return read(KEYS.balances).map(migrateBalance).sort((a, b) => a.month.localeCompare(b.month)); }
+  function contributions() { return read(KEYS.contributions).map(migrateContribution).sort((a, b) => String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id))); }
+  function accountOutbox() { return migrateAccountOutbox(read(KEYS.accountOutbox)); }
+  function monthOutbox() { return migrateMonthOutbox(read(KEYS.monthOutbox)); }
+  function hasUnsynced() { return accountOutbox().length > 0 || monthOutbox().length > 0; }
+  function hydrateAccount(account) { return migrateAccount(account); }
+  function hydrateBalance(balance) { const account = accounts().find((item) => item.id === balance.accountId); return { ...migrateBalance(balance), accountName: account?.name || "Unknown", source: account?.source || "manual" }; }
+  function hydrateContribution(record) { const account = accounts().find((item) => item.id === record.accountId); return { ...migrateContribution(record), accountName: account?.name || "Unknown", source: account?.source || "manual" }; }
+  function monthData(accountId, month) { return { accountId, month, balance: balances().find((item) => item.accountId === accountId && item.month === month) || null, contributions: contributions().filter((item) => item.accountId === accountId && item.month === month) }; }
+  function hydrateMonth(value) { if (!value) return null; const account = accounts().find((item) => item.id === value.accountId); return { ...normalizeMonth(value), accountName: account?.name || "Unknown", source: account?.source || "manual" }; }
+  function snapshots() {
+    return balances().map((balance) => ({ ...hydrateBalance(balance), contribution: contributions().filter((item) => item.accountId === balance.accountId && item.month === balance.month).reduce((sum, item) => sum + item.amount, 0) }));
+  }
+  function applyMonthToArrays(balanceRecords, contributionRecords, value) {
+    if (!value) return;
+    for (let index = balanceRecords.length - 1; index >= 0; index -= 1) if (balanceRecords[index].accountId === value.accountId && balanceRecords[index].month === value.month) balanceRecords.splice(index, 1);
+    for (let index = contributionRecords.length - 1; index >= 0; index -= 1) if (contributionRecords[index].accountId === value.accountId && contributionRecords[index].month === value.month) contributionRecords.splice(index, 1);
+    if (value.balance) balanceRecords.push(migrateBalance(value.balance));
+    (value.contributions || []).forEach((item) => contributionRecords.push(migrateContribution(item)));
+  }
+  function applyLocalMonth(value) { const balanceRecords = balances(); const contributionRecords = contributions(); applyMonthToArrays(balanceRecords, contributionRecords, value); write(KEYS.balances, balanceRecords); write(KEYS.contributions, contributionRecords); }
+
+  async function load() {
+    if (endpoint()) {
+      const [serverAccounts, serverBalances, serverContributions] = await Promise.all([request("listInvestmentAccounts", {}), request("listInvestmentBalances", {}), request("listInvestmentContributions", {})]);
+      const pendingAccounts = new Map(accountOutbox().map((item) => [item.record.id, item.record]));
+      write(KEYS.accounts, [...serverAccounts.filter((item) => !pendingAccounts.has(item.id)), ...pendingAccounts.values()]);
+      const localBalances = serverBalances.map(migrateBalance); const localContributions = serverContributions.map(migrateContribution); const outbox = monthOutbox(); let repaired = false;
+      outbox.forEach((item) => {
+        const serverMonth = { accountId: item.accountId, month: item.month, balance: localBalances.find((entry) => entry.accountId === item.accountId && entry.month === item.month) || null, contributions: localContributions.filter((entry) => entry.accountId === item.accountId && entry.month === item.month) };
+        if (item.failureCode === "conflict") { if (JSON.stringify(item.current) !== JSON.stringify(serverMonth)) { item.current = serverMonth; repaired = true; } applyMonthToArrays(localBalances, localContributions, serverMonth); }
+        else applyMonthToArrays(localBalances, localContributions, item.draft);
+      });
+      write(KEYS.balances, localBalances); write(KEYS.contributions, localContributions); if (repaired) write(KEYS.monthOutbox, outbox);
+    }
+    emit("budget:investments-changed");
+    return { accounts: accounts().map(hydrateAccount), balances: balances().map(hydrateBalance), contributions: contributions().map(hydrateContribution) };
+  }
+
+  function validateAccount(input) {
+    const name = String(input.name || "").trim(); if (!name) throw new Error("Enter an account name.");
+    const source = String(input.source || "").toLowerCase(); if (!["paycheck", "manual"].includes(source)) throw new Error("Choose paycheck deduction or manual transfer.");
+    return { id: input.id || uuid(), name, source, active: input.active !== false, createdAt: input.createdAt || now(), updatedAt: now() };
+  }
+  function addAccount(input) {
+    const record = validateAccount(input); const duplicate = accounts().find((item) => item.active !== false && item.name.toLowerCase() === record.name.toLowerCase()); if (duplicate) return hydrateAccount(duplicate);
+    write(KEYS.accounts, [...accounts(), record]); if (endpoint()) { write(KEYS.accountOutbox, [...accountOutbox(), { record, status: "pending", attempts: 0, nextRetryAt: 0, error: "" }]); scheduleNext(); }
+    emit("budget:investments-changed"); emit("budget:sync-changed"); return hydrateAccount(record);
+  }
+  async function updateAccount(input) { const existing = accounts().find((item) => item.id === input.id); if (!existing) throw new Error("That investment account could not be found."); const record = validateAccount({ ...existing, ...input, id: existing.id, createdAt: existing.createdAt }); const saved = endpoint() ? await request("updateInvestmentAccount", { account: record }) : record; write(KEYS.accounts, accounts().map((item) => item.id === saved.id ? saved : item)); emit("budget:investments-changed"); return hydrateAccount(saved); }
+  async function archiveAccount(id) { if (monthOutbox().some((item) => item.accountId === id)) throw new Error("Sync or discard this account’s pending monthly updates first."); const saved = endpoint() ? await request("archiveInvestmentAccount", { id }) : { ...accounts().find((item) => item.id === id), active: false }; write(KEYS.accounts, accounts().map((item) => item.id === id ? saved : item)); emit("budget:investments-changed"); return saved; }
+
+  function validateMonthInput(input, base) {
+    const user = activeUser(); if (!user) throw new Error("Choose an app user first.");
+    const month = String(input.month || ""); if (!/^\d{4}-\d{2}$/.test(month) || Number(month.slice(5)) < 1 || Number(month.slice(5)) > 12) throw new Error("Choose a reporting month.");
+    if (!accounts().some((account) => account.id === input.accountId && account.active !== false)) throw new Error("Choose an active investment account.");
+    const numericBalance = Number(input.balance); if (!Number.isFinite(numericBalance) || numericBalance < 0) throw new Error("Enter a nonnegative ending balance.");
+    const timestamp = now(); const baseBalance = base?.balance || null;
+    const balance = { id: baseBalance?.id || input.balanceId || uuid(), accountId: input.accountId, month, balance: Math.round(numericBalance * 100) / 100, notes: String(input.notes || "").trim(), createdAt: baseBalance?.createdAt || timestamp, createdBy: baseBalance?.createdBy || user.id, updatedAt: timestamp, updatedBy: user.id };
+    const known = new Map([...(base?.contributions || []), ...(input.existingContributions || [])].map((item) => [item.id, item]));
+    const flowRecords = (input.contributions || []).filter((item) => item.amount !== "" && Number(item.amount) !== 0).map((item) => {
+      const amount = Number(item.amount); if (!Number.isFinite(amount) || amount === 0) throw new Error("Contribution and withdrawal amounts must be positive values.");
+      const existing = item.id ? known.get(item.id) : null;
+      return { id: item.id || uuid(), accountId: input.accountId, month, amount: Math.round(amount * 100) / 100, createdAt: existing?.createdAt || timestamp, createdBy: existing?.createdBy || user.id, updatedAt: timestamp, updatedBy: user.id };
+    });
+    return { accountId: input.accountId, month, balance, contributions: flowRecords };
+  }
+  function queueMonth(input) {
+    const outbox = monthOutbox(); const key = monthKey(input.accountId, input.month); const index = outbox.findIndex((item) => monthKey(item.accountId, item.month) === key); const pending = index >= 0 ? outbox[index] : null;
+    if (pending?.failureCode === "conflict") throw new Error("Review this month’s Sheet conflict before saving another change.");
+    const base = pending?.base || monthData(input.accountId, input.month); const draft = validateMonthInput(input, pending?.draft || base);
+    const operation = { id: pending?.id || uuid(), accountId: input.accountId, month: input.month, draft, base, current: null, revision: (pending?.revision || 0) + 1, status: "pending", attempts: 0, nextRetryAt: 0, error: "", failureCode: "" };
+    applyLocalMonth(draft); if (endpoint()) { if (index >= 0) outbox[index] = operation; else outbox.push(operation); write(KEYS.monthOutbox, outbox); scheduleNext(); }
+    emit("budget:investments-changed"); emit("budget:sync-changed"); return hydrateMonth(draft);
+  }
+  function queueSnapshots(inputs) { return inputs.map((input) => { const existing = monthData(input.accountId, input.month); const amount = Number(input.contribution || 0); return queueMonth({ accountId: input.accountId, month: input.month, balance: input.balance, notes: input.notes, balanceId: existing.balance?.id || input.id, existingContributions: existing.contributions, contributions: amount === 0 ? [] : [{ id: existing.contributions.length === 1 ? existing.contributions[0].id : "", amount }] }); }); }
+  function getConflict(id) { const item = monthOutbox().find((entry) => entry.id === id && entry.failureCode === "conflict"); return item ? { id, draft: hydrateMonth(item.draft), current: hydrateMonth(item.current), base: hydrateMonth(item.base) } : null; }
+  function resolveConflict(id, input) { const outbox = monthOutbox(); const index = outbox.findIndex((item) => item.id === id && item.failureCode === "conflict"); if (index < 0) throw new Error("That investment conflict is no longer available."); const item = outbox[index]; if (!item.current) throw new Error("Refresh investments before resolving this conflict."); const originalIds = new Set((item.base?.contributions || []).map((flow) => flow.id)); const draftIds = new Set((input.contributions || []).map((flow) => flow.id).filter(Boolean)); const remoteAdditions = item.current.contributions.filter((flow) => !originalIds.has(flow.id) && !draftIds.has(flow.id)); const draft = validateMonthInput({ ...input, accountId: item.accountId, month: item.month, existingContributions: item.draft.contributions, contributions: [...(input.contributions || []), ...remoteAdditions] }, item.current); outbox[index] = { ...item, draft, base: item.current, current: null, revision: item.revision + 1, status: "pending", attempts: 0, nextRetryAt: 0, error: "", failureCode: "" }; applyLocalMonth(draft); write(KEYS.monthOutbox, outbox); emit("budget:investments-changed"); emit("budget:sync-changed"); scheduleNext(); return hydrateMonth(draft); }
+
+  function remapAccount(oldId, record) { write(KEYS.accounts, accounts().filter((item) => item.id !== oldId && item.id !== record.id).concat(record)); write(KEYS.balances, balances().map((item) => item.accountId === oldId ? { ...item, accountId: record.id } : item)); write(KEYS.contributions, contributions().map((item) => item.accountId === oldId ? { ...item, accountId: record.id } : item)); write(KEYS.monthOutbox, monthOutbox().map((item) => item.accountId === oldId ? { ...item, accountId: record.id, draft: { ...item.draft, accountId: record.id, balance: { ...item.draft.balance, accountId: record.id }, contributions: item.draft.contributions.map((flow) => ({ ...flow, accountId: record.id })) } } : item)); }
+  function retryDelay(attempts) { return RETRY_DELAYS[Math.min(Math.max(attempts - 1, 0), RETRY_DELAYS.length - 1)]; }
+  function pendingSchedule() { const blocked = new Set(accountOutbox().map((item) => item.record.id)); return [...accountOutbox(), ...monthOutbox().filter((item) => !blocked.has(item.accountId))].filter((item) => item.status === "pending").map((item) => Math.max(0, Number(item.nextRetryAt || 0) - Date.now())); }
+  function scheduleNext() { if (retryTimer) clearTimeout(retryTimer); retryTimer = null; if (offline() || !endpoint()) return; const delays = pendingSchedule(); if (delays.length) retryTimer = setTimeout(sync, Math.min(...delays)); }
+  function transportFailure(items, key, error) { const sent = new Map(items.map((item) => [item.id || item.record.id, item])); const source = key === KEYS.monthOutbox ? monthOutbox() : accountOutbox(); write(key, source.map((item) => { const sentItem = sent.get(item.id || item.record.id); if (!sentItem || (key === KEYS.monthOutbox && item.revision !== sentItem.revision)) return item; const attempts = (item.attempts || 0) + 1; return { ...item, status: "pending", attempts, nextRetryAt: Date.now() + retryDelay(attempts), error: error.message }; })); emit("budget:sync-retry-scheduled", { error: error.message }); }
+  function wireOperation(item) {
+    const baseFlows = new Map((item.base?.contributions || []).map((flow) => [flow.id, flow])); const draftFlows = new Map(item.draft.contributions.map((flow) => [flow.id, flow]));
+    return { id: item.id, accountId: item.accountId, month: item.month, balance: { record: item.draft.balance, base: item.base?.balance || null }, upserts: [...draftFlows.values()].map((record) => ({ record, base: baseFlows.get(record.id) || null })), deletes: [...baseFlows.values()].filter((record) => !draftFlows.has(record.id)).map((record) => ({ id: record.id, base: record })) };
+  }
+  async function sync() {
+    if (syncPromise || offline() || !endpoint()) return syncPromise; if (!pendingSchedule().some((delay) => delay <= 0)) { scheduleNext(); return null; }
+    let changed = false;
+    syncPromise = (async () => {
+      const accountBatch = accountOutbox().filter((item) => item.status === "pending" && (!item.nextRetryAt || item.nextRetryAt <= Date.now())).slice(0, 50);
+      if (accountBatch.length) {
+        const ids = new Set(accountBatch.map((item) => item.record.id)); write(KEYS.accountOutbox, accountOutbox().map((item) => ids.has(item.record.id) ? { ...item, status: "syncing" } : item)); emit("budget:sync-changed");
+        try { const result = await request("addInvestmentAccounts", { accounts: accountBatch.map((item) => item.record) }); (result.reconciled || []).forEach((item) => { remapAccount(item.requestedId, item.record); changed = true; }); const successful = new Set([...(result.saved || []).map((item) => item.id), ...(result.reconciled || []).map((item) => item.requestedId)]); const failed = new Map((result.failed || []).map((item) => [item.id, item])); write(KEYS.accountOutbox, accountOutbox().filter((item) => !successful.has(item.record.id)).map((item) => failed.has(item.record.id) ? { ...item, status: "failed", error: failed.get(item.record.id).error } : item)); if (successful.size) emit("budget:sync-succeeded", { count: successful.size }); if (failed.size) emit("budget:sync-failed", { count: failed.size }); }
+        catch (error) { transportFailure(accountBatch, KEYS.accountOutbox, error); return; }
+      }
+      const blocked = new Set(accountOutbox().map((item) => item.record.id)); const batch = monthOutbox().filter((item) => item.status === "pending" && !blocked.has(item.accountId) && (!item.nextRetryAt || item.nextRetryAt <= Date.now())).slice(0, 50); if (!batch.length) return;
+      const sent = new Map(batch.map((item) => [item.id, item])); write(KEYS.monthOutbox, monthOutbox().map((item) => sent.has(item.id) && item.revision === sent.get(item.id).revision ? { ...item, status: "syncing" } : item)); emit("budget:sync-changed");
+      try {
+        const result = await request("saveInvestmentMonths", { months: batch.map(wireOperation) }); const saved = new Map((result.saved || []).map((item) => [item.id, normalizeMonth(item)])); const failed = new Map((result.failed || []).map((item) => [item.id, item])); const next = [];
+        monthOutbox().forEach((item) => { const sentItem = sent.get(item.id); if (!sentItem) { next.push(item); return; } const confirmed = saved.get(item.id); if (item.revision !== sentItem.revision) { if (confirmed) { item.base = confirmed; applyLocalMonth(item.draft); } next.push({ ...item, status: "pending", nextRetryAt: 0 }); return; } if (confirmed) { applyLocalMonth(confirmed); changed = true; return; } const failure = failed.get(item.id); if (!failure) { next.push({ ...item, status: "pending", nextRetryAt: 0 }); return; } const current = normalizeMonth(failure.current); if (failure.code === "conflict" && current) { applyLocalMonth(current); changed = true; } next.push({ ...item, status: "failed", error: failure.error, failureCode: failure.code || "", current }); });
+        write(KEYS.monthOutbox, next); if (saved.size) emit("budget:sync-succeeded", { count: saved.size }); if (failed.size) emit("budget:sync-failed", { count: failed.size });
+      } catch (error) { transportFailure(batch, KEYS.monthOutbox, error); }
+    })().finally(() => { syncPromise = null; emit("budget:sync-changed"); if (changed) emit("budget:investments-changed"); scheduleNext(); }); return syncPromise;
+  }
+
+  function syncItems() { const item = (source, entry) => { const record = source === "investmentAccount" ? hydrateAccount(entry.record) : { ...hydrateMonth(entry.draft), balance: entry.draft.balance?.balance || 0 }; return { key: `${source}:${entry.id || entry.record.id}`, source, id: entry.id || entry.record.id, status: entry.status, error: entry.error, failureCode: entry.failureCode, attempts: entry.attempts || 0, nextRetryAt: entry.nextRetryAt || 0, retrying: !offline() && entry.status === "pending" && entry.attempts > 0, waitingForOnline: offline() && entry.status === "pending", record, current: source === "investmentMonth" ? hydrateMonth(entry.current) : null }; }; return [...accountOutbox().map((entry) => item("investmentAccount", entry)), ...monthOutbox().map((entry) => item("investmentMonth", entry))]; }
+  function retry(source, id) { const key = source === "investmentAccount" ? KEYS.accountOutbox : KEYS.monthOutbox; const items = source === "investmentAccount" ? accountOutbox() : monthOutbox(); write(key, items.map((item) => (item.id || item.record.id) === id && item.status !== "syncing" && item.failureCode !== "conflict" ? { ...item, status: "pending", nextRetryAt: 0, error: "", failureCode: "" } : item)); emit("budget:sync-changed"); scheduleNext(); }
+  function discard(source, id) { if (source === "investmentAccount") { if (monthOutbox().some((item) => item.accountId === id)) throw new Error("Discard dependent monthly updates first."); write(KEYS.accountOutbox, accountOutbox().filter((item) => item.record.id !== id)); write(KEYS.accounts, accounts().filter((item) => item.id !== id)); } else { const item = monthOutbox().find((entry) => entry.id === id); write(KEYS.monthOutbox, monthOutbox().filter((entry) => entry.id !== id)); const restore = item?.current || item?.base; if (restore) applyLocalMonth(restore); } emit("budget:sync-changed"); emit("budget:investments-changed"); scheduleNext(); }
+
+  function calculate(transactions, range) { const within = (month) => (!range?.start || month >= range.start) && (!range?.end || month <= range.end); const startDate = range?.start ? `${range.start}-01` : ""; const endDate = range?.end ? `${range.end}-31` : ""; const tx = transactions.filter((item) => (!startDate || item.date >= startDate) && (!endDate || item.date <= endDate)); const income = tx.filter((item) => item.type === "income").reduce((sum, item) => sum + Number(item.amount || 0), 0); const spending = tx.filter((item) => item.type !== "income").reduce((sum, item) => sum + Number(item.amount || 0), 0); const accountSources = new Map(accounts().map((account) => [account.id, account.source])); const period = contributions().filter((item) => within(item.month)); const paycheckContributions = period.filter((item) => accountSources.get(item.accountId) === "paycheck").reduce((sum, item) => sum + item.amount, 0); const manualContributions = period.filter((item) => accountSources.get(item.accountId) !== "paycheck").reduce((sum, item) => sum + item.amount, 0); const budgetSurplus = income - spending; return { income, spending, budgetSurplus, paycheckContributions, manualContributions, totalSavings: budgetSurplus + paycheckContributions }; }
+  function calculateGrowth(openingBalance, endingBalance, periodFlows) { if (openingBalance === null || openingBalance === undefined || endingBalance === null || endingBalance === undefined) return null; return Number(endingBalance) - Number(openingBalance) - periodFlows.reduce((sum, item) => sum + Number(item.amount ?? item.contribution ?? 0), 0); }
+
+  const originalSyncItems = window.BudgetAPI.getSyncItems.bind(window.BudgetAPI); window.BudgetAPI.getSyncItems = () => [...originalSyncItems(), ...syncItems()];
+  window.InvestmentAPI = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, addAccount, updateAccount, archiveAccount, queueMonth, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard };
+  window.addEventListener("online", () => { write(KEYS.accountOutbox, accountOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); write(KEYS.monthOutbox, monthOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); sync(); });
+  window.addEventListener("offline", () => { if (retryTimer) clearTimeout(retryTimer); retryTimer = null; emit("budget:sync-changed"); }); scheduleNext();
+})();

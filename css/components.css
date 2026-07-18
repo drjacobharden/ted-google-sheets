@@ -1,0 +1,121 @@
+/* 
+Small string of text that sits above a page title
+    - Has a 7 pixel gap on the bottom to separate it from the text below
+    - Uses the dark accent color
+    - Font size is 11 pixels and weight is a semibold 700
+    - All letters are uppercase
+*/
+.eyebrow {
+  margin: 0 0 7px;
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* 
+The big large text acting as the main title for the page. This only affects the h1 tag inside a page-heading div.
+    - No margin
+    - Font size is 26 pixels and the weight is a semibold 700
+    - The line height is 1.2 and the letter spacing is brought in slightly tight
+*/
+.page-heading h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+/* 
+The muted paragraph text that sits below a page title.
+    - There is 9 pixels of top margin separating it from the content above
+    - The text color is muted so it is faded out a bit
+    - The font size is 15 pixels
+*/
+.heading-copy {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* 
+The background blur that lays over the top of the screen when a modal or sidebar opens up.
+    - Position fixed makes this fixed in place while the inset of 0 makes it take up the whole screen
+    - Z index makes it sit on top of everything
+    - Uses a grid layout with both columns and rows
+    - Items are placed in the center of the screen
+    - 24 pixels of padding are on each side
+    - Nothing can overflow on the y axis
+    - The background is a blur, semitransparent dark color
+
+The modal overlay is slightly more blurred than the drawer since we don't want to lose the context of what we're working on
+as much when opening a drawer for editing.
+*/
+.drawer-overlay,
+.overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow-y: auto;
+  background: rgba(28, 31, 29, 0.58);
+  backdrop-filter: blur(7px);
+}
+
+.drawer-overlay {
+  backdrop-filter: blur(4px);
+}
+
+/* 
+Wrapper around titles for tables.
+    - Uses a flex display with a row based layout
+    - Has a minimum height of 82 pixels but can grow larger
+    - Items are aligned horizontally along their midline
+    - Items are laid out at the edges of the container with equal space between them
+    - Items are separated by a 20 pixel gap
+    - There are 15 pixels of vertical padding and 20 pixels of horizontal padding
+    - There is 1 pixel wide bottom border
+*/
+.table-header {
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 
+The title for the table
+    - Uses a 17 pixel font size with the standard weight
+    - Letter spacing is slightly compressed
+    - There are 4 pixels of bottom margin
+*/
+.table-header h2 {
+  margin: 0 0 4px;
+  font-size: var(--text-large);
+  letter-spacing: -0.02em;
+}
+
+/* 
+The subtitle text for the table
+    - Uses a muted text color and a small font size
+    - No margin so that the only spacing comes from the title itself
+*/
+.table-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-small);
+}
+
+/* 
+The 
+*/
+.month-range-filter {
+  margin: 22px 0;
+}
