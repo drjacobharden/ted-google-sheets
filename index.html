@@ -274,6 +274,8 @@
 
         <!-- Main content area -->
         <div class="content">
+          <div id="route-outlet"></div>
+
           <!-- Dashboard tab -->
           <section class="screen" data-screen="dashboard">
             <div class="page-heading">
@@ -440,55 +442,57 @@
             </div>
           </section>
           <!-- Categories tab -->
-          <section class="screen" data-screen="categories" hidden>
-            <div class="page-heading heading-row">
-              <div>
-                <p class="eyebrow">Organize spending</p>
-                <h1>Categories</h1>
-                <p class="heading-copy">
-                  Manage the labels used to organize your transactions.
-                </p>
-              </div>
-            </div>
-
-            <div class="category-layout">
-              <section
-                class="category-panel"
-                aria-labelledby="category-list-title"
-              >
-                <div class="table-header">
-                  <div>
-                    <h2 id="category-list-title">All categories</h2>
-                    <p id="category-count">0 categories</p>
-                  </div>
+          <template id="route-categories">
+            <section class="screen" data-screen="categories">
+              <div class="page-heading heading-row">
+                <div>
+                  <p class="eyebrow">Organize spending</p>
+                  <h1>Categories</h1>
+                  <p class="heading-copy">
+                    Manage the labels used to organize your transactions.
+                  </p>
                 </div>
-                <div
-                  class="category-list"
-                  id="category-list"
-                  aria-live="polite"
-                ></div>
-              </section>
+              </div>
 
-              <form class="add-category-card" id="category-form" novalidate>
-                <h2>Add a category</h2>
-                <p>Create a reusable category for future expenses.</p>
-                <label class="form-field">
-                  <span>Name</span>
-                  <input
-                    name="categoryName"
-                    type="text"
-                    maxlength="50"
-                    placeholder="e.g. Subscriptions"
-                    required
-                  />
-                </label>
-                <p class="category-form-message" aria-live="polite"></p>
-                <button class="primary-button" type="submit">
-                  Add category
-                </button>
-              </form>
-            </div>
-          </section>
+              <div class="category-layout">
+                <section
+                  class="category-panel"
+                  aria-labelledby="category-list-title"
+                >
+                  <div class="table-header">
+                    <div>
+                      <h2 id="category-list-title">All categories</h2>
+                      <p id="category-count">0 categories</p>
+                    </div>
+                  </div>
+                  <div
+                    class="category-list"
+                    id="category-list"
+                    aria-live="polite"
+                  ></div>
+                </section>
+
+                <form class="add-category-card" id="category-form" novalidate>
+                  <h2>Add a category</h2>
+                  <p>Create a reusable category for future expenses.</p>
+                  <label class="form-field">
+                    <span>Name</span>
+                    <input
+                      name="categoryName"
+                      type="text"
+                      maxlength="50"
+                      placeholder="e.g. Subscriptions"
+                      required
+                    />
+                  </label>
+                  <p class="category-form-message" aria-live="polite"></p>
+                  <button class="primary-button" type="submit">
+                    Add category
+                  </button>
+                </form>
+              </div>
+            </section>
+          </template>
           <!-- Vendors tab -->
           <section class="screen" data-screen="vendors" hidden>
             <div class="page-heading heading-row">
@@ -1671,9 +1675,11 @@
     <script src="js/users.js"></script>
 
     <script src="js/router.js"></script>
-
     <script src="js/main.js"></script>
-    <script src="js/categories.js"></script>
+
+    <script src="js/routes/categories.js"></script>
+
+    <!-- <script src="js/categories.js"></script> -->
     <script src="js/vendors.js"></script>
     <script src="js/people.js"></script>
     <script src="js/entity-detail.js"></script>
