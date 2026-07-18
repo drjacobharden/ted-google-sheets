@@ -1,0 +1,77 @@
+/**
+ *
+ * This file translates between route names and URLs.
+ *
+ * It does not manipulate or load data in any way. Its sole responsibility is to set the
+ * next hash name and dispatch an event with the route.
+ *
+ */
+(function () {
+  //   All available routes
+  const routes = new Set([
+    "dashboard",
+    "transactions",
+    "categories",
+    "vendors",
+    "people",
+    "entity-detail",
+    "sync",
+    "settings",
+    "new-transaction",
+    "investment-overview",
+    "investment-accounts",
+    "investment-balances",
+    "investment-update",
+  ]);
+
+  const DEFAULT_ROUTE = "transactions";
+
+  //   removes the hash from the current hash route to check that it is a valid route
+  function currentRoute() {
+    const name = location.hash.replace(/^#\/?/, "").split("?")[0];
+    return routes.has(name) ? name : DEFAULT_ROUTE;
+  }
+
+  //   validates the route and dispatches an event saying the route has changed
+  function navigate(name) {
+    const destination = routes.has(name) ? name : DEFAULT_ROUTE;
+    const nextHash = `#/${destination}`;
+
+    if (location.hash === nextHash) {
+      window.dispatchEvent(
+        new CustomEvent("app:route-changed", {
+          detail: { route: destination },
+        }),
+      );
+      return;
+    }
+
+    location.hash = `/${destination}`;
+  }
+
+  //   Announces that a new route has been loaded
+  function announceRoute() {
+    window.dispatchEvent(
+      new CustomEvent("app:route-changed", {
+        detail: { route: currentRoute() },
+      }),
+    );
+  }
+
+  //    Adds a listenter to the page waiting for a hashChange event
+  function start() {
+    window.addEventListener("hashchange", announceRoute);
+
+    if (!location.hash) {
+      navigate(DEFAULT_ROUTE);
+    } else {
+      announceRoute();
+    }
+  }
+
+  window.AppRouter = {
+    navigate,
+    currentRoute,
+    start,
+  };
+})();
