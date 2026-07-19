@@ -41,7 +41,6 @@
       script: "js/routes/categories.js",
       module: () => window.CategoryRoute,
     },
-
     vendors: {
       template: "route-vendors",
       script: "js/routes/vendors.js",
