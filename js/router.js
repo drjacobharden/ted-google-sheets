@@ -53,6 +53,12 @@
       script: "js/routes/people.js",
       module: () => window.PeopleRoute,
     },
+
+    transactions: {
+      template: "route-transactions",
+      script: "js/routes/transactions.js",
+      module: () => window.TransactionsRoute,
+    },
   };
 
   function loadScript(path) {
