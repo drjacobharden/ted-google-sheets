@@ -19,7 +19,7 @@ const dateRangePickerTemplate = () =>
         Custom
       </button>
     </div>
-    <div class="range-calendar-popover" >
+    <div class="range-calendar-popover" hidden>
       <div class="calendar-header">
         <button type="button" data-range-previous aria-label="Previous month">
           <svg width="90%" height="90%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
