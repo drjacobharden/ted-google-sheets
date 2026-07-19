@@ -41,10 +41,17 @@
       script: "js/routes/categories.js",
       module: () => window.CategoryRoute,
     },
+
     vendors: {
       template: "route-vendors",
       script: "js/routes/vendors.js",
       module: () => window.VendorRoute,
+    },
+
+    people: {
+      template: "route-people",
+      script: "js/routes/people.js",
+      module: () => window.PeopleRoute,
     },
   };
 

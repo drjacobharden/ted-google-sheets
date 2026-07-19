@@ -52,7 +52,7 @@
     }
 
     // Gets the transaction count per vendor and renders the list
-    function loadVendorsWithCounts() {
+    function load() {
       usage = new Map();
 
       const transactions = window.BudgetUI?.getTransactions() || [];
@@ -147,7 +147,7 @@
     window.addEventListener("budget:transaction-saved", load);
 
     // Run an initial render on mount
-    loadVendorsWithCounts();
+    load();
 
     // Set the cleanup to remove the listeners
     cleanup = () => {
@@ -168,7 +168,7 @@
     cleanup = null;
   }
 
-  window.CategoryRoute = {
+  window.VendorRoute = {
     mount,
     unmount,
   };

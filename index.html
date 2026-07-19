@@ -495,7 +495,7 @@
           </template>
           <!-- Vendors tab -->
           <template id="route-vendors">
-            <section class="screen" data-screen="vendors" hidden>
+            <section class="screen" data-screen="vendors">
               <div class="page-heading heading-row">
                 <div>
                   <p class="eyebrow">Track payees</p>
@@ -558,53 +558,57 @@
             </section>
           </template>
           <!-- People tab -->
-          <section class="screen" data-screen="people" hidden>
-            <div class="page-heading heading-row">
-              <div>
-                <p class="eyebrow">View assignments</p>
-                <h1>People</h1>
-                <p class="heading-copy">
-                  See how spending breaks down across your household.
-                </p>
-              </div>
-            </div>
-
-            <div class="category-layout">
-              <section
-                class="category-panel"
-                aria-labelledby="people-list-title"
-              >
-                <div class="table-header">
-                  <div>
-                    <h2 id="people-list-title">Household assignments</h2>
-                    <p id="people-count">1 assignment</p>
-                  </div>
+          <template id="route-people">
+            <section class="screen" data-screen="people">
+              <div class="page-heading heading-row">
+                <div>
+                  <p class="eyebrow">View assignments</p>
+                  <h1>People</h1>
+                  <p class="heading-copy">
+                    See how spending breaks down across your household.
+                  </p>
                 </div>
-                <div
-                  class="category-list"
-                  id="people-list"
-                  aria-live="polite"
-                ></div>
-              </section>
+              </div>
 
-              <form class="add-category-card" id="people-form" novalidate>
-                <h2>Add a person</h2>
-                <p>Add a member to your household.</p>
-                <label class="form-field">
-                  <span>Name</span>
-                  <input
-                    name="personName"
-                    type="text"
-                    maxlength="80"
-                    placeholder="e.g. Alex"
-                    required
-                  />
-                </label>
-                <p class="people-form-message" aria-live="polite"></p>
-                <button class="primary-button" type="submit">Add person</button>
-              </form>
-            </div>
-          </section>
+              <div class="category-layout">
+                <section
+                  class="category-panel"
+                  aria-labelledby="people-list-title"
+                >
+                  <div class="table-header">
+                    <div>
+                      <h2 id="people-list-title">Household assignments</h2>
+                      <p id="people-count">1 assignment</p>
+                    </div>
+                  </div>
+                  <div
+                    class="category-list"
+                    id="people-list"
+                    aria-live="polite"
+                  ></div>
+                </section>
+
+                <form class="add-category-card" id="people-form" novalidate>
+                  <h2>Add a person</h2>
+                  <p>Add a member to your household.</p>
+                  <label class="form-field">
+                    <span>Name</span>
+                    <input
+                      name="personName"
+                      type="text"
+                      maxlength="80"
+                      placeholder="e.g. Alex"
+                      required
+                    />
+                  </label>
+                  <p class="people-form-message" aria-live="polite"></p>
+                  <button class="primary-button" type="submit">
+                    Add person
+                  </button>
+                </form>
+              </div>
+            </section>
+          </template>
           <!-- Entity drill down tab -->
           <section class="screen" data-screen="entity-detail" hidden>
             <div class="page-heading heading-row">
@@ -1683,10 +1687,11 @@
 
     <script src="js/routes/categories.js"></script>
     <script src="js/routes/vendors.js"></script>
+    <script src="js/routes/people.js"></script>
 
     <!-- <script src="js/categories.js"></script> -->
     <!-- <script src="js/vendors.js"></script> -->
-    <script src="js/people.js"></script>
+    <!-- <script src="js/people.js"></script> -->
     <script src="js/entity-detail.js"></script>
     <script src="js/entity-editor.js"></script>
     <script src="js/form.js"></script>
