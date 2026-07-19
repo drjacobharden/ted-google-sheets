@@ -5,23 +5,27 @@
     // References to the form, list, and message
     const categoryForm = root.querySelector("#category-form");
     const categoryList = root.querySelector("#category-list");
+    const categoryCount = root.querySelector("#category-count");
     const formMessage = categoryForm.querySelector(".category-form-message");
+    let usage = new Map();
 
-    /** Render the category list from the spreadsheet data
-     *
-     */
+    //  Render the category list from the spreadsheet data
     function render() {
       const categories = window.BudgetAPI.listCategories({ type: "expense" });
-      document.getElementById("category-count").textContent =
-        `${categories.length} ${categories.length === 1 ? "category" : "categories"}`;
+
+      const count = categories.length;
+      const label = categories.length === 1 ? "category" : "categories";
+      categoryCount.textContent = `${count} ${label}`;
 
       categoryList.innerHTML = categories
         .map((category) => {
           const count = usage.get(category.id) || 0;
+
           const sync = window.BudgetAPI.getEntitySyncStatus(
             "category",
             category.id,
           );
+
           const syncControls = sync
             ? `<div class="entity-sync-state ${sync.status}"><span>${sync.status === "failed" ? "Needs attention" : "Pending"}</span>${sync.status === "failed" ? `<button type="button" data-entity-action="retry" data-entity-id="${category.id}">Retry</button><button type="button" data-entity-action="remove" data-entity-id="${category.id}">Remove</button>` : ""}</div>`
             : "";
@@ -34,9 +38,23 @@
         .join("");
     }
 
-    /** Handle submission of the form
-     *
-     */
+    // Load in all the transactions and set the counts for each category
+    function load() {
+      usage = new Map();
+      const transactions = window.BudgetUI?.getTransactions() || [];
+
+      transactions
+        .filter((transaction) => transaction.type !== "income")
+        .forEach((transaction) => {
+          const key = transaction.categoryId;
+          usage.set(key, (usage.get(key) || 0) + 1);
+        });
+
+      render();
+    }
+
+    //  Handle form submission
+    //  If the form is submitted, a new category is added
     async function handleSubmit(event) {
       event.preventDefault();
       formMessage.textContent = "";
@@ -62,9 +80,8 @@
       }
     }
 
-    /** Handle clicks inside the list
-     *
-     */
+    //  Handle clicks inside the list
+    //  if the user clicks an item in the list, it opens the detail screen for that category
     function handleClick(event) {
       const button = event.target.closest("[data-entity-action]");
       if (!button) {
@@ -90,20 +107,46 @@
       }
     }
 
+    // Handle keyboard use
+    // if the user hits enter while on the list, it will open the detail screen
+    function handleKeydown(event) {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+
+      if (event.target.closest("[data-entity-action]")) {
+        return;
+      }
+
+      const row = event.target.closest("[data-entity-id]");
+      if (!row) return;
+
+      event.preventDefault();
+
+      window.EntityDetailUI?.open("category", row.dataset.entityId);
+    }
+
     //  Listen to the submission and click events
     //  Rerender if the categories change
     categoryForm.addEventListener("submit", handleSubmit);
     categoryList.addEventListener("click", handleClick);
+    categoryList.addEventListener("keydown", handleKeydown);
     window.addEventListener("budget:categories-changed", render);
+    window.addEventListener("budget:entity-sync-changed", render);
+    window.addEventListener("budget:transaction-sync-changed", load);
+    window.addEventListener("budget:transaction-saved", load);
 
-    // Run an initial render on mount
-    render();
+    // Run an initial render on mount that gets all of the counts for each category
+    load();
 
     // Set the cleanup to remove the listeners
     cleanup = () => {
       categoryForm.removeEventListener("submit", handleSubmit);
       categoryList.removeEventListener("click", handleClick);
       window.removeEventListener("budget:categories-changed", render);
+      window.removeEventListener("budget:entity-sync-changed", render);
+      window.removeEventListener("budget:transaction-sync-changed", load);
+      window.removeEventListener("budget:transaction-saved", load);
     };
   }
 
