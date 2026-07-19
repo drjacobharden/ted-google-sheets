@@ -494,65 +494,69 @@
             </section>
           </template>
           <!-- Vendors tab -->
-          <section class="screen" data-screen="vendors" hidden>
-            <div class="page-heading heading-row">
-              <div>
-                <p class="eyebrow">Track payees</p>
-                <h1>Vendors</h1>
-                <p class="heading-copy">
-                  Manage the people and businesses attached to your
-                  transactions.
-                </p>
+          <template id="route-vendors">
+            <section class="screen" data-screen="vendors" hidden>
+              <div class="page-heading heading-row">
+                <div>
+                  <p class="eyebrow">Track payees</p>
+                  <h1>Vendors</h1>
+                  <p class="heading-copy">
+                    Manage the people and businesses attached to your
+                    transactions.
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div class="category-layout">
-              <section
-                class="category-panel"
-                aria-labelledby="vendor-list-title"
-              >
-                <div class="table-header">
-                  <div>
-                    <h2 id="vendor-list-title">All vendors</h2>
-                    <p id="vendor-count">0 vendors</p>
+              <div class="category-layout">
+                <section
+                  class="category-panel"
+                  aria-labelledby="vendor-list-title"
+                >
+                  <div class="table-header">
+                    <div>
+                      <h2 id="vendor-list-title">All vendors</h2>
+                      <p id="vendor-count">0 vendors</p>
+                    </div>
+                    <label class="search-field entity-search-field">
+                      <span class="sr-only">Search vendors</span>
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="6.5" />
+                        <path d="m16 16 4 4" />
+                      </svg>
+                      <input
+                        id="vendor-search"
+                        type="search"
+                        placeholder="Search vendors"
+                      />
+                    </label>
                   </div>
-                  <label class="search-field entity-search-field">
-                    <span class="sr-only">Search vendors</span>
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <circle cx="11" cy="11" r="6.5" />
-                      <path d="m16 16 4 4" />
-                    </svg>
+                  <div
+                    class="category-list"
+                    id="vendor-list"
+                    aria-live="polite"
+                  ></div>
+                </section>
+                <form class="add-category-card" id="vendor-form" novalidate>
+                  <h2>Add a vendor</h2>
+                  <p>Create a reusable vendor for future transactions.</p>
+                  <label class="form-field">
+                    <span>Name</span>
                     <input
-                      id="vendor-search"
-                      type="search"
-                      placeholder="Search vendors"
+                      name="vendorName"
+                      type="text"
+                      maxlength="80"
+                      placeholder="e.g. Local Market"
+                      required
                     />
                   </label>
-                </div>
-                <div
-                  class="category-list"
-                  id="vendor-list"
-                  aria-live="polite"
-                ></div>
-              </section>
-              <form class="add-category-card" id="vendor-form" novalidate>
-                <h2>Add a vendor</h2>
-                <p>Create a reusable vendor for future transactions.</p>
-                <label class="form-field">
-                  <span>Name</span>
-                  <input
-                    name="vendorName"
-                    type="text"
-                    maxlength="80"
-                    placeholder="e.g. Local Market"
-                    required
-                  />
-                </label>
-                <p class="vendor-form-message" aria-live="polite"></p>
-                <button class="primary-button" type="submit">Add vendor</button>
-              </form>
-            </div>
-          </section>
+                  <p class="vendor-form-message" aria-live="polite"></p>
+                  <button class="primary-button" type="submit">
+                    Add vendor
+                  </button>
+                </form>
+              </div>
+            </section>
+          </template>
           <!-- People tab -->
           <section class="screen" data-screen="people" hidden>
             <div class="page-heading heading-row">
@@ -1678,9 +1682,10 @@
     <script src="js/main.js"></script>
 
     <script src="js/routes/categories.js"></script>
+    <script src="js/routes/vendors.js"></script>
 
     <!-- <script src="js/categories.js"></script> -->
-    <script src="js/vendors.js"></script>
+    <!-- <script src="js/vendors.js"></script> -->
     <script src="js/people.js"></script>
     <script src="js/entity-detail.js"></script>
     <script src="js/entity-editor.js"></script>
