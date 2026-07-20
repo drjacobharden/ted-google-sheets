@@ -1029,10 +1029,17 @@ tbody tr:hover {
   color: var(--accent-dark);
 }
 .vendor-combobox-list button.add-option {
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   color: var(--accent-dark);
   font-weight: 700;
+  border-radius: 0px;
 }
+
+.vendor-combobox-list button.add-option:hover,
+.vendor-combobox-list button.add-option:active {
+  border-radius: 8px;
+}
+
 .combobox-empty {
   margin: 0;
   padding: 10px;

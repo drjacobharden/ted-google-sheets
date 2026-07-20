@@ -30,6 +30,11 @@ const monthFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
+const createdDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
 const monthNames = [
   "January",
   "February",
@@ -53,4 +58,5 @@ window.DateUtils = {
   monthFormatter,
   shortDateFormatter,
   shortMonthNames,
+  createdDateTimeFormatter,
 };
