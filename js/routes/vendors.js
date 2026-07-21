@@ -99,7 +99,11 @@
       const button = event.target.closest("[data-entity-action]");
       if (!button) {
         const row = event.target.closest("[data-entity-id]");
-        if (row) window.EntityDetailUI?.open("vendor", row.dataset.entityId);
+        if (row)
+          window.AppRouter.navigate("entity-detail", {
+            kind: "vendor",
+            id: row.dataset.entityId,
+          });
         return;
       }
       try {
@@ -126,7 +130,10 @@
       const row = event.target.closest("[data-entity-id]");
       if (!row) return;
       event.preventDefault();
-      window.EntityDetailUI?.open("vendor", row.dataset.entityId);
+      window.AppRouter.navigate("entity-detail", {
+        kind: "vendor",
+        id: row.dataset.entityId,
+      });
     }
 
     function handleSearch() {

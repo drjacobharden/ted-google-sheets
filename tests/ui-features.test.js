@@ -81,14 +81,19 @@ test("entity lists drill down into a shared detail screen and rename drawer", ()
   const category = fs.readFileSync("js/routes/categories.js", "utf8");
   const vendor = fs.readFileSync("js/routes/vendors.js", "utf8");
   const people = fs.readFileSync("js/routes/people.js", "utf8");
-  const detail = fs.readFileSync("js/entity-detail.js", "utf8");
+  const detail = fs.readFileSync("js/routes/entity-detail.js", "utf8");
   const editor = fs.readFileSync("js/entity-editor.js", "utf8");
   assert.match(html, /data-screen="entity-detail"/);
   assert.match(html, /id="entity-drawer-backdrop"/);
   assert.doesNotMatch(html, /id="focus-(category|vendor|person)-form"/);
-  [category, vendor, people].forEach((source) => assert.match(source, /EntityDetailUI\?\.open/));
+  [category, vendor, people].forEach((source) => {
+    assert.match(source, /AppRouter\.navigate\("entity-detail", \{/);
+    assert.match(source, /kind:/);
+    assert.match(source, /id:/);
+  });
+  assert.match(detail, /function mount\(root, \{ params = \{\} \} = \{\}\)/);
   assert.match(detail, /createTransactionRow/);
-  assert.match(detail, /TransactionEditor\.openEdit/);
+  assert.match(detail, /drawer: "edit"/);
   assert.match(detail, /Total spent/);
   assert.match(detail, /Net activity/);
   assert.match(editor, /renameEntityTransactions/);

@@ -27,7 +27,6 @@
     "entity-detail",
     "sync",
     "settings",
-    "new-transaction",
     "investment-overview",
     "investment-accounts",
     "investment-balances",
@@ -83,34 +82,55 @@
     return promise;
   }
 
-  //   removes the hash from the current hash route to check that it is a valid route
+  function parseRoute() {
+    const raw = location.hash.replace(/^#\/?/, "");
+    const [requestedName, query = ""] = raw.split("?", 2);
+    const name = routes.has(requestedName) ? requestedName : DEFAULT_ROUTE;
+    const params = Object.fromEntries(new URLSearchParams(query));
+
+    return { name, params };
+  }
+
+  // Return only the route name for callers that do not need parameters.
   function currentRoute() {
-    const name = location.hash.replace(/^#\/?/, "").split("?")[0];
-    return routes.has(name) ? name : DEFAULT_ROUTE;
+    return parseRoute().name;
+  }
+
+  function currentParams() {
+    return { ...parseRoute().params };
+  }
+
+  function routeHash(name, params = {}) {
+    const destination = routes.has(name) ? name : DEFAULT_ROUTE;
+    const query = new URLSearchParams();
+
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      query.set(key, String(value));
+    });
+
+    const suffix = query.toString();
+    return `#/${destination}${suffix ? `?${suffix}` : ""}`;
   }
 
   //   validates the route and dispatches an event saying the route has changed
-  function navigate(name) {
-    const destination = routes.has(name) ? name : DEFAULT_ROUTE;
-    const nextHash = `#/${destination}`;
+  function navigate(name, params = {}) {
+    const nextHash = routeHash(name, params);
 
     if (location.hash === nextHash) {
-      window.dispatchEvent(
-        new CustomEvent("app:route-changed", {
-          detail: { route: destination },
-        }),
-      );
+      announceRoute();
       return;
     }
 
-    location.hash = `/${destination}`;
+    location.hash = nextHash.slice(1);
   }
 
   //   Announces that a new route has been loaded
   function announceRoute() {
+    const { name, params } = parseRoute();
     window.dispatchEvent(
       new CustomEvent("app:route-changed", {
-        detail: { route: currentRoute() },
+        detail: { route: name, params },
       }),
     );
   }
@@ -129,6 +149,8 @@
   window.AppRouter = {
     navigate,
     currentRoute,
+    currentParams,
+    parseRoute,
     start,
   };
 })();

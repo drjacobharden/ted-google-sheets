@@ -1,10 +1,11 @@
 (function () {
+  const { create: createTransactionRow } = window.TransactionRow;
   const { escapeHTML, money } = window.AppUtils;
   const { shortDateFormatter } = window.DateUtils;
 
   let cleanup = null;
 
-  function mount(root) {
+  function mount(root, { params = {} } = {}) {
     // References to the form, list, and message
     const transactionList = root.querySelector("#transaction-list");
     const search = root.querySelector("#transaction-search");
@@ -20,6 +21,7 @@
     let query = "";
     let type = "all";
     let activeRange = { start: "", end: "", preset: "all" };
+    let drawerOpened = false;
 
     function amountFor(transaction) {
       const amount = Number(transaction.amount) || 0;
@@ -81,36 +83,6 @@
         );
     }
 
-    // HTML for a single row in the table
-    function createTransactionRow(transaction) {
-      const row = document.createElement("tr");
-      row.dataset.transactionId = transaction.id;
-      row.tabIndex = 0;
-      row.setAttribute("role", "button");
-      row.setAttribute(
-        "aria-label",
-        `Edit ${transaction.vendor || transaction.category || "transaction"} from ${transaction.date}`,
-      );
-      const isIncome = transaction.type === "income";
-      const category = String(
-        transaction.category || (isIncome ? "Income" : "Other"),
-      );
-      const initial = category.charAt(0).toUpperCase();
-      const note = String(transaction.notes || "").trim();
-      const syncStatus = transaction.syncStatus;
-      const syncBadge = syncStatus
-        ? `<span class="transaction-sync-badge ${syncStatus}" title="${escapeHTML(transaction.syncError || "Waiting to sync")}">${syncStatus === "failed" ? "Needs attention" : "Pending"}</span>`
-        : "";
-      row.innerHTML = `
-        <td>${shortDateFormatter.format(new Date(`${transaction.date}T00:00:00Z`))}${syncBadge}</td>
-        <td><div class="transaction-name"><span class="category-icon${isIncome ? " income-category-icon" : ""}" aria-hidden="true">${escapeHTML(initial)}</span><strong class="${isIncome ? "income-category-title" : ""}">${escapeHTML(category)}</strong></div></td>
-        <td class="vendor-cell">${escapeHTML(isIncome ? "---" : transaction.vendor || "---")}</td>
-        <td><span class="assignment-chip">${escapeHTML(transaction.assignment || "Shared")}</span></td>
-        <td class="note-cell"><span title="${escapeHTML(note)}">${escapeHTML(note || "---")}</span></td>
-        <td class="amount-cell ${isIncome ? "amount-income" : "amount-expense"}">${isIncome ? "+" : "−"}${currency.format(Math.abs(Number(transaction.amount) || 0))}</td>`;
-      return row;
-    }
-
     //  Render the vendor list from the spreadsheet data
     function render() {
       const items = filteredTransactions();
@@ -135,11 +107,16 @@
 
     //  Handle clicks inside the list
     //  open the entity detail screen for the vendor
+    function editTransaction(id) {
+      window.AppRouter.navigate("transactions", {
+        drawer: "edit",
+        id,
+      });
+    }
+
     function handleClick(event) {
       const row = event.target.closest("tr[data-transaction-id]");
-      if (row) {
-        window.TransactionEditor.openEdit(row.dataset.transactionId);
-      }
+      if (row) editTransaction(row.dataset.transactionId);
     }
 
     function handleKeydown(event) {
@@ -147,7 +124,7 @@
       const row = event.target.closest("tr[data-transaction-id]");
       if (!row) return;
       event.preventDefault();
-      window.TransactionEditor?.openEdit(row.dataset.transactionId);
+      editTransaction(row.dataset.transactionId);
     }
 
     function handleSearch() {
@@ -183,6 +160,38 @@
       render();
     }
 
+    function openRequestedDrawer() {
+      if (drawerOpened) return;
+
+      if (params.drawer === "new") {
+        drawerOpened = Boolean(window.TransactionEditor?.openCreate());
+        return;
+      }
+
+      if (!["edit", "review"].includes(params.drawer) || !params.id) return;
+
+      const transactionIsAvailable =
+        window.BudgetUI.areTransactionsLoaded() ||
+        Boolean(window.BudgetAPI.getTransactionOutboxItem(params.id));
+
+      if (!transactionIsAvailable) return;
+
+      drawerOpened = Boolean(
+        window.TransactionEditor?.openEdit(params.id, {
+          review: params.drawer === "review",
+        }),
+      );
+
+      if (!drawerOpened && window.BudgetUI.areTransactionsLoaded()) {
+        window.AppRouter.navigate("transactions");
+      }
+    }
+
+    function handleTransactionsLoaded() {
+      load();
+      openRequestedDrawer();
+    }
+
     //  Listen to the submission and click events
     //  Rerender when the search input changes
     //  Rerender when vendors change, sync completes, or a transaction saves
@@ -193,7 +202,10 @@
     window.addEventListener("date-range-changed", handleDateRangeChange);
     window.addEventListener("budget:transaction-sync-changed", load);
     window.addEventListener("budget:transaction-saved", load);
-    window.addEventListener("budget:transactions-loaded", load);
+    window.addEventListener(
+      "budget:transactions-loaded",
+      handleTransactionsLoaded,
+    );
     window.addEventListener("budget:transaction-removed", load);
     window.addEventListener("budget:transaction-restored", load);
     window.addEventListener("budget:transaction-queued", load);
@@ -211,6 +223,8 @@
     `;
     }
 
+    openRequestedDrawer();
+
     // Set the cleanup to remove the listeners
     cleanup = () => {
       transactionList.removeEventListener("click", handleClick);
@@ -220,7 +234,10 @@
       window.removeEventListener("date-range-changed", handleDateRangeChange);
       window.removeEventListener("budget:transaction-sync-changed", load);
       window.removeEventListener("budget:transaction-saved", load);
-      window.removeEventListener("budget:transactions-loaded", load);
+      window.removeEventListener(
+        "budget:transactions-loaded",
+        handleTransactionsLoaded,
+      );
       window.removeEventListener("budget:transaction-removed", load);
       window.removeEventListener("budget:transaction-restored", load);
       window.removeEventListener("budget:transaction-queued", load);

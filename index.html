@@ -631,61 +631,67 @@
             </section>
           </template>
           <!-- Entity drill down tab -->
-          <section class="screen" data-screen="entity-detail" hidden>
-            <div class="page-heading heading-row">
-              <div>
+          <template id="route-entity-detail">
+            <section class="screen" data-screen="entity-detail">
+              <div class="page-heading heading-row">
+                <div>
+                  <button
+                    class="back-button"
+                    id="entity-detail-back"
+                    type="button"
+                  >
+                    ← Back
+                  </button>
+                  <p class="eyebrow" id="entity-detail-eyebrow">Details</p>
+                  <h1 id="entity-detail-title">Entity</h1>
+                </div>
                 <button
-                  class="back-button"
-                  id="entity-detail-back"
+                  class="primary-button compact"
+                  id="edit-entity"
                   type="button"
                 >
-                  ← Back
+                  Edit entity
                 </button>
-                <p class="eyebrow" id="entity-detail-eyebrow">Details</p>
-                <h1 id="entity-detail-title">Entity</h1>
               </div>
-              <button
-                class="primary-button compact"
-                id="edit-entity"
-                type="button"
-              >
-                Edit entity
-              </button>
-            </div>
-            <date-range-picker preset="month"></date-range-picker>
-            <div
-              class="summary-grid entity-summary-grid"
-              id="entity-summary-grid"
-              aria-label="Entity summary"
-            ></div>
-            <div class="ledger-card">
-              <div class="table-header">
-                <div>
-                  <h2>Activity</h2>
-                  <p id="entity-transaction-count">0 transactions</p>
+              <date-range-picker preset="month"></date-range-picker>
+              <div
+                class="summary-grid entity-summary-grid"
+                id="entity-summary-grid"
+                aria-label="Entity summary"
+              ></div>
+              <div class="ledger-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Activity</h2>
+                    <p id="entity-transaction-count">0 transactions</p>
+                  </div>
+                </div>
+                <div
+                  class="transaction-state"
+                  id="entity-transaction-state"
+                ></div>
+                <div
+                  class="table-wrap"
+                  id="entity-transaction-table-wrap"
+                  hidden
+                >
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Category</th>
+                        <th scope="col">Vendor</th>
+                        <th scope="col">Assignment</th>
+                        <th scope="col">Note</th>
+                        <th scope="col" class="amount-cell">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody id="entity-transaction-list"></tbody>
+                  </table>
                 </div>
               </div>
-              <div
-                class="transaction-state"
-                id="entity-transaction-state"
-              ></div>
-              <div class="table-wrap" id="entity-transaction-table-wrap" hidden>
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">Date</th>
-                      <th scope="col">Category</th>
-                      <th scope="col">Vendor</th>
-                      <th scope="col">Assignment</th>
-                      <th scope="col">Note</th>
-                      <th scope="col" class="amount-cell">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody id="entity-transaction-list"></tbody>
-                </table>
-              </div>
-            </div>
-          </section>
+            </section>
+          </template>
           <!-- Sync tab -->
           <template id="route-sync">
             <section class="screen" data-screen="sync">
@@ -1520,6 +1526,7 @@
     <!-- Scripts: Utils and API must be listed first! -->
     <script src="js/utils/app-utils.js"></script>
     <script src="js/utils/date-utils.js"></script>
+    <script src="js/utils/transaction-row.js"></script>
 
     <script src="js/api.js"></script>
     <script src="js/investments-api.js"></script>
@@ -1529,19 +1536,19 @@
     <script src="js/users.js"></script>
 
     <script src="js/router.js"></script>
+    <script src="js/routes/transaction-drawer.js"></script>
     <script src="js/main.js"></script>
 
     <script src="js/routes/transactions.js"></script>
     <script src="js/routes/categories.js"></script>
     <script src="js/routes/vendors.js"></script>
     <script src="js/routes/people.js"></script>
-    <script src="js/routes/transaction-drawer.js"></script>
     <script src="js/routes/sync.js"></script>
+    <script src="js/routes/entity-detail.js"></script>
 
     <!-- <script src="js/categories.js"></script> -->
     <!-- <script src="js/vendors.js"></script> -->
     <!-- <script src="js/people.js"></script> -->
-    <script src="js/entity-detail.js"></script>
     <script src="js/entity-editor.js"></script>
     <!-- <script src="js/form.js"></script> -->
     <!-- <script src="js/sync.js"></script> -->

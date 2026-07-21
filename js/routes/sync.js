@@ -141,7 +141,10 @@
       try {
         if (action === "review") {
           if (item.source === "transaction")
-            window.TransactionEditor.openEdit(item.id, { review: true });
+            window.AppRouter.navigate("transactions", {
+              drawer: "review",
+              id: item.id,
+            });
           if (["investmentSnapshot", "investmentMonth"].includes(item.source))
             window.InvestmentUI?.reviewMonth(item.id);
         }

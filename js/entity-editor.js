@@ -45,7 +45,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const label = config[opened.kind].label;
       close(true);
       window.ToastUI?.show(`${label.charAt(0).toUpperCase() + label.slice(1)} updated.`);
-      window.EntityDetailUI?.render();
     } catch (error) {
       message.className = "form-message error"; message.textContent = error.message;
       submit.disabled = false; submit.textContent = "Save changes";

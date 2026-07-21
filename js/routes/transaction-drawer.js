@@ -67,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     initialFormState = formState();
     showDrawer();
+    return true;
   }
 
   //  Open the drawer in edit mode to edit an existing transaction
@@ -83,7 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
         type: "error",
       });
 
-      return;
+      return false;
     }
 
     mode = "edit";
@@ -132,6 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     initialFormState = formState();
     showDrawer();
+    return true;
   }
 
   //  Shared display logic that runs regardless of the mode
@@ -224,7 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return !backdrop.hidden && formState() !== initialFormState;
   }
 
-  function close(force = false) {
+  function close(force = false, { updateRoute = true } = {}) {
     if (
       !force &&
       isDirty() &&
@@ -242,6 +244,15 @@ document.addEventListener("DOMContentLoaded", () => {
       ? returnFocus
       : document.querySelector('[data-tab="transactions"]')
     )?.focus();
+
+    if (
+      updateRoute &&
+      window.AppRouter.currentRoute() === "transactions" &&
+      window.AppRouter.currentParams().drawer
+    ) {
+      window.AppRouter.navigate("transactions");
+    }
+
     return true;
   }
 
@@ -367,10 +378,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const button = event.target.closest("[data-new-transaction]");
     if (!button) return;
     event.preventDefault();
-    openCreate();
+    window.AppRouter.navigate("transactions", { drawer: "new" });
   }
 
   document.addEventListener("click", handleNewTransactionClick);
+
+  window.addEventListener("app:route-changed", (event) => {
+    const { route, params = {} } = event.detail;
+    const drawerRequested =
+      route === "transactions" &&
+      ["new", "edit", "review"].includes(params.drawer);
+
+    if (!drawerRequested && !backdrop.hidden) {
+      close(true, { updateRoute: false });
+    }
+  });
 
   closeButton.addEventListener("click", () => close());
   cancelButton.addEventListener("click", () => close());

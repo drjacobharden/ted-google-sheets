@@ -86,7 +86,11 @@
       const button = event.target.closest("[data-entity-action]");
       if (!button) {
         const row = event.target.closest("[data-entity-id]");
-        if (row) window.EntityDetailUI?.open("category", row.dataset.entityId);
+        if (row)
+          window.AppRouter.navigate("entity-detail", {
+            kind: "category",
+            id: row.dataset.entityId,
+          });
         return;
       }
       try {
@@ -123,7 +127,10 @@
 
       event.preventDefault();
 
-      window.EntityDetailUI?.open("category", row.dataset.entityId);
+      window.AppRouter.navigate("entity-detail", {
+        kind: "category",
+        id: row.dataset.entityId,
+      });
     }
 
     //  Listen to the submission and click events

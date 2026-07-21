@@ -1,6 +1,11 @@
 document.addEventListener("DOMContentLoaded", () => {
   let unmountCurrentRoute = null;
   let referenceDataPromise;
+  let referenceDataLoaded = false;
+
+  window.addEventListener("budget:reference-data-changed", () => {
+    referenceDataLoaded = true;
+  });
 
   // Mount the template for the route provided.
   //  - 1: unmount the currently mounted route if it exists
@@ -8,7 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
   //  - 3: if the template exists, mount its content inside the outlet
   //  - 4: get the module for the route and mount its associated data and listeners
   //  - 5: set the unmount to the current route's unmount function so that all listeners can be removed when navigating away
-  function mountTemplate(name) {
+  function mountTemplate(name, params = {}) {
     unmountCurrentRoute?.();
 
     const outlet = document.getElementById("route-outlet");
@@ -29,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
       people: window.PeopleRoute,
       transactions: window.TransactionsRoute,
       sync: window.SyncRoute,
+      "entity-detail": window.EntityRoute,
     };
 
     const routeModule = routeModules[name];
@@ -38,7 +44,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    routeModule.mount(screen);
+    screen.hidden = false;
+    routeModule.mount(screen, { route: name, params });
 
     unmountCurrentRoute = () => {
       routeModule?.unmount();
@@ -78,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.AppRouter.navigate(name);
   }
 
-  function renderRoute(name) {
+  function renderRoute(name, params = {}) {
     screens.forEach((screen) => {
       screen.hidden = screen.dataset.screen !== name;
     });
@@ -92,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     enterRoute(name);
     updateNavigationSection(name);
-    mountTemplate(name);
+    mountTemplate(name, params);
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -107,7 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ]);
     }
 
-    if (name === "transactions" && !state.loaded) {
+    if (["transactions", "entity-detail"].includes(name) && !state.loaded) {
       await ensureReferenceData();
       await loadTransactions();
     }
@@ -118,12 +125,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (name === "dashboard" || name.startsWith("investment-"))
       window.InvestmentUI?.load();
-    if (name === "new-transaction")
-      document.querySelector('[name="amount"]')?.focus();
     // if (name === "categories") window.CategoryUI?.load();
     // if (name === "vendors") window.VendorUI?.load();
     // if (name === "people") window.PeopleUI?.load();
-    if (name === "entity-detail") window.EntityDetailUI?.render();
     if (name === "settings") {
       loadSettings();
       window.UserUI?.load();
@@ -160,7 +164,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   //  Listen for the change in route from router.js and render the route's data.
   window.addEventListener("app:route-changed", (event) => {
-    renderRoute(event.detail.route);
+    renderRoute(event.detail.route, event.detail.params);
   });
 
   document.querySelectorAll("[data-nav-section-toggle]").forEach((toggle) =>
@@ -419,6 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
     getTransaction: (id) =>
       state.transactions.find((transaction) => transaction.id === id) || null,
     areTransactionsLoaded: () => state.loaded,
+    isReferenceDataLoaded: () => referenceDataLoaded,
   };
   updateConnectionUI();
   if (!window.OnboardingUI?.isBlocking()) initializeData();

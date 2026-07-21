@@ -84,7 +84,10 @@
       if (!button) {
         const row = event.target.closest("[data-entity-id]");
         if (row)
-          window.EntityDetailUI?.open("assignment", row.dataset.entityId);
+          window.AppRouter.navigate("entity-detail", {
+            kind: "assignment",
+            id: row.dataset.entityId,
+          });
         return;
       }
       try {
@@ -111,7 +114,10 @@
       const row = event.target.closest("[data-entity-id]");
       if (!row) return;
       event.preventDefault();
-      window.EntityDetailUI?.open("assignment", row.dataset.entityId);
+      window.AppRouter.navigate("entity-detail", {
+        kind: "assignment",
+        id: row.dataset.entityId,
+      });
     }
 
     //  Listen to the submission and click events
