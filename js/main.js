@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
       vendors: window.VendorRoute,
       people: window.PeopleRoute,
       transactions: window.TransactionsRoute,
+      sync: window.SyncRoute,
     };
 
     const routeModule = routeModules[name];
@@ -119,11 +120,10 @@ document.addEventListener("DOMContentLoaded", () => {
       window.InvestmentUI?.load();
     if (name === "new-transaction")
       document.querySelector('[name="amount"]')?.focus();
-    if (name === "categories") window.CategoryUI?.load();
-    if (name === "vendors") window.VendorUI?.load();
-    if (name === "people") window.PeopleUI?.load();
+    // if (name === "categories") window.CategoryUI?.load();
+    // if (name === "vendors") window.VendorUI?.load();
+    // if (name === "people") window.PeopleUI?.load();
     if (name === "entity-detail") window.EntityDetailUI?.render();
-    if (name === "sync") window.SyncUI?.render();
     if (name === "settings") {
       loadSettings();
       window.UserUI?.load();

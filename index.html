@@ -687,37 +687,39 @@
             </div>
           </section>
           <!-- Sync tab -->
-          <section class="screen" data-screen="sync" hidden>
-            <div class="page-heading">
-              <p class="eyebrow">Background activity</p>
-              <h1>Sync</h1>
-              <p class="heading-copy">
-                Review changes waiting to be saved to your Google Sheet.
-              </p>
-            </div>
-            <div class="sync-card">
-              <div class="table-header">
-                <div>
-                  <h2>Changes</h2>
-                  <p id="sync-screen-summary">All changes are saved.</p>
+          <template id="route-sync">
+            <section class="screen" data-screen="sync">
+              <div class="page-heading">
+                <p class="eyebrow">Background activity</p>
+                <h1>Sync</h1>
+                <p class="heading-copy">
+                  Review changes waiting to be saved to your Google Sheet.
+                </p>
+              </div>
+              <div class="sync-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Changes</h2>
+                    <p id="sync-screen-summary">All changes are saved.</p>
+                  </div>
+                  <button
+                    class="secondary-button compact"
+                    id="retry-all-sync"
+                    type="button"
+                    hidden
+                  >
+                    Retry all now
+                  </button>
                 </div>
-                <button
-                  class="secondary-button compact"
-                  id="retry-all-sync"
-                  type="button"
-                  hidden
-                >
-                  Retry all now
-                </button>
+                <div class="sync-empty" id="sync-empty">
+                  <div class="empty-symbol" aria-hidden="true">✓</div>
+                  <h3>Everything is up to date</h3>
+                  <p>New changes will appear here while they are syncing.</p>
+                </div>
+                <div class="sync-list" id="sync-list" aria-live="polite"></div>
               </div>
-              <div class="sync-empty" id="sync-empty">
-                <div class="empty-symbol" aria-hidden="true">✓</div>
-                <h3>Everything is up to date</h3>
-                <p>New changes will appear here while they are syncing.</p>
-              </div>
-              <div class="sync-list" id="sync-list" aria-live="polite"></div>
-            </div>
-          </section>
+            </section>
+          </template>
           <!-- Settings tab -->
           <section class="screen" data-screen="settings" hidden>
             <div class="page-heading">
@@ -1520,8 +1522,9 @@
     <script src="js/utils/date-utils.js"></script>
 
     <script src="js/api.js"></script>
-
     <script src="js/investments-api.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/sync-notifications.js"></script>
     <script src="js/onboarding.js"></script>
     <script src="js/users.js"></script>
 
@@ -1533,6 +1536,7 @@
     <script src="js/routes/vendors.js"></script>
     <script src="js/routes/people.js"></script>
     <script src="js/routes/transaction-drawer.js"></script>
+    <script src="js/routes/sync.js"></script>
 
     <!-- <script src="js/categories.js"></script> -->
     <!-- <script src="js/vendors.js"></script> -->
@@ -1540,7 +1544,7 @@
     <script src="js/entity-detail.js"></script>
     <script src="js/entity-editor.js"></script>
     <!-- <script src="js/form.js"></script> -->
-    <script src="js/sync.js"></script>
+    <!-- <script src="js/sync.js"></script> -->
     <script src="js/investments.js"></script>
   </body>
 </html>
