@@ -52,7 +52,6 @@ const EntityDetailRenderEvents = [
 
     const title = root.querySelector("#entity-detail-title");
     const eyebrow = root.querySelector("#entity-detail-eyebrow");
-    const backButton = root.querySelector("#entity-detail-back");
     const editButton = root.querySelector("#edit-entity");
     const rangePicker = root.querySelector("date-range-picker");
     const summary = root.querySelector("#entity-summary-grid");
@@ -188,16 +187,12 @@ const EntityDetailRenderEvents = [
       selected && window.EntityEditor.open(selected.kind, selected.id);
     }
 
-    function handleBackButtonClick() {
-      window.AppRouter.navigate(EntityDetailConfig[selected.kind].screen);
-    }
-
     function handleListClick(event) {
       const row = event.target.closest("tr[data-transaction-id]");
       if (row) {
-        window.AppRouter.navigate("transactions", {
+        window.AppRouter.updateParams({
           drawer: "edit",
-          id: row.dataset.transactionId,
+          transactionId: row.dataset.transactionId,
         });
       }
     }
@@ -207,14 +202,13 @@ const EntityDetailRenderEvents = [
       const row = event.target.closest("tr[data-transaction-id]");
       if (!row) return;
       event.preventDefault();
-      window.AppRouter.navigate("transactions", {
+      window.AppRouter.updateParams({
         drawer: "edit",
-        id: row.dataset.transactionId,
+        transactionId: row.dataset.transactionId,
       });
     }
 
     root.addEventListener("date-range-changed", handleDateRangeChange);
-    backButton.addEventListener("click", handleBackButtonClick);
     editButton.addEventListener("click", handleEditButtonClick);
     list.addEventListener("click", handleListClick);
     list.addEventListener("keydown", handleListKeydown);
@@ -226,7 +220,6 @@ const EntityDetailRenderEvents = [
 
     cleanup = () => {
       root.removeEventListener("date-range-changed", handleDateRangeChange);
-      backButton.removeEventListener("click", handleBackButtonClick);
       editButton.removeEventListener("click", handleEditButtonClick);
       list.removeEventListener("click", handleListClick);
       list.removeEventListener("keydown", handleListKeydown);

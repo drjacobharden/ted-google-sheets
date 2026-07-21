@@ -635,13 +635,6 @@
             <section class="screen" data-screen="entity-detail">
               <div class="page-heading heading-row">
                 <div>
-                  <button
-                    class="back-button"
-                    id="entity-detail-back"
-                    type="button"
-                  >
-                    ← Back
-                  </button>
                   <p class="eyebrow" id="entity-detail-eyebrow">Details</p>
                   <h1 id="entity-detail-title">Entity</h1>
                 </div>
@@ -1124,22 +1117,34 @@
             id="transaction-edit-message"
             aria-live="polite"
           ></p>
-          <footer class="transaction-drawer-actions">
-            <button
-              class="secondary-button"
-              id="cancel-transaction-edit"
-              type="button"
-            >
-              Cancel
-            </button>
-            <button class="primary-button" type="submit">Save changes</button>
-          </footer>
-          <div class="transaction-metadata">
-            <p>
-              <span>Transaction ID</span><code id="transaction-edit-id"></code
-              ><button id="copy-transaction-id" type="button">Copy</button>
-            </p>
-            <p id="transaction-created-footnote"></p>
+          <div class="transaction-drawer-controls">
+            <footer class="transaction-drawer-actions">
+              <button
+                class="secondary-button"
+                id="cancel-transaction-edit"
+                type="button"
+              >
+                Cancel
+              </button>
+              <button class="primary-button" type="submit">Save changes</button>
+            </footer>
+            <label class="batch-entry-toggle" id="batch-entry-toggle">
+              <span>
+                <strong>Batch input</strong>
+                <small
+                  >Keep the drawer open and preserve the date after
+                  adding</small
+                >
+              </span>
+              <input type="checkbox" name="batchEntry" role="switch" />
+            </label>
+            <div class="transaction-metadata">
+              <p>
+                <span>Transaction ID</span><code id="transaction-edit-id"></code
+                ><button id="copy-transaction-id" type="button">Copy</button>
+              </p>
+              <p id="transaction-created-footnote"></p>
+            </div>
           </div>
         </form>
       </aside>

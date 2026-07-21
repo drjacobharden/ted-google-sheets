@@ -1,7 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
   let unmountCurrentRoute = null;
   let referenceDataPromise;
+  let transactionLoadPromise;
   let referenceDataLoaded = false;
+  let mountedContentKey = "";
 
   window.addEventListener("budget:reference-data-changed", () => {
     referenceDataLoaded = true;
@@ -86,6 +88,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderRoute(name, params = {}) {
+    const contentParams = { ...params };
+    delete contentParams.drawer;
+    delete contentParams.transactionId;
+    const contentKey = `${name}?${new URLSearchParams(contentParams)}`;
+
+    if (contentKey === mountedContentKey) return;
+
+    mountedContentKey = contentKey;
     screens.forEach((screen) => {
       screen.hidden = screen.dataset.screen !== name;
     });
@@ -99,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     enterRoute(name);
     updateNavigationSection(name);
-    mountTemplate(name, params);
+    mountTemplate(name, contentParams);
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -123,11 +133,9 @@ document.addEventListener("DOMContentLoaded", () => {
       await window.InvestmentUI?.load?.();
     }
 
-    if (name === "dashboard" || name.startsWith("investment-"))
+    if (name === "dashboard" || name.startsWith("investment-")) {
       window.InvestmentUI?.load();
-    // if (name === "categories") window.CategoryUI?.load();
-    // if (name === "vendors") window.VendorUI?.load();
-    // if (name === "people") window.PeopleUI?.load();
+    }
     if (name === "settings") {
       loadSettings();
       window.UserUI?.load();
@@ -202,22 +210,30 @@ document.addEventListener("DOMContentLoaded", () => {
     showAppNotice(event.detail),
   );
 
-  async function loadTransactions() {
-    try {
-      // Get all of the transactions from the spreadsheet
-      state.transactions = await window.BudgetAPI.listTransactions();
-      // Flag that the data loaded
-      state.loaded = true;
-      //  Alert listeners that the data has loaded
-      window.dispatchEvent(new CustomEvent("budget:transactions-loaded"));
-    } catch (error) {
-      //  Alert listenters that the data failed to load
-      window.dispatchEvent(
-        new CustomEvent("budget:transactions-load-error", {
-          detail: { error },
-        }),
-      );
-    }
+  function loadTransactions() {
+    if (transactionLoadPromise) return transactionLoadPromise;
+
+    transactionLoadPromise = (async () => {
+      try {
+        // Get all of the transactions from the spreadsheet
+        state.transactions = await window.BudgetAPI.listTransactions();
+        // Flag that the data loaded
+        state.loaded = true;
+        //  Alert listeners that the data has loaded
+        window.dispatchEvent(new CustomEvent("budget:transactions-loaded"));
+      } catch (error) {
+        //  Alert listenters that the data failed to load
+        window.dispatchEvent(
+          new CustomEvent("budget:transactions-load-error", {
+            detail: { error },
+          }),
+        );
+      } finally {
+        transactionLoadPromise = null;
+      }
+    })();
+
+    return transactionLoadPromise;
   }
 
   const settingsForm = document.getElementById("connection-form");

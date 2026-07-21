@@ -257,6 +257,13 @@ test("validates normalized references, rebuilds Ledger, and batch-renames 1,000 
   assert.ok(ledger.getFilter());
   assert.equal(ledger.data.slice(1).filter((row) => row[8]).length, 1000);
 
+  const refund = call({ action: "addTransaction", transaction: {
+    ...base, id: "823e4567-e89b-42d3-a456-426614174000", amount: -7.25,
+  } });
+  assert.equal(refund.ok, true);
+  assert.equal(refund.data.type, "expense");
+  assert.equal(refund.data.amount, -7.25);
+
   assert.equal(call({ action: "archiveVendor", id: vendorId }).ok, true);
   const archivedVendorTransaction = call({ action: "addTransaction", transaction: {
     ...base, id: "723e4567-e89b-42d3-a456-426614174000",
@@ -276,6 +283,7 @@ test("validates normalized references, rebuilds Ledger, and batch-renames 1,000 
     ...base, id: "623e4567-e89b-42d3-a456-426614174000", type: "income", categoryId: income.id, vendorId: "",
   } });
   assert.equal(validIncome.ok, true);
+
 });
 
 test("batch-adds transactions with idempotency, partial failure, and two grouped writes", () => {
@@ -443,9 +451,14 @@ test("batch-updates transactions with immutable metadata, conflict detection, an
   call({ action: "archiveVendor", id: vendorId });
   const unchangedArchivedReference = call({ action: "updateTransactions", updates: [{ transaction: { ...result.data.saved[0], amount: 19 }, base: result.data.saved[0] }] });
   assert.equal(unchangedArchivedReference.data.saved.length, 1);
-  const changedToIncome = call({ action: "updateTransactions", updates: [{
-    transaction: { ...unchangedArchivedReference.data.saved[0], type: "income", categoryId: income.id, vendorId: "", amount: 20 },
+  const updatedRefund = call({ action: "updateTransactions", updates: [{
+    transaction: { ...unchangedArchivedReference.data.saved[0], amount: -19 },
     base: unchangedArchivedReference.data.saved[0],
+  }] });
+  assert.equal(updatedRefund.data.saved[0].amount, -19);
+  const changedToIncome = call({ action: "updateTransactions", updates: [{
+    transaction: { ...updatedRefund.data.saved[0], type: "income", categoryId: income.id, vendorId: "", amount: 20 },
+    base: updatedRefund.data.saved[0],
   }] });
   assert.equal(changedToIncome.data.saved.length, 1);
   assert.equal(changedToIncome.data.saved[0].type, "income");

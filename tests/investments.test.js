@@ -60,10 +60,12 @@ test("investment savings excludes manual transfers from the combined total", () 
   const totals = runtime.api.calculate([
     { type: "income", amount: 5000, date: "2026-07-01" },
     { type: "expense", amount: 3500, date: "2026-07-02" },
+    { type: "expense", amount: -100, date: "2026-07-03" },
   ], { start: "2026-07", end: "2026-07" });
-  assert.equal(totals.budgetSurplus, 1500);
+  assert.equal(totals.spending, 3400);
+  assert.equal(totals.budgetSurplus, 1600);
   assert.equal(totals.paycheckContributions, 750);
-  assert.equal(totals.totalSavings, 2250);
+  assert.equal(totals.totalSavings, 2350);
   assert.equal(totals.manualContributions, 300);
 });
 

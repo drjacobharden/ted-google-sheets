@@ -5,7 +5,7 @@
 
   let cleanup = null;
 
-  function mount(root, { params = {} } = {}) {
+  function mount(root) {
     // References to the form, list, and message
     const transactionList = root.querySelector("#transaction-list");
     const search = root.querySelector("#transaction-search");
@@ -21,7 +21,6 @@
     let query = "";
     let type = "all";
     let activeRange = { start: "", end: "", preset: "all" };
-    let drawerOpened = false;
 
     function amountFor(transaction) {
       const amount = Number(transaction.amount) || 0;
@@ -108,9 +107,9 @@
     //  Handle clicks inside the list
     //  open the entity detail screen for the vendor
     function editTransaction(id) {
-      window.AppRouter.navigate("transactions", {
+      window.AppRouter.updateParams({
         drawer: "edit",
-        id,
+        transactionId: id,
       });
     }
 
@@ -160,38 +159,6 @@
       render();
     }
 
-    function openRequestedDrawer() {
-      if (drawerOpened) return;
-
-      if (params.drawer === "new") {
-        drawerOpened = Boolean(window.TransactionEditor?.openCreate());
-        return;
-      }
-
-      if (!["edit", "review"].includes(params.drawer) || !params.id) return;
-
-      const transactionIsAvailable =
-        window.BudgetUI.areTransactionsLoaded() ||
-        Boolean(window.BudgetAPI.getTransactionOutboxItem(params.id));
-
-      if (!transactionIsAvailable) return;
-
-      drawerOpened = Boolean(
-        window.TransactionEditor?.openEdit(params.id, {
-          review: params.drawer === "review",
-        }),
-      );
-
-      if (!drawerOpened && window.BudgetUI.areTransactionsLoaded()) {
-        window.AppRouter.navigate("transactions");
-      }
-    }
-
-    function handleTransactionsLoaded() {
-      load();
-      openRequestedDrawer();
-    }
-
     //  Listen to the submission and click events
     //  Rerender when the search input changes
     //  Rerender when vendors change, sync completes, or a transaction saves
@@ -202,10 +169,7 @@
     window.addEventListener("date-range-changed", handleDateRangeChange);
     window.addEventListener("budget:transaction-sync-changed", load);
     window.addEventListener("budget:transaction-saved", load);
-    window.addEventListener(
-      "budget:transactions-loaded",
-      handleTransactionsLoaded,
-    );
+    window.addEventListener("budget:transactions-loaded", load);
     window.addEventListener("budget:transaction-removed", load);
     window.addEventListener("budget:transaction-restored", load);
     window.addEventListener("budget:transaction-queued", load);
@@ -223,8 +187,6 @@
     `;
     }
 
-    openRequestedDrawer();
-
     // Set the cleanup to remove the listeners
     cleanup = () => {
       transactionList.removeEventListener("click", handleClick);
@@ -234,10 +196,7 @@
       window.removeEventListener("date-range-changed", handleDateRangeChange);
       window.removeEventListener("budget:transaction-sync-changed", load);
       window.removeEventListener("budget:transaction-saved", load);
-      window.removeEventListener(
-        "budget:transactions-loaded",
-        handleTransactionsLoaded,
-      );
+      window.removeEventListener("budget:transactions-loaded", load);
       window.removeEventListener("budget:transaction-removed", load);
       window.removeEventListener("budget:transaction-restored", load);
       window.removeEventListener("budget:transaction-queued", load);

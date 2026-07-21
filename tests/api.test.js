@@ -107,6 +107,25 @@ test("requires normalized category IDs and defaults income to seeded Income", as
     type: "income", amount: 10, date: "2026-07-13", categoryId: expenses[0].id,
     assignmentId: api.SHARED_ASSIGNMENT_ID,
   }), /valid category/);
+
+  const vendor = await api.addVendor({ name: "Bookshop" });
+  const refund = await api.addTransaction({
+    type: "expense", amount: -24.99, date: "2026-07-14",
+    categoryId: expenses[0].id, vendorId: vendor.id,
+    assignmentId: api.SHARED_ASSIGNMENT_ID, notes: "Refund",
+  });
+  assert.equal(refund.type, "expense");
+  assert.equal(refund.amount, -24.99);
+  const updatedRefund = api.queueTransactionUpdate(
+    { ...refund, amount: -19.5 },
+    refund,
+  );
+  assert.equal(updatedRefund.amount, -19.5);
+  await assert.rejects(() => api.addTransaction({
+    type: "expense", amount: 0, date: "2026-07-14",
+    categoryId: expenses[0].id, vendorId: vendor.id,
+    assignmentId: api.SHARED_ASSIGNMENT_ID,
+  }), /non-zero/);
 });
 
 test("keeps each computer's active user selection local", () => {

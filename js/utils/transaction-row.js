@@ -9,6 +9,9 @@ function createTransactionRow(transaction) {
     `Edit ${transaction.vendor || transaction.category || "transaction"} from ${transaction.date}`,
   );
   const isIncome = transaction.type === "income";
+  const amount = Number(transaction.amount) || 0;
+  const budgetEffect = isIncome ? amount : -amount;
+  const increasesBalance = budgetEffect > 0;
   const category = String(
     transaction.category || (isIncome ? "Income" : "Other"),
   );
@@ -24,7 +27,7 @@ function createTransactionRow(transaction) {
         <td class="vendor-cell">${escapeHTML(isIncome ? "---" : transaction.vendor || "---")}</td>
         <td><span class="assignment-chip">${escapeHTML(transaction.assignment || "Shared")}</span></td>
         <td class="note-cell"><span title="${escapeHTML(note)}">${escapeHTML(note || "---")}</span></td>
-        <td class="amount-cell ${isIncome ? "amount-income" : "amount-expense"}">${isIncome ? "+" : "−"}${currency.format(Math.abs(Number(transaction.amount) || 0))}</td>`;
+        <td class="amount-cell ${increasesBalance ? "amount-income" : "amount-expense"}">${increasesBalance ? "+" : "−"}${currency.format(Math.abs(amount))}</td>`;
   return row;
 }
 

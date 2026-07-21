@@ -2039,6 +2039,43 @@ tbody tr:hover {
 body.drawer-open {
   overflow: hidden;
 }
+#transaction-drawer-backdrop:not([hidden]) {
+  background: transparent;
+  backdrop-filter: none;
+}
+#transaction-drawer-backdrop:not([hidden])::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: rgba(28, 31, 29, 0.58);
+  backdrop-filter: blur(4px);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 360ms ease-out;
+}
+#transaction-drawer-backdrop:not([hidden]) > .transaction-drawer {
+  z-index: 1;
+  transform: translateX(100%);
+  transition: transform 250ms cubic-bezier(0.33, 1, 0.68, 1);
+  will-change: transform;
+}
+#transaction-drawer-backdrop.is-open::before {
+  opacity: 1;
+}
+#transaction-drawer-backdrop.is-open > .transaction-drawer {
+  transform: translateX(0);
+}
+#transaction-drawer-backdrop.is-closing::before {
+  opacity: 0;
+  transition-duration: 200ms;
+  transition-timing-function: ease-out;
+}
+#transaction-drawer-backdrop.is-closing > .transaction-drawer {
+  transform: translateX(100%);
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+}
 .transaction-drawer {
   position: absolute;
   top: 0;
@@ -2051,12 +2088,22 @@ body.drawer-open {
   background: var(--surface);
   box-shadow: -20px 0 60px rgba(20, 27, 21, 0.18);
 }
+#transaction-drawer {
+  display: flex;
+  flex-direction: column;
+}
 .transaction-drawer-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 24px;
+}
+#transaction-edit-form {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
 }
 .transaction-drawer-header h2 {
   margin: 3px 0 0;
@@ -2083,7 +2130,64 @@ body.drawer-open {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 22px;
+}
+.transaction-drawer-controls {
+  margin-top: auto;
+  padding-top: 22px;
+}
+.batch-entry-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+.batch-entry-toggle > span {
+  display: grid;
+  gap: 3px;
+}
+.batch-entry-toggle strong {
+  font-size: 13px;
+}
+.batch-entry-toggle small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.batch-entry-toggle input {
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: #eef0eb;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.batch-entry-toggle input::before {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 2px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 4px rgba(20, 27, 21, 0.2);
+  content: "";
+  transition: transform 160ms ease;
+}
+.batch-entry-toggle input:checked {
+  border-color: var(--accent-dark);
+  background: var(--accent-dark);
+}
+.batch-entry-toggle input:checked::before {
+  transform: translateX(18px);
+}
+.batch-entry-toggle input:focus-visible {
+  outline: 3px solid rgba(111, 157, 102, 0.25);
+  outline-offset: 2px;
 }
 .transaction-metadata {
   margin-top: 26px;

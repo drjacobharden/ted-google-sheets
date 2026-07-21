@@ -589,13 +589,16 @@
   function createTransactionRecord(transaction) {
     ensureLocalData();
     const activeUser = getActiveUser(); if (!activeUser) throw new Error("Choose or add a user in Settings first.");
-    const category = listCategories({ type: transaction.type }).find((item) => item.id === transaction.categoryId);
+    const type = transaction.type === "income" ? "income" : "expense";
+    const category = listCategories({ type }).find((item) => item.id === transaction.categoryId);
     const assignment = listPeople().find((item) => item.id === transaction.assignmentId);
-    const vendor = transaction.type === "income" ? null : listVendors().find((item) => item.id === transaction.vendorId);
+    const vendor = type === "income" ? null : listVendors().find((item) => item.id === transaction.vendorId);
     if (!category) throw new Error("Choose a valid category for this transaction type.");
     if (!assignment) throw new Error("Choose a valid assignment.");
-    if (transaction.type !== "income" && !vendor) throw new Error("Choose a valid vendor.");
-    return { ...transaction, vendorId: transaction.type === "income" ? "" : transaction.vendorId, id: transaction.id || uuid(), createdAt: transaction.createdAt || now(), createdBy: transaction.createdBy || activeUser.id };
+    if (type !== "income" && !vendor) throw new Error("Choose a valid vendor.");
+    const amount = Number(transaction.amount);
+    if (!Number.isFinite(amount) || amount === 0) throw new Error("Amount must be a non-zero value.");
+    return { ...transaction, type, amount: Math.round(amount * 100) / 100, vendorId: type === "income" ? "" : transaction.vendorId, id: transaction.id || uuid(), createdAt: transaction.createdAt || now(), createdBy: transaction.createdBy || activeUser.id };
   }
 
   async function addTransaction(transaction) {
@@ -687,7 +690,7 @@
     if (!assignment && transaction.assignmentId !== base.assignmentId) throw new Error("Choose a valid assignment.");
     if (type !== "income" && !vendor && transaction.vendorId !== base.vendorId) throw new Error("Choose a valid vendor.");
     const amount = Number(transaction.amount);
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
+    if (!Number.isFinite(amount) || amount === 0) throw new Error("Amount must be a non-zero value.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(transaction.date || ""))) throw new Error("Choose a valid transaction date.");
     return {
       id: base.id, createdAt: base.createdAt, createdBy: base.createdBy,

@@ -59,30 +59,55 @@ test("router parses entity identifiers from the hash", () => {
   );
 });
 
-test("router builds transaction drawer parameters and announces them", () => {
+test("router preserves the current screen when adding drawer parameters", () => {
   const { window, location, events } = loadRouter("#/categories");
 
-  window.AppRouter.navigate("transactions", {
+  window.AppRouter.updateParams({
     drawer: "edit",
-    id: "transaction/1",
+    transactionId: "transaction/1",
   });
   assert.equal(
     location.hash,
-    "#/transactions?drawer=edit&id=transaction%2F1",
+    "#/categories?drawer=edit&transactionId=transaction%2F1",
   );
 
   window.AppRouter.start();
   events.length = 0;
-  window.AppRouter.navigate("transactions", {
+  window.AppRouter.updateParams({
     drawer: "edit",
-    id: "transaction/1",
+    transactionId: "transaction/1",
   });
 
   assert.equal(
     JSON.stringify(events.at(-1).detail),
     JSON.stringify({
-      route: "transactions",
-      params: { drawer: "edit", id: "transaction/1" },
+      route: "categories",
+      params: { drawer: "edit", transactionId: "transaction/1" },
     }),
   );
+});
+
+test("removing drawer parameters preserves entity-detail state", () => {
+  const { window, location } = loadRouter(
+    "#/entity-detail?kind=vendor&id=vendor-1&drawer=edit&transactionId=tx-1",
+  );
+
+  window.AppRouter.updateParams({ drawer: null, transactionId: null });
+
+  assert.equal(
+    location.hash,
+    "#/entity-detail?kind=vendor&id=vendor-1",
+  );
+});
+
+test("main treats drawer parameters as overlays rather than new content", () => {
+  const main = fs.readFileSync("js/main.js", "utf8");
+  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
+
+  assert.match(main, /delete contentParams\.drawer/);
+  assert.match(main, /delete contentParams\.transactionId/);
+  assert.match(main, /if \(contentKey === mountedContentKey\) return/);
+  assert.match(drawer, /AppRouter\.updateParams/);
+  assert.doesNotMatch(drawer, /AppRouter\.navigate\("transactions"/);
+  assert.doesNotMatch(drawer, /window\.TransactionEditor/);
 });

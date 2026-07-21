@@ -93,7 +93,8 @@ test("entity lists drill down into a shared detail screen and rename drawer", ()
   });
   assert.match(detail, /function mount\(root, \{ params = \{\} \} = \{\}\)/);
   assert.match(detail, /createTransactionRow/);
-  assert.match(detail, /drawer: "edit"/);
+  assert.match(detail, /AppRouter\.updateParams/);
+  assert.match(detail, /transactionId:/);
   assert.match(detail, /Total spent/);
   assert.match(detail, /Net activity/);
   assert.match(editor, /renameEntityTransactions/);
@@ -109,4 +110,50 @@ test("vendor search and normalized select styling are present", () => {
   assert.match(css, /select \{[\s\S]*appearance: none/);
   assert.match(css, /border-radius: var\(--radius-small\)/);
   assert.match(css, /background-image: url\("data:image\/svg\+xml/);
+});
+
+test("transaction drawer overlay and panel animate in and out together", () => {
+  const css = fs.readFileSync("styles.css", "utf8");
+
+  assert.match(
+    css,
+    /#transaction-drawer-backdrop:not\(\[hidden\]\)::before[\s\S]*opacity: 0[\s\S]*transition: opacity 360ms ease-out/,
+  );
+  assert.match(
+    css,
+    /#transaction-drawer-backdrop:not\(\[hidden\]\) > \.transaction-drawer[\s\S]*translateX\(100%\)[\s\S]*transition: transform 360ms cubic-bezier\(0\.33, 1, 0\.68, 1\)/,
+  );
+  assert.match(
+    css,
+    /#transaction-drawer-backdrop\.is-open::before\s*\{\s*opacity: 1/,
+  );
+  assert.match(
+    css,
+    /#transaction-drawer-backdrop\.is-open > \.transaction-drawer\s*\{\s*transform: translateX\(0\)/,
+  );
+  assert.match(
+    css,
+    /#transaction-drawer-backdrop\.is-closing::before[\s\S]*opacity: 0[\s\S]*transition-duration: 260ms/,
+  );
+  assert.match(
+    css,
+    /#transaction-drawer-backdrop\.is-closing > \.transaction-drawer[\s\S]*translateX\(100%\)[\s\S]*transition-duration: 260ms/,
+  );
+
+  const drawer = fs.readFileSync(
+    "js/routes/transaction-drawer.js",
+    "utf8",
+  );
+  assert.match(drawer, /void drawer\.offsetWidth/);
+  assert.match(drawer, /backdrop\.classList\.add\("is-open"\)/);
+  assert.match(drawer, /backdrop\.classList\.add\("is-closing"\)/);
+  assert.match(drawer, /event\.propertyName === "transform"/);
+  assert.match(
+    drawer,
+    /closeTimer = window\.setTimeout\(finishClose, reducedMotion \? 0 : 320\)/,
+  );
+  assert.match(
+    drawer,
+    /function finishClose\(\)[\s\S]*backdrop\.hidden = true/,
+  );
 });

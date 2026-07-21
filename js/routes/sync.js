@@ -141,9 +141,9 @@
       try {
         if (action === "review") {
           if (item.source === "transaction")
-            window.AppRouter.navigate("transactions", {
+            window.AppRouter.updateParams({
               drawer: "review",
-              id: item.id,
+              transactionId: item.id,
             });
           if (["investmentSnapshot", "investmentMonth"].includes(item.source))
             window.InvestmentUI?.reviewMonth(item.id);

@@ -14,12 +14,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const drawerTitle = document.getElementById("transaction-drawer-title");
   const saveButton = form.querySelector('button[type="submit"]');
   const transactionMetadata = form.querySelector(".transaction-metadata");
+  const batchEntryToggle = document.getElementById("batch-entry-toggle");
+  const batchEntryInput = form.elements.batchEntry;
   const transactionIdElement = document.getElementById("transaction-edit-id");
   const createdFootnote = document.getElementById(
     "transaction-created-footnote",
   );
 
-  const vendorField = form.querySelector(".vendor-form-field");
   const categorySelect = form.querySelector("category-select");
   const vendorSelect = form.querySelector("vendor-input");
   const peopleSelect = form.querySelector("people-select");
@@ -31,6 +32,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let returnFocus = null;
   let activeType = "expense";
   let expenseDraft = { categoryId: "", vendorId: "" };
+  let closing = false;
+  let closeTimer = 0;
+  let closeAnimationHandler = null;
 
   //  Open the drawer in creation mode to add a new transaction
   //    - 1: Set the flag for mode to create and clear the transaction id
@@ -48,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
     form.elements.type.value = "expense";
     form.elements.amount.value = "";
     form.elements.notes.value = "";
+    batchEntryInput.checked = false;
     activeType = "expense";
     expenseDraft = { categoryId: "", vendorId: "" };
 
@@ -64,6 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
     drawerTitle.textContent = "New transaction";
     saveButton.textContent = "Add transaction";
     transactionMetadata.hidden = true;
+    batchEntryToggle.hidden = false;
 
     initialFormState = formState();
     showDrawer();
@@ -122,6 +128,8 @@ document.addEventListener("DOMContentLoaded", () => {
     drawerTitle.textContent = "Edit transaction";
     saveButton.textContent = "Save changes";
     transactionMetadata.hidden = false;
+    batchEntryToggle.hidden = true;
+    batchEntryInput.checked = false;
     transactionIdElement.textContent = record.id;
 
     const createdAt = new Date(record.createdAt);
@@ -139,14 +147,38 @@ document.addEventListener("DOMContentLoaded", () => {
   //  Shared display logic that runs regardless of the mode
   function showDrawer() {
     message.textContent = "";
+    if (closeTimer) window.clearTimeout(closeTimer);
+    if (closeAnimationHandler) {
+      drawer.removeEventListener("transitionend", closeAnimationHandler);
+    }
+    closing = false;
+    closeTimer = 0;
+    closeAnimationHandler = null;
+    backdrop.classList.remove("is-closing", "is-open");
     backdrop.hidden = false;
+    // Commit the off-screen state before enabling transitions. Without this
+    // layout boundary, repeated opens can skip or compress the entrance.
+    void drawer.offsetWidth;
+
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    if (reducedMotion) {
+      form.elements.amount.focus({ preventScroll: true });
+    } else {
+      drawer.addEventListener("transitionend", handleDrawerOpened);
+    }
+
+    backdrop.classList.add("is-open");
     document.body.classList.add("drawer-open");
     appShell.inert = true;
-    drawer.focus();
 
-    setTimeout(() => {
-      form.elements.amount.focus();
-    }, 0);
+    // drawer.focus();
+
+    // setTimeout(() => {
+    //   form.elements.amount.focus();
+    // }, 0);
   }
 
   function populateFormOptions({
@@ -208,7 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
     categorySelect.value = income
       ? window.BudgetAPI.INCOME_CATEGORY_ID
       : expenseDraft.categoryId;
-    vendorField.hidden = income;
+    vendorSelect.hidden = income;
     vendorSelect.value = income ? "" : expenseDraft.vendorId;
     activeType = type;
   }
@@ -226,14 +258,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return !backdrop.hidden && formState() !== initialFormState;
   }
 
-  function close(force = false, { updateRoute = true } = {}) {
-    if (
-      !force &&
-      isDirty() &&
-      !window.confirm("Discard your unsaved transaction changes?")
-    )
-      return false;
+  function finishClose() {
+    if (!closing) return;
+    closing = false;
+    if (closeTimer) window.clearTimeout(closeTimer);
+    if (closeAnimationHandler) {
+      drawer.removeEventListener("transitionend", closeAnimationHandler);
+    }
+    closeTimer = 0;
+    closeAnimationHandler = null;
     backdrop.hidden = true;
+    backdrop.classList.remove("is-closing", "is-open");
     document.body.classList.remove("drawer-open");
     appShell.inert = false;
     transactionId = "";
@@ -244,13 +279,36 @@ document.addEventListener("DOMContentLoaded", () => {
       ? returnFocus
       : document.querySelector('[data-tab="transactions"]')
     )?.focus();
+  }
 
+  function close(force = false, { updateRoute = true } = {}) {
+    if (closing || backdrop.hidden) return true;
     if (
-      updateRoute &&
-      window.AppRouter.currentRoute() === "transactions" &&
-      window.AppRouter.currentParams().drawer
-    ) {
-      window.AppRouter.navigate("transactions");
+      !force &&
+      isDirty() &&
+      !window.confirm("Discard your unsaved transaction changes?")
+    )
+      return false;
+
+    closing = true;
+    backdrop.classList.remove("is-open");
+    backdrop.classList.add("is-closing");
+    closeAnimationHandler = (event) => {
+      if (event.target === drawer && event.propertyName === "transform") {
+        finishClose();
+      }
+    };
+    drawer.addEventListener("transitionend", closeAnimationHandler);
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    )?.matches;
+    closeTimer = window.setTimeout(finishClose, reducedMotion ? 0 : 320);
+
+    if (updateRoute && window.AppRouter.currentParams().drawer) {
+      window.AppRouter.updateParams({
+        drawer: null,
+        transactionId: null,
+      });
     }
 
     return true;
@@ -322,7 +380,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       initialFormState = formState();
-      close(true);
+      if (mode === "create" && batchEntryInput.checked) {
+        resetForBatchEntry(draft.date);
+      } else {
+        close(true);
+      }
     } catch (error) {
       message.className = "form-message error";
       message.textContent = error.message;
@@ -339,6 +401,23 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateTransaction(draft) {
     window.BudgetAPI.queueTransactionUpdate(draft, openedBase);
     window.ToastUI?.show("Transaction updated. Syncing…");
+  }
+
+  function resetForBatchEntry(date) {
+    form.elements.type.value = "expense";
+    form.elements.amount.value = "";
+    form.elements.notes.value = "";
+    activeType = "expense";
+    expenseDraft = { categoryId: "", vendorId: "" };
+    categorySelect.clearFallbackSelection();
+    vendorSelect.clearFallbackSelection();
+    peopleSelect.clearFallbackSelection();
+    datePickerElement.value = date;
+    populateFormOptions();
+    message.className = "form-message success";
+    message.textContent = "Transaction added. Ready for the next one.";
+    initialFormState = formState();
+    form.elements.amount.focus({ preventScroll: true });
   }
 
   form.querySelectorAll('[name="type"]').forEach((input) =>
@@ -378,21 +457,73 @@ document.addEventListener("DOMContentLoaded", () => {
     const button = event.target.closest("[data-new-transaction]");
     if (!button) return;
     event.preventDefault();
-    window.AppRouter.navigate("transactions", { drawer: "new" });
+    window.AppRouter.updateParams({
+      drawer: "new",
+      transactionId: null,
+    });
   }
 
   document.addEventListener("click", handleNewTransactionClick);
 
-  window.addEventListener("app:route-changed", (event) => {
-    const { route, params = {} } = event.detail;
-    const drawerRequested =
-      route === "transactions" &&
-      ["new", "edit", "review"].includes(params.drawer);
+  let openedRouteKey = "";
 
-    if (!drawerRequested && !backdrop.hidden) {
-      close(true, { updateRoute: false });
+  function openDrawerFromCurrentRoute() {
+    const params = window.AppRouter.currentParams();
+    const action = params.drawer;
+    const id = params.transactionId;
+    const routeKey = `${action || ""}:${id || ""}`;
+
+    if (!["new", "edit", "review"].includes(action)) {
+      openedRouteKey = "";
+      if (!backdrop.hidden) close(true, { updateRoute: false });
+      return;
     }
-  });
+
+    if (routeKey === openedRouteKey && !backdrop.hidden) return;
+
+    if (action === "new") {
+      if (openCreate()) openedRouteKey = routeKey;
+      return;
+    }
+
+    if (!id) {
+      window.AppRouter.updateParams({ drawer: null, transactionId: null });
+      return;
+    }
+
+    const transactionIsAvailable =
+      window.BudgetUI.areTransactionsLoaded() ||
+      Boolean(window.BudgetAPI.getTransactionOutboxItem(id));
+
+    if (!transactionIsAvailable) {
+      window.BudgetUI.loadTransactions();
+      return;
+    }
+
+    if (openEdit(id, { review: action === "review" })) {
+      openedRouteKey = routeKey;
+    } else if (window.BudgetUI.areTransactionsLoaded()) {
+      window.AppRouter.updateParams({ drawer: null, transactionId: null });
+    }
+  }
+
+  function handleDrawerOpened(event) {
+    if (event.target !== drawer || event.propertyName !== "transform") {
+      return;
+    }
+
+    drawer.removeEventListener("transitionend", handleDrawerOpened);
+
+    form.elements.amount.focus({
+      preventScroll: true,
+    });
+  }
+
+  window.addEventListener("app:route-changed", openDrawerFromCurrentRoute);
+  window.addEventListener(
+    "budget:transactions-loaded",
+    openDrawerFromCurrentRoute,
+  );
 
   closeButton.addEventListener("click", () => close());
   cancelButton.addEventListener("click", () => close());
@@ -455,10 +586,4 @@ document.addEventListener("DOMContentLoaded", () => {
         window.prompt("Copy the transaction ID:", id);
       }
     });
-
-  window.TransactionEditor = {
-    openCreate,
-    openEdit,
-    close,
-  };
 });

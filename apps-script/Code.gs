@@ -332,7 +332,7 @@ function validateUpdatedTransaction_(input, existing, references) {
   const type = cleanText_(input.type, 20).toLowerCase();
   if (type !== 'income' && type !== 'expense') throw new Error('Transaction type must be income or expense.');
   const amount = Number(input.amount);
-  if (!isFinite(amount) || amount <= 0) throw new Error('Amount must be greater than zero.');
+  if (!isFinite(amount) || amount === 0) throw new Error('Amount must be a non-zero value.');
   const date = cleanText_(input.date, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidISODate_(date)) throw new Error('Date must be a valid YYYY-MM-DD value.');
 
@@ -373,7 +373,7 @@ function validateTransaction_(input, references) {
   const type = cleanText_(input.type, 20).toLowerCase();
   if (type !== 'income' && type !== 'expense') throw new Error('Transaction type must be income or expense.');
   const amount = Number(input.amount);
-  if (!isFinite(amount) || amount <= 0) throw new Error('Amount must be greater than zero.');
+  if (!isFinite(amount) || amount === 0) throw new Error('Amount must be a non-zero value.');
   const date = cleanText_(input.date, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidISODate_(date)) throw new Error('Date must be a valid YYYY-MM-DD value.');
 

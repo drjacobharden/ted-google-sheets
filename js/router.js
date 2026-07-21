@@ -125,6 +125,20 @@
     location.hash = nextHash.slice(1);
   }
 
+  function updateParams(changes = {}) {
+    const params = currentParams();
+
+    Object.entries(changes).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") {
+        delete params[key];
+      } else {
+        params[key] = String(value);
+      }
+    });
+
+    navigate(currentRoute(), params);
+  }
+
   //   Announces that a new route has been loaded
   function announceRoute() {
     const { name, params } = parseRoute();
@@ -148,6 +162,7 @@
 
   window.AppRouter = {
     navigate,
+    updateParams,
     currentRoute,
     currentParams,
     parseRoute,

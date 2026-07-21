@@ -1,7 +1,7 @@
 // HTML Template: Remove the ` ` at the start and end to edit but put them back before saving
 const currencyInputTemplate = () => `
   <label class="form-field">
-    <span>Amount</span>
+    <span>Amount <small>(use a negative value for refunds)</small></span>
     <div class="input-shell">
       <span class="input-prefix">$</span>
       <input
@@ -9,7 +9,6 @@ const currencyInputTemplate = () => `
         name="amount"
         type="number"
         inputmode="decimal"
-        min="0.01"
         step="0.01"
         placeholder="0.00"
         required

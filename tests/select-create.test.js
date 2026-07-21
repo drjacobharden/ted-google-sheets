@@ -141,6 +141,39 @@ test("transaction drawer validates custom fields and owns both create buttons", 
   assert.match(drawer, /if \(!form\.checkValidity\(\)\)/);
 });
 
+test("transaction drawer supports signed refunds and create-only batch entry", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  const currency = fs.readFileSync("js/components/currency-input.js", "utf8");
+  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
+  const row = fs.readFileSync("js/utils/transaction-row.js", "utf8");
+
+  assert.match(html, /id="batch-entry-toggle"/);
+  assert.match(html, /name="batchEntry" role="switch"/);
+  assert.doesNotMatch(currency, /min="0\.01"/);
+  assert.match(currency, /negative value for refunds/);
+  assert.match(drawer, /batchEntryToggle\.hidden = false/);
+  assert.match(drawer, /batchEntryToggle\.hidden = true/);
+  assert.match(drawer, /resetForBatchEntry\(draft\.date\)/);
+  assert.match(drawer, /datePickerElement\.value = date/);
+  assert.match(row, /budgetEffect = isIncome \? amount : -amount/);
+});
+
+test("transaction drawer anchors controls and fully removes the income vendor row", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  const css = fs.readFileSync("styles.css", "utf8");
+  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
+
+  assert.match(html, /class="transaction-drawer-controls"/);
+  assert.match(
+    html,
+    /class="transaction-drawer-controls"[\s\S]*class="transaction-drawer-actions"[\s\S]*id="batch-entry-toggle"[\s\S]*class="transaction-metadata"/,
+  );
+  assert.match(css, /#transaction-edit-form\s*\{[\s\S]*flex: 1;[\s\S]*flex-direction: column/);
+  assert.match(css, /\.transaction-drawer-controls\s*\{[\s\S]*margin-top: auto/);
+  assert.match(drawer, /vendorSelect\.hidden = income/);
+  assert.doesNotMatch(drawer, /vendorField\.hidden = income/);
+});
+
 test("select-create supports session-scoped archived fallback selections", () => {
   const controller = fs.readFileSync(
     "js/components/select-create-controller.js",
