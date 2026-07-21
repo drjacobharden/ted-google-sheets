@@ -62,21 +62,25 @@ test("custom date Apply uses a disabled cursor rather than a loading cursor", ()
 
 test("transaction entry exposes an accessible vendor combobox", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const form = fs.readFileSync("js/form.js", "utf8");
-  assert.match(html, /id="vendor-combobox-input"[^>]+role="combobox"/);
-  assert.match(html, /id="vendor-combobox-list"\s+role="listbox"/);
-  assert.doesNotMatch(html, /<select name="vendor"/);
-  assert.match(form, /dataset\.addVendor/);
-  assert.match(form, /aria-activedescendant/);
-  assert.match(form, /BudgetAPI\.addVendor\(\{ name \}\)/);
-  assert.match(form, /event\.detail\?\.oldId === vendorIdInput\.value/);
+  const vendor = fs.readFileSync("js/components/vendor-input.js", "utf8");
+  const controller = fs.readFileSync(
+    "js/components/select-create-controller.js",
+    "utf8",
+  );
+  assert.match(html, /<vendor-input><\/vendor-input>/);
+  assert.match(vendor, /role="combobox"/);
+  assert.match(vendor, /role="listbox"/);
+  assert.match(vendor, /aria-controls/);
+  assert.match(vendor, /BudgetAPI\.addVendor\(\{ name \}\)/);
+  assert.match(controller, /aria-selected/);
+  assert.match(controller, /ArrowDown/);
 });
 
 test("entity lists drill down into a shared detail screen and rename drawer", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const category = fs.readFileSync("js/categories.js", "utf8");
-  const vendor = fs.readFileSync("js/vendors.js", "utf8");
-  const people = fs.readFileSync("js/people.js", "utf8");
+  const category = fs.readFileSync("js/routes/categories.js", "utf8");
+  const vendor = fs.readFileSync("js/routes/vendors.js", "utf8");
+  const people = fs.readFileSync("js/routes/people.js", "utf8");
   const detail = fs.readFileSync("js/entity-detail.js", "utf8");
   const editor = fs.readFileSync("js/entity-editor.js", "utf8");
   assert.match(html, /data-screen="entity-detail"/);
@@ -84,7 +88,7 @@ test("entity lists drill down into a shared detail screen and rename drawer", ()
   assert.doesNotMatch(html, /id="focus-(category|vendor|person)-form"/);
   [category, vendor, people].forEach((source) => assert.match(source, /EntityDetailUI\?\.open/));
   assert.match(detail, /createTransactionRow/);
-  assert.match(detail, /TransactionEditor\.open/);
+  assert.match(detail, /TransactionEditor\.openEdit/);
   assert.match(detail, /Total spent/);
   assert.match(detail, /Net activity/);
   assert.match(editor, /renameEntityTransactions/);
@@ -93,7 +97,7 @@ test("entity lists drill down into a shared detail screen and rename drawer", ()
 
 test("vendor search and normalized select styling are present", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const vendor = fs.readFileSync("js/vendors.js", "utf8");
+  const vendor = fs.readFileSync("js/routes/vendors.js", "utf8");
   const css = fs.readFileSync("styles.css", "utf8");
   assert.match(html, /id="vendor-search"/);
   assert.match(vendor, /\$\{vendors\.length\} of \$\{allVendors\.length\} vendors/);

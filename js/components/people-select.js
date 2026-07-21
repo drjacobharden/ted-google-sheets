@@ -1,16 +1,16 @@
-const vendorSelectTemplate = () => `
-  <div class="form-field vendor-form-field">
-    <span class="vendor-select-label">Vendor</span>
-    <div class="vendor-select-menu">
-      <input class="vendor-id-input" name="vendorId" type="hidden" />
+const peopleSelectTemplate = () => `
+  <div class="form-field people-form-field">
+    <span class="people-select-label">Assignment</span>
+    <div class="people-select-menu">
+      <input class="assignment-id-input" name="assignmentId" type="hidden" />
       <button
-        class="vendor-select-trigger select-create-trigger"
+        class="people-select-trigger select-create-trigger"
         type="button"
         role="combobox"
         aria-haspopup="listbox"
         aria-expanded="false"
       >
-        <span>Select a vendor</span>
+        <span>Select an assignment</span>
       </button>
       <div class="select-create-popup" hidden>
         <div class="select-create-search-row">
@@ -19,7 +19,7 @@ const vendorSelectTemplate = () => `
             type="search"
             maxlength="80"
             autocomplete="off"
-            placeholder="Search or add vendor"
+            placeholder="Search or add person"
             aria-autocomplete="list"
           />
           <button class="select-create-add" type="button" hidden>Add</button>
@@ -30,7 +30,7 @@ const vendorSelectTemplate = () => `
           aria-live="polite"
           hidden
         ></p>
-        <div class="vendor-select-list select-create-list" role="listbox"></div>
+        <div class="people-select-list select-create-list" role="listbox"></div>
       </div>
     </div>
   </div>
@@ -39,7 +39,7 @@ const vendorSelectTemplate = () => `
 (function () {
   let nextId = 0;
 
-  class VendorInput extends HTMLElement {
+  class PeopleSelect extends HTMLElement {
     static get observedAttributes() {
       return ["value"];
     }
@@ -50,14 +50,14 @@ const vendorSelectTemplate = () => `
     get value() {
       return (
         this.#controller?.value ||
-        this.querySelector(".vendor-id-input")?.value ||
+        this.querySelector(".assignment-id-input")?.value ||
         this.getAttribute("value") ||
         ""
       );
     }
 
-    set value(vendorId) {
-      const id = String(vendorId || "");
+    set value(personId) {
+      const id = String(personId || "");
 
       if (!this.#controller) {
         if (id) this.setAttribute("value", id);
@@ -91,23 +91,23 @@ const vendorSelectTemplate = () => `
     connectedCallback() {
       const initialValue = Object.prototype.hasOwnProperty.call(this, "value")
         ? String(this.value || "")
-        : this.getAttribute("value") || "";
+        : this.getAttribute("value") || window.BudgetAPI.SHARED_ASSIGNMENT_ID;
       if (Object.prototype.hasOwnProperty.call(this, "value")) {
         delete this.value;
       }
 
-      this.innerHTML = vendorSelectTemplate();
+      this.innerHTML = peopleSelectTemplate();
       this.#form = this.closest("form");
 
-      const controlId = `vendor-select-${++nextId}`;
+      const controlId = `people-select-${++nextId}`;
       const labelId = `${controlId}-label`;
       const popupId = `${controlId}-popup`;
       const listId = `${controlId}-list`;
-      const label = this.querySelector(".vendor-select-label");
-      const trigger = this.querySelector(".vendor-select-trigger");
+      const label = this.querySelector(".people-select-label");
+      const trigger = this.querySelector(".people-select-trigger");
       const search = this.querySelector(".select-create-search");
       const popup = this.querySelector(".select-create-popup");
-      const list = this.querySelector(".vendor-select-list");
+      const list = this.querySelector(".people-select-list");
 
       label.id = labelId;
       trigger.id = controlId;
@@ -115,12 +115,12 @@ const vendorSelectTemplate = () => `
       trigger.setAttribute("aria-controls", popupId);
       popup.id = popupId;
       list.id = listId;
-      search.setAttribute("aria-label", "Search or add vendor");
+      search.setAttribute("aria-label", "Search or add person");
       search.setAttribute("aria-controls", listId);
 
       this.#controller = new window.SelectCreateController({
         host: this,
-        idInput: this.querySelector(".vendor-id-input"),
+        idInput: this.querySelector(".assignment-id-input"),
         trigger,
         triggerText: trigger.querySelector("span"),
         popup,
@@ -128,37 +128,37 @@ const vendorSelectTemplate = () => `
         addButton: this.querySelector(".select-create-add"),
         list,
         message: this.querySelector(".select-create-message"),
-        getOptions: () => window.BudgetAPI.listVendors(),
-        createOption: (name) => window.BudgetAPI.addVendor({ name }),
-        onSelect: (vendor, state) => this.#handleSelection(vendor, state),
-        onCreate: (vendor) => {
+        getOptions: () => window.BudgetAPI.listPeople(),
+        createOption: (name) => window.BudgetAPI.addPerson({ name }),
+        onSelect: (person, state) => this.#handleSelection(person, state),
+        onCreate: (person) => {
           this.dispatchEvent(
-            new CustomEvent("vendor-created", {
+            new CustomEvent("person-created", {
               bubbles: true,
-              detail: { vendor },
+              detail: { person },
             }),
           );
           window.ToastUI?.show(
             window.BudgetAPI.getConfig().endpoint
-              ? `${vendor.name} was added. Syncing…`
-              : `${vendor.name} was added.`,
+              ? `${person.name} was added. Syncing…`
+              : `${person.name} was added.`,
           );
         },
-        placeholder: "Select a vendor",
-        entityLabel: "vendor",
-        emptyLabel: "No matching vendors",
+        placeholder: "Select an assignment",
+        entityLabel: "person",
+        emptyLabel: "No matching people",
       });
 
       this.#controller.refresh(initialValue);
       this.#controller.connect();
       this.#form?.addEventListener("reset", this);
-      window.addEventListener("budget:vendors-changed", this);
+      window.addEventListener("budget:people-changed", this);
     }
 
     disconnectedCallback() {
       this.#controller?.disconnect();
       this.#form?.removeEventListener("reset", this);
-      window.removeEventListener("budget:vendors-changed", this);
+      window.removeEventListener("budget:people-changed", this);
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
@@ -169,16 +169,22 @@ const vendorSelectTemplate = () => `
 
     handleEvent(event) {
       if (event.type === "reset") {
-        setTimeout(() => this.#controller.refresh("", { resetSearch: true }), 0);
+        setTimeout(
+          () =>
+            this.#controller.refresh(window.BudgetAPI.SHARED_ASSIGNMENT_ID, {
+              resetSearch: true,
+            }),
+          0,
+        );
       }
 
-      if (event.type === "budget:vendors-changed") {
+      if (event.type === "budget:people-changed") {
         this.#controller.refresh(this.value);
       }
     }
 
-    #handleSelection(vendor, { announce }) {
-      const id = String(vendor?.id || "");
+    #handleSelection(person, { announce }) {
+      const id = String(person?.id || "");
 
       if (id) {
         if (this.getAttribute("value") !== id) this.setAttribute("value", id);
@@ -188,14 +194,14 @@ const vendorSelectTemplate = () => `
 
       if (announce) {
         this.dispatchEvent(
-          new CustomEvent("vendor-selected", {
+          new CustomEvent("person-selected", {
             bubbles: true,
-            detail: { vendor },
+            detail: { person },
           }),
         );
       }
     }
   }
 
-  customElements.define("vendor-input", VendorInput);
+  customElements.define("people-select", PeopleSelect);
 })();

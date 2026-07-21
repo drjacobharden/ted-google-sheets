@@ -1,0 +1,255 @@
+const categorySelectTemplate = () => `
+  <div class="form-field category-form-field">
+    <span class="category-select-label">Category</span>
+    <div class="category-select-menu">
+      <input class="category-id-input" name="categoryId" type="hidden" />
+      <button
+        class="category-select-trigger select-create-trigger"
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded="false"
+      >
+        <span>Select a category</span>
+      </button>
+      <div class="select-create-popup" hidden>
+        <div class="select-create-search-row">
+          <input
+            class="select-create-search"
+            type="search"
+            maxlength="50"
+            autocomplete="off"
+            placeholder="Search or add category"
+            aria-autocomplete="list"
+          />
+          <button class="select-create-add" type="button" hidden>Add</button>
+        </div>
+        <p
+          class="select-create-message"
+          role="alert"
+          aria-live="polite"
+          hidden
+        ></p>
+        <div
+          class="category-select-list select-create-list"
+          role="listbox"
+        ></div>
+      </div>
+    </div>
+  </div>
+`;
+
+(function () {
+  let nextId = 0;
+
+  class CategorySelect extends HTMLElement {
+    static get observedAttributes() {
+      return ["value", "type"];
+    }
+
+    #controller = null;
+    #form = null;
+    #type = "expense";
+
+    get value() {
+      return (
+        this.#controller?.value ||
+        this.querySelector(".category-id-input")?.value ||
+        this.getAttribute("value") ||
+        ""
+      );
+    }
+
+    set value(categoryId) {
+      const id = String(categoryId || "");
+
+      if (!this.#controller) {
+        if (id) this.setAttribute("value", id);
+        else this.removeAttribute("value");
+        return;
+      }
+
+      this.#controller.setValue(id);
+    }
+
+    get isOpen() {
+      return this.#controller?.isOpen || false;
+    }
+
+    setFallbackSelection(selection) {
+      this.#controller?.setFallbackSelection(selection);
+    }
+
+    clearFallbackSelection() {
+      this.#controller?.clearFallbackSelection();
+    }
+
+    reportSelectionError(message) {
+      this.#controller?.reportSelectionError(message);
+    }
+
+    closePopup(options) {
+      this.#controller?.close(options);
+    }
+
+    get type() {
+      return this.#type;
+    }
+
+    set type(value) {
+      const type = value === "income" ? "income" : "expense";
+
+      if (this.getAttribute("type") !== type) {
+        this.setAttribute("type", type);
+      } else if (this.#type !== type) {
+        this.#type = type;
+        this.#controller?.refresh(this.value, { resetSearch: true });
+      }
+    }
+
+    connectedCallback() {
+      const initialValue = Object.prototype.hasOwnProperty.call(this, "value")
+        ? String(this.value || "")
+        : this.getAttribute("value") || "";
+      const initialType = Object.prototype.hasOwnProperty.call(this, "type")
+        ? this.type
+        : null;
+      if (Object.prototype.hasOwnProperty.call(this, "value")) {
+        delete this.value;
+      }
+      if (Object.prototype.hasOwnProperty.call(this, "type")) {
+        delete this.type;
+      }
+
+      this.innerHTML = categorySelectTemplate();
+      this.#form = this.closest("form");
+
+      const controlId = `category-select-${++nextId}`;
+      const labelId = `${controlId}-label`;
+      const popupId = `${controlId}-popup`;
+      const listId = `${controlId}-list`;
+      const label = this.querySelector(".category-select-label");
+      const trigger = this.querySelector(".category-select-trigger");
+      const search = this.querySelector(".select-create-search");
+      const popup = this.querySelector(".select-create-popup");
+      const list = this.querySelector(".category-select-list");
+
+      label.id = labelId;
+      trigger.id = controlId;
+      trigger.setAttribute("aria-labelledby", `${labelId} ${controlId}`);
+      trigger.setAttribute("aria-controls", popupId);
+      popup.id = popupId;
+      list.id = listId;
+      search.setAttribute("aria-label", "Search or add category");
+      search.setAttribute("aria-controls", listId);
+
+      this.#type =
+        initialType === "income" || initialType === "expense"
+          ? initialType
+          : this.#getFormType();
+      this.#controller = new window.SelectCreateController({
+        host: this,
+        idInput: this.querySelector(".category-id-input"),
+        trigger,
+        triggerText: trigger.querySelector("span"),
+        popup,
+        search,
+        addButton: this.querySelector(".select-create-add"),
+        list,
+        message: this.querySelector(".select-create-message"),
+        getOptions: () =>
+          window.BudgetAPI.listCategories({ type: this.#type }),
+        createOption: (name) =>
+          window.BudgetAPI.addCategory({ name, type: this.#type }),
+        onSelect: (category, state) => this.#handleSelection(category, state),
+        onCreate: (category) => {
+          this.dispatchEvent(
+            new CustomEvent("category-created", {
+              bubbles: true,
+              detail: { category },
+            }),
+          );
+          window.ToastUI?.show(
+            window.BudgetAPI.getConfig().endpoint
+              ? `${category.name} was added. Syncing…`
+              : `${category.name} was added.`,
+          );
+        },
+        placeholder: "Select a category",
+        entityLabel: "category",
+        emptyLabel: "No matching categories",
+      });
+
+      this.#controller.refresh(initialValue);
+      this.#controller.connect();
+      this.#form?.addEventListener("change", this);
+      this.#form?.addEventListener("reset", this);
+      window.addEventListener("budget:categories-changed", this);
+    }
+
+    disconnectedCallback() {
+      this.#controller?.disconnect();
+      this.#form?.removeEventListener("change", this);
+      this.#form?.removeEventListener("reset", this);
+      window.removeEventListener("budget:categories-changed", this);
+    }
+
+    attributeChangedCallback(name, oldValue, newValue) {
+      if (oldValue === newValue || !this.#controller) return;
+
+      if (name === "value") this.#controller.setValue(newValue || "");
+
+      if (name === "type") {
+        this.#type = newValue === "income" ? "income" : "expense";
+        this.#controller.refresh(this.value, { resetSearch: true });
+      }
+    }
+
+    handleEvent(event) {
+      if (event.type === "change" && event.target.name === "type") {
+        this.#type = event.target.value === "income" ? "income" : "expense";
+        this.#controller.refresh(this.value, { resetSearch: true });
+      }
+
+      if (event.type === "reset") {
+        setTimeout(() => {
+          this.#type = this.#getFormType();
+          this.#controller.refresh("", { resetSearch: true });
+        }, 0);
+      }
+
+      if (event.type === "budget:categories-changed") {
+        this.#controller.refresh(this.value);
+      }
+    }
+
+    #getFormType() {
+      const selectedType = this.#form?.querySelector(
+        '[name="type"]:checked',
+      )?.value;
+      const requestedType = this.getAttribute("type") || selectedType;
+      return requestedType === "income" ? "income" : "expense";
+    }
+
+    #handleSelection(category, { announce }) {
+      const id = String(category?.id || "");
+
+      if (id) {
+        if (this.getAttribute("value") !== id) this.setAttribute("value", id);
+      } else if (this.hasAttribute("value")) {
+        this.removeAttribute("value");
+      }
+
+      if (announce) {
+        this.dispatchEvent(
+          new CustomEvent("category-selected", {
+            bubbles: true,
+            detail: { category },
+          }),
+        );
+      }
+    }
+  }
+
+  customElements.define("category-select", CategorySelect);
+})();

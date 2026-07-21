@@ -21,17 +21,17 @@ test("transaction entry is optimistic and exposes durable sync controls", () => 
 
 test("transaction editing uses a UUID drawer, durable updates, and unified notifications", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const main = fs.readFileSync("js/main.js", "utf8");
-  const editor = fs.readFileSync("js/transaction-editor.js", "utf8");
+  const transactions = fs.readFileSync("js/routes/transactions.js", "utf8");
+  const editor = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
   const sync = fs.readFileSync("js/sync.js", "utf8");
   const api = fs.readFileSync("js/api.js", "utf8");
   assert.match(html, /id="transaction-drawer"/);
   assert.match(html, /id="transaction-edit-id"/);
   assert.match(html, /id="transaction-created-footnote"/);
   assert.match(html, /id="toast-stack"/);
-  assert.match(main, /dataset\.transactionId = transaction\.id/);
-  assert.match(main, /TransactionEditor\?\.open/);
-  assert.match(editor, /window\.openTransactionEditor = open/);
+  assert.match(transactions, /dataset\.transactionId = transaction\.id/);
+  assert.match(transactions, /TransactionEditor\?\.openEdit/);
+  assert.match(editor, /window\.TransactionEditor = \{[\s\S]*openCreate,[\s\S]*openEdit,[\s\S]*close/);
   assert.match(editor, /queueTransactionUpdate/);
   assert.match(api, /operation: "update"/);
   assert.match(api, /revision/);
@@ -63,9 +63,9 @@ test("offline retries expose countdowns, manual controls, and a deduplicated out
 
 test("entity creation is optimistic and management screens reuse loaded transactions", () => {
   const api = fs.readFileSync("js/api.js", "utf8");
-  const category = fs.readFileSync("js/categories.js", "utf8");
-  const vendor = fs.readFileSync("js/vendors.js", "utf8");
-  const people = fs.readFileSync("js/people.js", "utf8");
+  const category = fs.readFileSync("js/routes/categories.js", "utf8");
+  const vendor = fs.readFileSync("js/routes/vendors.js", "utf8");
+  const people = fs.readFileSync("js/routes/people.js", "utf8");
   assert.match(api, /myFinance\.entityOutbox\.v1/);
   assert.match(api, /syncEntityOutbox/);
   assert.match(api, /pendingEntities\.has\(item\.record\.vendorId\)/);

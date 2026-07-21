@@ -172,6 +172,9 @@ month-picker,
   outline: 0;
   box-shadow: 0 0 0 4px rgba(111, 157, 102, 0.12);
 }
+.date-picker-trigger[aria-invalid="true"] {
+  border-color: #d49898;
+}
 
 .date-picker-trigger svg,
 .month-picker-trigger svg {

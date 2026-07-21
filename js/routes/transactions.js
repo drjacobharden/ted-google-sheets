@@ -137,7 +137,9 @@
     //  open the entity detail screen for the vendor
     function handleClick(event) {
       const row = event.target.closest("tr[data-transaction-id]");
-      if (row) window.TransactionEditor?.open(row.dataset.transactionId);
+      if (row) {
+        window.TransactionEditor.openEdit(row.dataset.transactionId);
+      }
     }
 
     function handleKeydown(event) {
@@ -145,7 +147,7 @@
       const row = event.target.closest("tr[data-transaction-id]");
       if (!row) return;
       event.preventDefault();
-      window.TransactionEditor?.open(row.dataset.transactionId);
+      window.TransactionEditor?.openEdit(row.dataset.transactionId);
     }
 
     function handleSearch() {

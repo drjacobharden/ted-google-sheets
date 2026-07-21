@@ -26,6 +26,10 @@
     <script src="js/components/close-button.js" defer></script>
     <script src="js/components/month-picker.js" defer></script>
     <script src="js/components/date-range-picker.js" defer></script>
+    <script src="js/components/select-create-controller.js" defer></script>
+    <script src="js/components/category-select.js" defer></script>
+    <script src="js/components/vendor-input.js" defer></script>
+    <script src="js/components/people-select.js" defer></script>
 
     <!-- Screen imports -->
     <!-- TODO: Put screen imports here -->
@@ -131,7 +135,7 @@
               <button
                 class="nav-item nav-subitem nav-action-item"
                 type="button"
-                data-tab="new-transaction"
+                data-new-transaction
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
@@ -325,7 +329,7 @@
                 <button
                   class="primary-button compact"
                   type="button"
-                  data-tab="new-transaction"
+                  data-new-transaction
                 >
                   <span aria-hidden="true">+</span> Add transaction
                 </button>
@@ -888,175 +892,6 @@
               </aside>
             </div>
           </section>
-          <!-- New transaction tab -->
-          <section class="screen" data-screen="new-transaction" hidden>
-            <div class="page-heading">
-              <p class="eyebrow">Record activity</p>
-              <h1>New transaction</h1>
-              <p class="heading-copy">
-                Add a transaction to your budget ledger.
-              </p>
-            </div>
-
-            <form class="transaction-form" novalidate>
-              <fieldset class="type-toggle">
-                <legend>Transaction type</legend>
-                <label>
-                  <input type="radio" name="type" value="expense" checked />
-                  <span>Expense</span>
-                </label>
-                <label>
-                  <input type="radio" name="type" value="income" />
-                  <span>Income</span>
-                </label>
-              </fieldset>
-
-              <div class="form-grid">
-                <currency-input></currency-input>
-                <date-picker name="transaction-date"></date-picker>
-
-                <div class="form-field category-form-field">
-                  <span>Category</span>
-                  <select class="category-select" name="category" required>
-                    <option value="">Select a category</option>
-                  </select>
-                  <div class="inline-category" id="inline-category" hidden>
-                    <label for="inline-category-name">New category name</label>
-                    <div class="inline-category-row">
-                      <input
-                        id="inline-category-name"
-                        type="text"
-                        maxlength="50"
-                        placeholder="e.g. Subscriptions"
-                      />
-                      <div class="inline-entity-actions">
-                        <button
-                          class="inline-cancel-button"
-                          id="cancel-inline-category"
-                          type="button"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          class="secondary-button"
-                          id="save-inline-category"
-                          type="button"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                    <p class="inline-category-message" aria-live="polite"></p>
-                  </div>
-                </div>
-
-                <div class="form-field vendor-form-field">
-                  <span id="vendor-combobox-label">Vendor</span>
-                  <div class="vendor-combobox" id="vendor-combobox">
-                    <input name="vendor" type="hidden" />
-                    <input
-                      id="vendor-combobox-input"
-                      type="text"
-                      maxlength="80"
-                      autocomplete="off"
-                      placeholder="Type a vendor name"
-                      role="combobox"
-                      aria-labelledby="vendor-combobox-label"
-                      aria-autocomplete="list"
-                      aria-expanded="false"
-                      aria-controls="vendor-combobox-list"
-                    />
-                    <div
-                      class="vendor-combobox-list"
-                      id="vendor-combobox-list"
-                      role="listbox"
-                      hidden
-                    ></div>
-                  </div>
-                  <p class="inline-vendor-message" aria-live="polite"></p>
-                </div>
-
-                <div class="form-field assignment-form-field">
-                  <span>Assignment</span>
-                  <select name="assignment" required>
-                    <option value="Shared">Shared</option>
-                  </select>
-                  <div class="inline-person" id="inline-person" hidden>
-                    <label for="inline-person-name">New household member</label>
-                    <div class="inline-person-row">
-                      <input
-                        id="inline-person-name"
-                        type="text"
-                        maxlength="80"
-                        placeholder="e.g. Alex"
-                      />
-                      <div class="inline-entity-actions">
-                        <button
-                          class="inline-cancel-button"
-                          id="cancel-inline-person"
-                          type="button"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          class="secondary-button"
-                          id="save-inline-person"
-                          type="button"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                    <p class="inline-person-message" aria-live="polite"></p>
-                  </div>
-                </div>
-
-                <label class="form-field">
-                  <span>Note <small>(optional)</small></span>
-                  <input
-                    name="notes"
-                    type="text"
-                    maxlength="160"
-                    placeholder="Add a short note"
-                  />
-                </label>
-              </div>
-
-              <div
-                id="transaction-sync-status"
-                class="transaction-sync-status"
-                aria-live="polite"
-              >
-                <span id="transaction-sync-text">All changes saved</span>
-                <div
-                  id="transaction-sync-actions"
-                  class="transaction-sync-actions"
-                  hidden
-                >
-                  <button
-                    id="view-sync-from-form"
-                    class="inline-cancel-button"
-                    type="button"
-                  >
-                    View Sync
-                  </button>
-                </div>
-              </div>
-              <p class="form-message" aria-live="polite"></p>
-              <div class="form-actions">
-                <button
-                  class="secondary-button"
-                  type="button"
-                  data-tab="transactions"
-                >
-                  Cancel
-                </button>
-                <button class="primary-button" type="submit">
-                  Add transaction
-                </button>
-              </div>
-            </form>
-          </section>
           <!-- Investment overview tab -->
           <section class="screen" data-screen="investment-overview" hidden>
             <div class="page-heading">
@@ -1264,25 +1099,16 @@
               ></label
             >
           </fieldset>
+
           <div class="drawer-form-grid">
             <currency-input></currency-input>
             <date-picker name="date"></date-picker>
-
-            <label class="form-field"
-              ><span>Category</span
-              ><select name="categoryId" required></select
-            ></label>
-            <label class="form-field" id="edit-vendor-field"
-              ><span>Vendor</span
-              ><select name="vendorId" required></select
-            ></label>
-            <label class="form-field"
-              ><span>Assignment</span
-              ><select name="assignmentId" required></select
-            ></label>
-            <label class="form-field"
-              ><span>Note <small>(optional)</small></span
-              ><textarea name="notes" maxlength="1000" rows="3"></textarea>
+            <category-select></category-select>
+            <vendor-input></vendor-input>
+            <people-select></people-select>
+            <label class="form-field">
+              <span>Note <small>(optional)</small></span>
+              <textarea name="notes" maxlength="1000" rows="3"></textarea>
             </label>
           </div>
           <p
@@ -1706,14 +1532,14 @@
     <script src="js/routes/categories.js"></script>
     <script src="js/routes/vendors.js"></script>
     <script src="js/routes/people.js"></script>
+    <script src="js/routes/transaction-drawer.js"></script>
 
     <!-- <script src="js/categories.js"></script> -->
     <!-- <script src="js/vendors.js"></script> -->
     <!-- <script src="js/people.js"></script> -->
     <script src="js/entity-detail.js"></script>
     <script src="js/entity-editor.js"></script>
-    <script src="js/form.js"></script>
-    <script src="js/transaction-editor.js"></script>
+    <!-- <script src="js/form.js"></script> -->
     <script src="js/sync.js"></script>
     <script src="js/investments.js"></script>
   </body>
