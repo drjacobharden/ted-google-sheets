@@ -4,14 +4,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const backdrop = document.getElementById("transaction-drawer-backdrop");
   const drawer = document.getElementById("transaction-drawer");
   const form = document.getElementById("transaction-edit-form");
+  const header = document.getElementById("transaction-drawer-header");
 
   const message = document.getElementById("transaction-edit-message");
   const datePickerElement = form.querySelector('date-picker[name="date"]');
   const appShell = document.querySelector(".app-shell");
-  const closeButton = document.getElementById("close-transaction-drawer");
   const cancelButton = document.getElementById("cancel-transaction-edit");
 
-  const drawerTitle = document.getElementById("transaction-drawer-title");
   const saveButton = form.querySelector('button[type="submit"]');
   const transactionMetadata = form.querySelector(".transaction-metadata");
   const batchEntryToggle = document.getElementById("batch-entry-toggle");
@@ -66,7 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     populateFormOptions();
 
-    drawerTitle.textContent = "New transaction";
+    header.title = "New transaction";
     saveButton.textContent = "Add transaction";
     transactionMetadata.hidden = true;
     batchEntryToggle.hidden = false;
@@ -125,7 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     populateFormFromRecord(record);
 
-    drawerTitle.textContent = "Edit transaction";
+    header.title = "Edit transaction";
     saveButton.textContent = "Save changes";
     transactionMetadata.hidden = false;
     batchEntryToggle.hidden = true;
@@ -524,8 +523,8 @@ document.addEventListener("DOMContentLoaded", () => {
     "budget:transactions-loaded",
     openDrawerFromCurrentRoute,
   );
+  window.addEventListener("drawer:close-requested", close);
 
-  closeButton.addEventListener("click", () => close());
   cancelButton.addEventListener("click", () => close());
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();

@@ -81,47 +81,230 @@
     return `<article class="summary-card"><div><p>${escapeHTML(label)}</p><strong>${escapeHTML(value)}</strong>${hint ? `<small>${escapeHTML(hint)}</small>` : ""}</div></article>`;
   }
 
-  function trendSVG() {
+  function monthIndex(month) {
+    const match = String(month || "").match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+    return match ? Number(match[1]) * 12 + Number(match[2]) - 1 : null;
+  }
+
+  function monthFromIndex(index) {
+    const year = Math.floor(index / 12);
+    const month = (index % 12) + 1;
+    return `${year}-${String(month).padStart(2, "0")}`;
+  }
+
+  function monthsBetween(start, end) {
+    const first = monthIndex(start);
+    const last = monthIndex(end);
+    if (first === null || last === null || first > last) return [];
+    return Array.from({ length: last - first + 1 }, (_, offset) =>
+      monthFromIndex(first + offset),
+    );
+  }
+
+  function buildTrendSeries({
+    balances = [],
+    contributions = [],
+    accounts = [],
+    range = {},
+  }) {
+    const accountIds = new Set(accounts.map((account) => account.id));
+    const validBalances = balances
+      .filter(
+        (item) => accountIds.has(item.accountId) && monthIndex(item.month) !== null,
+      )
+      .sort((a, b) => a.month.localeCompare(b.month));
+    if (!validBalances.length) {
+      return { months: [], balances: [], contributions: [] };
+    }
+
+    const start = monthIndex(range.start) !== null
+      ? range.start
+      : validBalances[0].month;
+    const end = monthIndex(range.end) !== null
+      ? range.end
+      : validBalances.at(-1).month;
+    const months = monthsBetween(start, end);
+    const rowsByAccount = new Map(
+      accounts.map((account) => [
+        account.id,
+        validBalances.filter((item) => item.accountId === account.id),
+      ]),
+    );
+
+    const aggregateBalances = months.map((month) => {
+      const target = monthIndex(month);
+      return accounts.reduce((total, account) => {
+        const rows = rowsByAccount.get(account.id);
+        if (!rows?.length || target < monthIndex(rows[0].month)) return total;
+
+        const previous = rows.filter((row) => row.month <= month).at(-1);
+        const next = rows.find((row) => row.month >= month);
+        if (!previous) return total;
+        if (!next || next.month === previous.month) {
+          return total + Number(previous.balance || 0);
+        }
+
+        const previousIndex = monthIndex(previous.month);
+        const nextIndex = monthIndex(next.month);
+        const progress = (target - previousIndex) / (nextIndex - previousIndex);
+        const interpolated =
+          Number(previous.balance || 0) +
+          (Number(next.balance || 0) - Number(previous.balance || 0)) * progress;
+        return total + interpolated;
+      }, 0);
+    });
+
+    const validContributions = contributions.filter(
+      (item) =>
+        accountIds.has(item.accountId) && monthIndex(item.month) !== null,
+    );
+    const cumulativeContributions = months.map((month) =>
+      validContributions
+        .filter((item) => item.month <= month)
+        .reduce((total, item) => total + Number(item.amount || 0), 0),
+    );
+
+    return {
+      months,
+      balances: aggregateBalances,
+      contributions: cumulativeContributions,
+    };
+  }
+
+  function legacyTrendSeries() {
     const balances = window.InvestmentAPI.balances();
     const months = [...new Set(balances.map((item) => item.month))].sort();
     const accounts = window.InvestmentAPI.accounts();
-    const points = months.map((month) => ({
-      month,
-      value: accounts.reduce((sum, account) => {
-        const row = balances
-          .filter(
-            (item) => item.accountId === account.id && item.month <= month,
-          )
-          .sort((a, b) => a.month.localeCompare(b.month))
-          .at(-1);
-        return sum + Number(row?.balance || 0);
-      }, 0),
-    }));
-    if (!points.length) {
+    return {
+      months,
+      balances: months.map((month) =>
+        accounts.reduce((sum, account) => {
+          const row = balances
+            .filter(
+              (item) => item.accountId === account.id && item.month <= month,
+            )
+            .sort((a, b) => a.month.localeCompare(b.month))
+            .at(-1);
+          return sum + Number(row?.balance || 0);
+        }, 0),
+      ),
+      contributions: [],
+    };
+  }
+
+  function niceScale(values, tickCount = 4) {
+    let min = Math.min(0, ...values);
+    let max = Math.max(0, ...values);
+    if (min === max) max = min + 1;
+    const roughStep = (max - min) / tickCount;
+    const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+    const normalized = roughStep / magnitude;
+    const step =
+      (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) *
+      magnitude;
+    min = Math.floor(min / step) * step;
+    max = Math.ceil(max / step) * step;
+    const ticks = [];
+    for (let value = min; value <= max + step / 2; value += step) {
+      ticks.push(Math.abs(value) < step / 1000 ? 0 : value);
+    }
+    return { min, max, ticks };
+  }
+
+  function compactMoney(value) {
+    const absolute = Math.abs(value);
+    const compact = (divisor, suffix) => {
+      const result = absolute / divisor;
+      return `${result >= 10 || Number.isInteger(result) ? result.toFixed(0) : result.toFixed(1)}${suffix}`;
+    };
+    const amount = absolute >= 1000000
+      ? compact(1000000, "M")
+      : absolute >= 1000
+        ? compact(1000, "K")
+        : absolute.toFixed(0);
+    return `${value < 0 ? "−" : ""}$${amount}`;
+  }
+
+  function trendSVG(options) {
+    const includeContributions = options?.includeContributions === true;
+    const series = options
+      ? buildTrendSeries({
+          balances: window.InvestmentAPI.balances(),
+          contributions: window.InvestmentAPI.contributions(),
+          accounts: window.InvestmentAPI.accounts(),
+          range: options.range,
+        })
+      : legacyTrendSeries();
+    if (!series.months.length) {
       return '<div class="investment-empty">Add monthly balances to build your trend.</div>';
     }
 
     const width = 760;
-    const height = 230;
-    const pad = 34;
-    const max = Math.max(...points.map((item) => item.value), 1);
-    const min = Math.min(...points.map((item) => item.value), 0);
+    const height = 270;
+    const plot = { top: 42, right: 24, bottom: 42, left: 76 };
+    const visibleValues = includeContributions
+      ? [...series.balances, ...series.contributions]
+      : series.balances;
+    const { min, max, ticks } = niceScale(visibleValues);
     const span = Math.max(max - min, 1);
-    const coordinates = points.map((item, index) => ({
-      ...item,
-      x:
-        pad +
-        (points.length === 1
-          ? (width - pad * 2) / 2
-          : (index * (width - pad * 2)) / (points.length - 1)),
-      y: height - pad - ((item.value - min) / span) * (height - pad * 2),
-    }));
+    const plotWidth = width - plot.left - plot.right;
+    const plotHeight = height - plot.top - plot.bottom;
+    const x = (index) =>
+      plot.left +
+      (series.months.length === 1
+        ? plotWidth / 2
+        : (index * plotWidth) / (series.months.length - 1));
+    const y = (value) => plot.top + ((max - value) / span) * plotHeight;
+    const coordinates = (values) =>
+      values.map((value, index) => ({
+        month: series.months[index],
+        value,
+        x: x(index),
+        y: y(value),
+      }));
+    const balancePoints = coordinates(series.balances);
+    const contributionPoints = coordinates(series.contributions);
+    const xLabelStep = Math.max(1, Math.ceil((series.months.length - 1) / 5));
+    const xLabelIndexes = new Set(
+      series.months
+        .map((_, index) => index)
+        .filter(
+          (index) =>
+            index === 0 ||
+            index === series.months.length - 1 ||
+            index % xLabelStep === 0,
+        ),
+    );
+    const line = (points) =>
+      `M${points.map((point) => `${point.x},${point.y}`).join(" L")}`;
+    const circles = (points, className, label) =>
+      points
+        .map(
+          (point) =>
+            `<circle class="${className}" cx="${point.x}" cy="${point.y}" r="3.5"><title>${formatMonth(point.month)} — ${label}: ${money(point.value)}</title></circle>`,
+        )
+        .join("");
+    const ariaLabel = includeContributions
+      ? "Investment balance and cumulative net contribution trend"
+      : "Investment balance trend";
+    const zeroY = y(0);
 
-    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Investment balance trend from ${formatMonth(points[0].month)} to ${formatMonth(points.at(-1).month)}"><path class="trend-area" d="M${coordinates[0].x},${height - pad} ${coordinates.map((point) => `L${point.x},${point.y}`).join(" ")} L${coordinates.at(-1).x},${height - pad} Z"/><path class="trend-line" d="M${coordinates.map((point) => `${point.x},${point.y}`).join(" L")}"/>${coordinates.map((point) => `<circle cx="${point.x}" cy="${point.y}" r="4"><title>${formatMonth(point.month)}: ${money(point.value)}</title></circle>`).join("")}<text x="${pad}" y="${height - 8}">${formatMonth(points[0].month)}</text><text x="${width - pad}" y="${height - 8}" text-anchor="end">${formatMonth(points.at(-1).month)}</text></svg>`;
+    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${ariaLabel} from ${formatMonth(series.months[0])} to ${formatMonth(series.months.at(-1))}">
+      ${includeContributions ? `<g class="trend-legend" aria-hidden="true"><line class="trend-line trend-balance-line" x1="${plot.left}" y1="16" x2="${plot.left + 28}" y2="16"/><text x="${plot.left + 36}" y="20">Balance</text><line class="trend-line trend-contribution-line" x1="${plot.left + 118}" y1="16" x2="${plot.left + 146}" y2="16"/><text x="${plot.left + 154}" y="20">Net contributions</text></g>` : ""}
+      <g class="trend-grid" aria-hidden="true">${ticks.map((tick) => `<line x1="${plot.left}" y1="${y(tick)}" x2="${width - plot.right}" y2="${y(tick)}"/><text x="${plot.left - 10}" y="${y(tick) + 4}" text-anchor="end">${compactMoney(tick)}</text>`).join("")}</g>
+      <line class="trend-y-axis" x1="${plot.left}" y1="${plot.top}" x2="${plot.left}" y2="${height - plot.bottom}" aria-hidden="true"/>
+      <path class="trend-area" d="M${balancePoints[0].x},${zeroY} ${balancePoints.map((point) => `L${point.x},${point.y}`).join(" ")} L${balancePoints.at(-1).x},${zeroY} Z"/>
+      <path class="trend-line trend-balance-line" d="${line(balancePoints)}"/>
+      ${includeContributions ? `<path class="trend-line trend-contribution-line" d="${line(contributionPoints)}"/>` : ""}
+      ${circles(balancePoints, "trend-balance-point", "Balance")}
+      ${includeContributions ? circles(contributionPoints, "trend-contribution-point", "Net contributions") : ""}
+      <g class="trend-x-labels" aria-hidden="true">${[...xLabelIndexes].map((index) => `<text x="${x(index)}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === series.months.length - 1 ? "end" : "middle"}">${formatMonth(series.months[index])}</text>`).join("")}</g>
+    </svg>`;
   }
 
   window.InvestmentView = {
     card,
+    buildTrendSeries,
     currentMonth,
     formatMonth,
     latestByAccount,

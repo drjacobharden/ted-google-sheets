@@ -47,6 +47,94 @@ function loadInvestments(options = {}) {
   return { api: window.InvestmentAPI, values, requests, events, timers, context, listeners };
 }
 
+function loadInvestmentView(data) {
+  const window = {
+    AppUtils: {
+      escapeHTML: (value) => String(value),
+      money: (value) => `$${Number(value).toFixed(2)}`,
+      netFlows: (flows) => flows.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    },
+    DateUtils: {
+      shortMonthNames: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    },
+    InvestmentAPI: {
+      balances: () => data.balances || [],
+      contributions: () => data.contributions || [],
+      accounts: () => data.accounts || [],
+    },
+  };
+  const context = { window, Date, Map, Set, Number, String, Math, Array };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync("js/utils/investment-view.js", "utf8"), context);
+  return window.InvestmentView;
+}
+
+test("investment trend interpolates gaps, carries balances, and accumulates lifetime flows", () => {
+  const view = loadInvestmentView({
+    accounts: [{ id: "first" }, { id: "second" }],
+    balances: [
+      { accountId: "first", month: "2026-01", balance: 100 },
+      { accountId: "first", month: "2026-03", balance: 300 },
+      { accountId: "second", month: "2026-02", balance: 50 },
+    ],
+    contributions: [
+      { accountId: "first", month: "2025-12", amount: 25 },
+      { accountId: "first", month: "2026-02", amount: 75 },
+      { accountId: "second", month: "2026-03", amount: -10 },
+    ],
+  });
+  const result = view.buildTrendSeries({
+    balances: [
+      { accountId: "first", month: "2026-01", balance: 100 },
+      { accountId: "first", month: "2026-03", balance: 300 },
+      { accountId: "second", month: "2026-02", balance: 50 },
+    ],
+    contributions: [
+      { accountId: "first", month: "2025-12", amount: 25 },
+      { accountId: "first", month: "2026-02", amount: 75 },
+      { accountId: "second", month: "2026-03", amount: -10 },
+    ],
+    accounts: [{ id: "first" }, { id: "second" }],
+    range: { start: "2026-01", end: "2026-04" },
+  });
+
+  assert.deepEqual(Array.from(result.months), ["2026-01", "2026-02", "2026-03", "2026-04"]);
+  assert.deepEqual(Array.from(result.balances), [100, 250, 350, 350]);
+  assert.deepEqual(Array.from(result.contributions), [25, 100, 90, 90]);
+});
+
+test("all-time investment trend inserts missing calendar months", () => {
+  const view = loadInvestmentView({});
+  const result = view.buildTrendSeries({
+    balances: [
+      { accountId: "account", month: "2026-01", balance: 100 },
+      { accountId: "account", month: "2026-03", balance: 300 },
+    ],
+    accounts: [{ id: "account" }],
+  });
+
+  assert.deepEqual(Array.from(result.months), ["2026-01", "2026-02", "2026-03"]);
+  assert.deepEqual(Array.from(result.balances), [100, 200, 300]);
+});
+
+test("investment overview trend renders two series and a currency y axis", () => {
+  const view = loadInvestmentView({
+    accounts: [{ id: "account" }],
+    balances: [{ accountId: "account", month: "2026-01", balance: 1000 }],
+    contributions: [{ accountId: "account", month: "2026-01", amount: 100 }],
+  });
+  const svg = view.trendSVG({
+    range: { start: "2026-01", end: "2026-02" },
+    includeContributions: true,
+  });
+
+  assert.match(svg, /trend-balance-line/);
+  assert.match(svg, /trend-contribution-line/);
+  assert.match(svg, /trend-y-axis/);
+  assert.match(svg, /Net contributions/);
+  assert.doesNotMatch(svg, /NaN|Infinity/);
+});
+
 test("investment savings excludes manual transfers from the combined total", () => {
   const runtime = loadInvestments({ values: {
     "myFinance.investmentAccounts.v1": JSON.stringify([
@@ -265,7 +353,8 @@ test("investment routes and drawers replace the legacy global screens", () => {
   assert.match(source, /investment-account-detail/);
   assert.match(source, /investmentReviewId/);
   assert.match(source, /createdByName/);
-  assert.match(source, /formatMonth\(points\[0\]\.month\)/);
+  assert.match(source, /formatMonth\(series\.months\[0\]\)/);
+  assert.match(source, /trendSVG\(\{ range, includeContributions: true \}\)/);
   assert.match(source, /formatMonth\(balance\.month\)/);
   assert.match(source, /amount:\s*sign \* amount/);
   assert.match(source, /suppressSingleDefault = true/);

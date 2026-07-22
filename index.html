@@ -22,10 +22,11 @@
     <link rel="stylesheet" href="css/responsiveness.css" />
 
     <!-- Component imports -->
+    <script src="js/components/close-button.js" defer></script>
+    <script src="js/components/drawer-header.js" defer></script>
     <script src="js/components/page-title.js" defer></script>
     <script src="js/components/date-picker.js" defer></script>
     <script src="js/components/currency-input.js" defer></script>
-    <script src="js/components/close-button.js" defer></script>
     <script src="js/components/month-picker.js" defer></script>
     <script src="js/components/date-range-picker.js" defer></script>
     <script src="js/components/select-create-controller.js" defer></script>
@@ -892,13 +893,18 @@
         aria-labelledby="transaction-drawer-title"
         tabindex="-1"
       >
-        <header class="transaction-drawer-header">
+        <drawer-header
+          id="transaction-drawer-header"
+          title="Edit transaction"
+          eyebrow="Transaction details"
+        ></drawer-header>
+        <!-- <header class="transaction-drawer-header">
           <div>
             <p class="eyebrow">Transaction details</p>
             <h2 id="transaction-drawer-title">Edit transaction</h2>
           </div>
           <close-button id="close-transaction-drawer"></close-button>
-        </header>
+        </header> -->
         <form
           id="transaction-edit-form"
           class="transaction-edit-form"
@@ -976,20 +982,11 @@
         aria-labelledby="entity-drawer-title"
         tabindex="-1"
       >
-        <header class="transaction-drawer-header">
-          <div>
-            <p class="eyebrow">Edit details</p>
-            <h2 id="entity-drawer-title">Edit entity</h2>
-          </div>
-          <button
-            class="drawer-close"
-            id="close-entity-drawer"
-            type="button"
-            aria-label="Close entity editor"
-          >
-            ×
-          </button>
-        </header>
+        <drawer-header
+          id="entity-drawer-header"
+          title="Edit entity"
+          eyebrow="Edit details"
+        ></drawer-header>
         <form id="entity-edit-form" novalidate>
           <div class="drawer-form-grid">
             <label class="form-field"
@@ -1020,22 +1017,12 @@
         aria-labelledby="investment-account-drawer-title"
         tabindex="-1"
       >
-        <header class="transaction-drawer-header">
-          <div>
-            <p class="eyebrow">Account details</p>
-            <h2 id="investment-account-drawer-title">
-              Edit investment account
-            </h2>
-          </div>
-          <button
-            class="drawer-close"
-            id="close-investment-account-drawer"
-            type="button"
-            aria-label="Close account editor"
-          >
-            ×
-          </button>
-        </header>
+        <drawer-header
+          id="investment-account-drawer-header"
+          title="Edit investment account"
+          eyebrow="Account details"
+        ></drawer-header>
+
         <form id="investment-account-edit-form">
           <div class="drawer-form-grid">
             <label class="form-field"
@@ -1073,20 +1060,11 @@
         aria-labelledby="investment-month-drawer-title"
         tabindex="-1"
       >
-        <header class="transaction-drawer-header">
-          <div>
-            <p class="eyebrow">Monthly investment update</p>
-            <h2 id="investment-month-drawer-title">Account · Month</h2>
-          </div>
-          <button
-            class="drawer-close"
-            id="close-investment-month-drawer"
-            type="button"
-            aria-label="Close monthly investment editor"
-          >
-            ×
-          </button>
-        </header>
+        <drawer-header
+          id="investment-drawer-header"
+          title="Account · Month"
+          eyebrow="Monthly investment update"
+        ></drawer-header>
         <form id="investment-month-form" novalidate>
           <div class="investment-month-targets">
             <label class="form-field">

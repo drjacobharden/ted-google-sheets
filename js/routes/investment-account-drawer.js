@@ -39,7 +39,8 @@ document.addEventListener("DOMContentLoaded", () => {
     initialState = "";
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
-      : document.getElementById("edit-investment-account"))?.focus();
+      : document.getElementById("edit-investment-account")
+    )?.focus();
   }
 
   function close(force = false, { updateRoute = true } = {}) {
@@ -194,9 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
   form
     .querySelector("[data-account-cancel]")
     .addEventListener("click", () => close());
-  document
-    .getElementById("close-investment-account-drawer")
-    .addEventListener("click", () => close());
+
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });
@@ -226,4 +225,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   window.addEventListener("app:route-changed", openFromRoute);
   window.addEventListener("budget:investments-loaded", openFromRoute);
+  window.addEventListener("drawer:close-requested", close);
 });

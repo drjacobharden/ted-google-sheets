@@ -4,19 +4,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const backdrop = document.getElementById("investment-month-drawer-backdrop");
   const drawer = document.getElementById("investment-month-drawer");
   const form = document.getElementById("investment-month-form");
+  const header = document.getElementById("investment-drawer-header");
   const accountSelect = form.elements.accountId;
   const monthPicker = form.querySelector("month-picker");
   const balanceInput = form.elements.balance;
   const contributionList = document.getElementById(
     "investment-contribution-list",
   );
-  const withdrawalList = document.getElementById(
-    "investment-withdrawal-list",
-  );
+  const withdrawalList = document.getElementById("investment-withdrawal-list");
   const message = document.getElementById("investment-month-message");
-  const existingNotice = document.getElementById(
-    "investment-month-existing",
-  );
+  const existingNotice = document.getElementById("investment-month-existing");
   const conflictPanel = document.getElementById("investment-month-conflict");
   const metadata = document.getElementById("investment-balance-metadata");
   const createdLabel = document.getElementById("investment-balance-created");
@@ -80,8 +77,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateTotals() {
-    const contributions = [...contributionList.querySelectorAll("input")]
-      .reduce((sum, input) => sum + Number(input.value || 0), 0);
+    const contributions = [
+      ...contributionList.querySelectorAll("input"),
+    ].reduce((sum, input) => sum + Number(input.value || 0), 0);
     const withdrawals = [...withdrawalList.querySelectorAll("input")].reduce(
       (sum, input) => sum + Number(input.value || 0),
       0,
@@ -145,8 +143,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function populateTarget(accountId, month, conflict = null) {
     const checked = batchInput.checked;
-    const value = conflict?.draft ||
-      window.InvestmentAPI.monthData(accountId, month);
+    const value =
+      conflict?.draft || window.InvestmentAPI.monthData(accountId, month);
     target = { accountId, month };
     reviewId = conflict?.id || "";
     accountSelect.value = accountId;
@@ -157,8 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
       mode = "create";
       batchToggle.hidden = false;
       batchInput.checked = checked;
-      document.getElementById("investment-month-drawer-title").textContent =
-        "Add monthly balance";
+      header.title = "Add monthly balance";
       submit.textContent = "Add balance";
       setEntryDisabled(true);
       initialDraftState = draftState();
@@ -192,8 +189,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const account = window.InvestmentAPI.accounts().find(
       (item) => item.id === accountId,
     );
-    document.getElementById("investment-month-drawer-title").textContent =
-      existing ? `Edit ${account?.name || "investment"} balance` : "Add monthly balance";
+    header.title = existing
+      ? `Edit ${account?.name || "investment"} balance`
+      : "Add monthly balance";
     submit.textContent = existing ? "Save changes" : "Add balance";
     setEntryDisabled(false);
     updateTotals();
@@ -218,7 +216,8 @@ document.addEventListener("DOMContentLoaded", () => {
     initialDraftState = "";
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
-      : document.querySelector("[data-new-investment-balance]"))?.focus();
+      : document.querySelector("[data-new-investment-balance]")
+    )?.focus();
   }
 
   function close(force = false, { updateRoute = true } = {}) {
@@ -346,7 +345,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function changeTarget() {
     const next = { accountId: accountSelect.value, month: monthPicker.value };
-    if (isDirty() && !window.confirm("Discard this draft and load another account or month?")) {
+    if (
+      isDirty() &&
+      !window.confirm("Discard this draft and load another account or month?")
+    ) {
       accountSelect.value = target.accountId;
       monthPicker.value = target.month;
       return;
@@ -459,9 +461,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("cancel-investment-month")
     .addEventListener("click", () => close());
-  document
-    .getElementById("close-investment-month-drawer")
-    .addEventListener("click", () => close());
+  // document
+  //   .getElementById("close-investment-month-drawer")
+  //   .addEventListener("click", () => close());
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });
@@ -491,4 +493,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   window.addEventListener("app:route-changed", openFromRoute);
   window.addEventListener("budget:investments-loaded", openFromRoute);
+  window.addEventListener("drawer:close-requested", close);
 });

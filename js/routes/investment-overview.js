@@ -46,7 +46,7 @@
             ? `${values.covered} of ${values.total} accounts covered`
             : "Needs a prior snapshot",
         );
-      trend.innerHTML = trendSVG();
+      trend.innerHTML = trendSVG({ range, includeContributions: true });
       coverage.textContent = values.total
         ? `Growth coverage: ${values.covered} of ${values.total} active accounts${values.stale ? ` · ${values.stale} carried forward from an earlier month` : ""}.`
         : "Add an account to begin.";

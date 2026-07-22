@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const backdrop = document.getElementById("entity-drawer-backdrop");
   const drawer = document.getElementById("entity-drawer");
   const form = document.getElementById("entity-edit-form");
+  const header = document.getElementById("entity-drawer-header");
   const message = form.querySelector(".form-message");
   const submit = form.querySelector('[type="submit"]');
   const appShell = document.querySelector(".app-shell");
@@ -9,8 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const config = {
     category: {
       label: "category",
-      records: () =>
-        window.BudgetAPI.listCategories({ type: "expense" }),
+      records: () => window.BudgetAPI.listCategories({ type: "expense" }),
       update: (input) => window.BudgetAPI.updateCategory(input),
     },
     vendor: {
@@ -54,16 +54,13 @@ document.addEventListener("DOMContentLoaded", () => {
     openedName = "";
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
-      : document.getElementById("edit-entity"))?.focus();
+      : document.getElementById("edit-entity")
+    )?.focus();
   }
 
   function close(force = false, { updateRoute = true } = {}) {
     if (closing || backdrop.hidden) return true;
-    if (
-      !force &&
-      dirty() &&
-      !window.confirm("Discard your unsaved changes?")
-    ) {
+    if (!force && dirty() && !window.confirm("Discard your unsaved changes?")) {
       return false;
     }
 
@@ -117,8 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
     opened = { kind, id };
     openedName = entity.name;
     returnFocus = document.activeElement;
-    document.getElementById("entity-drawer-title").textContent =
-      `Edit ${settings.label}`;
+    header.title = `Edit ${settings.label}`;
     form.elements.name.maxLength = kind === "category" ? 50 : 80;
     form.elements.name.value = entity.name;
     message.textContent = "";
@@ -190,9 +186,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  document
-    .getElementById("close-entity-drawer")
-    .addEventListener("click", () => close());
   document
     .getElementById("cancel-entity-edit")
     .addEventListener("click", () => close());
@@ -275,4 +268,5 @@ document.addEventListener("DOMContentLoaded", () => {
     "budget:reference-data-changed",
     openDrawerFromCurrentRoute,
   );
+  window.addEventListener("drawer:close-requested", close);
 });

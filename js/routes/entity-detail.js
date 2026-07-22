@@ -50,8 +50,7 @@ const EntityDetailRenderEvents = [
       return;
     }
 
-    const title = root.querySelector("#entity-detail-title");
-    const eyebrow = root.querySelector("#entity-detail-eyebrow");
+    const header = root.querySelector("page-title");
     const editButton = root.querySelector("#edit-entity");
     const rangePicker = root.querySelector("date-range-picker");
     const summary = root.querySelector("#entity-summary-grid");
@@ -117,7 +116,7 @@ const EntityDetailRenderEvents = [
 
       if (!entity) {
         if (!window.BudgetUI.isReferenceDataLoaded()) {
-          title.textContent = "Loading details…";
+          header.title = "Loading details…";
           editButton.disabled = true;
           summary.replaceChildren();
           table.hidden = true;
@@ -133,8 +132,8 @@ const EntityDetailRenderEvents = [
 
       const items = transactions();
 
-      title.textContent = entity.name;
-      eyebrow.textContent = `${EntityDetailConfig[selected.kind].label} details`;
+      header.title = entity.name;
+      header.eyebrow = `${EntityDetailConfig[selected.kind].label} details`;
       editButton.textContent = `Edit ${EntityDetailConfig[selected.kind].label}`;
 
       const sync = window.BudgetAPI.getEntitySyncStatus(
