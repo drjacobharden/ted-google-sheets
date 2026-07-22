@@ -217,7 +217,7 @@ body.onboarding-open {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.7fr);
   gap: 20px;
-  margin-top: 8px;
+  margin-top: 18px;
 }
 .investment-layout > .ledger-card {
   margin-top: 0;
@@ -378,6 +378,9 @@ body.onboarding-open {
   flex-direction: column;
   gap: 22px;
 }
+.investment-month-drawer .transaction-drawer-controls {
+  padding-bottom: 28px;
+}
 .investment-month-targets {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, 0.7fr);
@@ -508,7 +511,14 @@ body.onboarding-open {
 }
 .investment-account-row {
   cursor: pointer;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.investment-account-row > div {
+  min-width: 0;
+}
+.investment-account-row p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
 }
 .form-footnote {
   margin: 12px 0 18px;
@@ -517,7 +527,33 @@ body.onboarding-open {
   line-height: 1.55;
 }
 .account-balance {
+  margin-left: auto;
   font-size: 15px;
+  text-align: right;
+  white-space: nowrap;
+}
+.investment-history-table {
+  min-width: 560px;
+}
+.investment-history-table th:nth-child(1) {
+  width: 28%;
+}
+.investment-history-table th:nth-child(2) {
+  width: 42%;
+}
+.investment-history-table th:nth-child(3) {
+  width: 30%;
+}
+.investment-history-table td,
+.investment-history-table th {
+  padding-right: 22px;
+  padding-left: 22px;
+}
+.investment-history-table td small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
 }
 .investment-empty {
   display: grid;

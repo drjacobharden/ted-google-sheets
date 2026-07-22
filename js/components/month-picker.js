@@ -186,7 +186,6 @@ const monthPickerTemplate = ({ alignmentClass }) => `
       // Centralized router configuration to stop double triggering
       this.addEventListener("click", this);
       this.addEventListener("keydown", this);
-      // document.addEventListener("click", this);
 
       this.#update();
     }
@@ -194,7 +193,6 @@ const monthPickerTemplate = ({ alignmentClass }) => `
     disconnectedCallback() {
       this.removeEventListener("click", this);
       this.removeEventListener("keydown", this);
-      document.removeEventListener("click", this);
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
@@ -204,10 +202,6 @@ const monthPickerTemplate = ({ alignmentClass }) => `
 
     handleEvent(event) {
       if (event.type === "click") {
-        if (event.currentTarget === document && !this.contains(event.target)) {
-          console.log("do nothing");
-          return;
-        }
         this.#handleClick(event);
       } else if (event.type === "keydown") {
         this.#handleKeydown(event);
@@ -216,24 +210,20 @@ const monthPickerTemplate = ({ alignmentClass }) => `
 
     #handleClick(event) {
       if (!this.contains(event.target)) {
-        console.log("close");
         this.#closeCalendar();
         return;
       }
 
       if (event.target.closest(".month-picker-trigger")) {
-        console.log(this.#isOpen);
         this.#popover.hidden ? this.#openCalendar() : this.#closeCalendar();
         return;
       } else if (event.target.closest("[data-month-picker-previous]")) {
-        console.log("prev");
         if (this.#canShowYear(this.#visibleYear - 1)) {
           this.#visibleYear -= 1;
           this.#renderMonths();
         }
         return;
       } else if (event.target.closest("[data-month-picker-next]")) {
-        console.log("next");
         if (this.#canShowYear(this.#visibleYear + 1)) {
           this.#visibleYear += 1;
           this.#renderMonths();
@@ -243,7 +233,6 @@ const monthPickerTemplate = ({ alignmentClass }) => `
 
       const mtnButton = event.target.closest("[data-month-value]");
       if (mtnButton) {
-        console.log("month");
         this.#select(mtnButton.dataset.monthValue);
       }
     }
@@ -278,7 +267,6 @@ const monthPickerTemplate = ({ alignmentClass }) => `
       this.#trigger.setAttribute("aria-expanded", "true");
 
       requestAnimationFrame(() => {
-        document.addEventListener("click", this);
         const preferred =
           this.#grid.querySelector(".selected") ||
           this.#grid.querySelector(".current") ||
@@ -295,7 +283,6 @@ const monthPickerTemplate = ({ alignmentClass }) => `
       this.#popover.style.display = "none";
       this.#trigger.setAttribute("aria-expanded", "false");
 
-      document.removeEventListener("click", this);
       if (restoreFocus) this.#trigger.focus();
     }
 

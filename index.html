@@ -302,7 +302,7 @@
                 </div>
                 <div id="dashboard-trend" class="investment-chart"></div>
               </section>
-              <section class="ledger-card">
+              <section class="ledger-card investment-history-card">
                 <div class="table-header">
                   <div>
                     <h2>Savings breakdown</h2>
@@ -436,7 +436,7 @@
                 </div>
 
                 <div class="table-wrap" id="transaction-table-wrap" hidden>
-                  <table>
+                  <table class="investment-history-table">
                     <thead>
                       <tr>
                         <th scope="col">Date</th>
@@ -757,126 +757,126 @@
           </template>
           <!-- Investment overview tab -->
           <template id="route-investment-overview">
-          <section class="screen" data-screen="investment-overview">
-            <page-title
-              eyebrow="Long-term savings"
-              title="Investment overview"
-              subtitle="Balances, contributions, and contribution-adjusted growth for retirement planning."
-            ></page-title>
-            <div class="month-range-filter" data-month-range></div>
-            <div class="summary-grid" id="investment-summary"></div>
-            <section class="ledger-card chart-card">
-              <div class="table-header">
-                <div>
-                  <h2>Balance trend</h2>
-                  <p id="investment-coverage">No investment history yet.</p>
+            <section class="screen" data-screen="investment-overview">
+              <page-title
+                eyebrow="Long-term savings"
+                title="Investment overview"
+                subtitle="Balances, contributions, and contribution-adjusted growth for retirement planning."
+              ></page-title>
+              <div class="month-range-filter" data-month-range></div>
+              <div class="summary-grid" id="investment-summary"></div>
+              <section class="ledger-card chart-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Balance trend</h2>
+                    <p id="investment-coverage">No investment history yet.</p>
+                  </div>
                 </div>
-              </div>
-              <div id="investment-trend" class="investment-chart"></div>
-              <div
-                id="investment-allocation"
-                class="investment-allocation"
-                aria-label="Investment allocation"
-              ></div>
+                <div id="investment-trend" class="investment-chart"></div>
+                <div
+                  id="investment-allocation"
+                  class="investment-allocation"
+                  aria-label="Investment allocation"
+                ></div>
+              </section>
             </section>
-          </section>
           </template>
           <!-- Investment accounts tab -->
           <template id="route-investment-accounts">
-          <section class="screen" data-screen="investment-accounts">
-            <page-title
-              eyebrow="Investments"
-              title="Accounts"
-              subtitle="Manage the investment accounts included in household reporting."
-            ></page-title>
-            <div class="investment-layout">
-              <section class="ledger-card investment-account-list-card">
-                <div class="table-header">
-                  <div>
-                    <h2>Accounts</h2>
-                    <p id="investment-account-count">0 accounts</p>
+            <section class="screen" data-screen="investment-accounts">
+              <page-title
+                eyebrow="Investments"
+                title="Accounts"
+                subtitle="Manage the investment accounts included in household reporting."
+              ></page-title>
+              <div class="investment-layout">
+                <section class="ledger-card investment-account-list-card">
+                  <div class="table-header">
+                    <div>
+                      <h2>Accounts</h2>
+                      <p id="investment-account-count">0 accounts</p>
+                    </div>
                   </div>
-                </div>
-                <div id="investment-account-list" class="category-list"></div>
-              </section>
+                  <div id="investment-account-list" class="category-list"></div>
+                </section>
 
-              <form class="add-category-card" id="investment-account-form">
-                <h2>Add an account</h2>
-                <p>Create a record of the accounts you invest into.</p>
-                <label class="form-field">
-                  <span>Name</span>
-                  <input
-                    name="name"
-                    type="text"
-                    maxlength="80"
-                    placeholder="e.g. Roth IRA"
-                    required
-                  />
-                </label>
-                <label class="form-field">
-                  <span>Source</span>
-                  <select name="source" required>
-                    <option value="manual">Manual transfer</option>
-                    <option value="paycheck">Paycheck deduction</option>
-                  </select></label
-                >
+                <form class="add-category-card" id="investment-account-form">
+                  <h2>Add an account</h2>
+                  <p>Create a record of the accounts you invest into.</p>
+                  <label class="form-field">
+                    <span>Name</span>
+                    <input
+                      name="name"
+                      type="text"
+                      maxlength="80"
+                      placeholder="e.g. Roth IRA"
+                      required
+                    />
+                  </label>
+                  <label class="form-field">
+                    <span>Source</span>
+                    <select name="source" required>
+                      <option value="manual">Manual transfer</option>
+                      <option value="paycheck">Paycheck deduction</option>
+                    </select></label
+                  >
 
-                <p class="form-footnote">
-                  Paycheck deductions are considered when calculating your total
-                  savings. Manual transfers are not because they come from
-                  savings already counted in income minus spending.
-                </p>
-                <button class="primary-button" type="submit">
-                  Add account
-                </button>
-                <p class="settings-message" role="status"></p>
-              </form>
-            </div>
-          </section>
+                  <p class="form-footnote">
+                    Paycheck deductions are considered when calculating your
+                    total savings. Manual transfers are not because they come
+                    from savings already counted in income minus spending.
+                  </p>
+                  <button class="primary-button" type="submit">
+                    Add account
+                  </button>
+                  <p class="settings-message" role="status"></p>
+                </form>
+              </div>
+            </section>
           </template>
           <!-- Investment account detail -->
           <template id="route-investment-account-detail">
-          <section class="screen" data-screen="investment-account-detail">
-            <page-title
-              eyebrow="Investments"
-              title="Investment account"
-              subtitle="Monthly balance history"
-            >
-              <button
-                class="primary-button compact"
-                id="edit-investment-account"
-                type="button"
+            <section class="screen" data-screen="investment-account-detail">
+              <page-title
+                eyebrow="Investments"
+                title="Investment account"
+                subtitle="Monthly balance history"
               >
-                Edit account
-              </button>
-            </page-title>
-            <section class="ledger-card">
-              <div class="table-header">
-                <div>
-                  <h2>Balance history</h2>
-                  <p id="investment-account-history-count">0 balances</p>
+                <button
+                  class="primary-button compact"
+                  id="edit-investment-account"
+                  type="button"
+                >
+                  Edit account
+                </button>
+              </page-title>
+              <section class="ledger-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Balance history</h2>
+                    <p id="investment-account-history-count">0 balances</p>
+                  </div>
                 </div>
-              </div>
-              <div class="table-wrap" id="investment-account-history-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Month</th>
-                      <th>Net contribution</th>
-                      <th class="amount-cell">Ending balance</th>
-                    </tr>
-                  </thead>
-                  <tbody id="investment-account-history-body"></tbody>
-                </table>
-              </div>
-              <div
-                id="investment-account-history-empty"
-                class="investment-empty"
-              >
-                No monthly balances have been recorded.
-              </div>
+                <div class="table-wrap" id="investment-account-history-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th>Net contribution</th>
+                        <th class="amount-cell">Ending balance</th>
+                      </tr>
+                    </thead>
+                    <tbody id="investment-account-history-body"></tbody>
+                  </table>
+                </div>
+                <div
+                  id="investment-account-history-empty"
+                  class="investment-empty"
+                >
+                  No monthly balances have been recorded.
+                </div>
+              </section>
             </section>
-          </section>
           </template>
         </div>
       </section>
@@ -1011,11 +1011,7 @@
       </aside>
     </div>
     <!-- Investment account right sidebar -->
-    <div
-      class="drawer-overlay"
-      id="investment-account-drawer-backdrop"
-      hidden
-    >
+    <div class="drawer-overlay" id="investment-account-drawer-backdrop" hidden>
       <aside
         class="transaction-drawer"
         id="investment-account-drawer"
@@ -1068,11 +1064,7 @@
       </aside>
     </div>
     <!-- Investment contribution right sidebar -->
-    <div
-      class="drawer-overlay"
-      id="investment-month-drawer-backdrop"
-      hidden
-    >
+    <div class="drawer-overlay" id="investment-month-drawer-backdrop" hidden>
       <aside
         class="transaction-drawer investment-month-drawer"
         id="investment-month-drawer"
@@ -1103,7 +1095,10 @@
                 <option value="">Choose an account</option>
               </select>
             </label>
-            <month-picker label="Reporting month"></month-picker>
+            <month-picker
+              label="Reporting month"
+              alignment="right"
+            ></month-picker>
           </div>
           <p
             class="investment-existing-notice"
@@ -1229,9 +1224,7 @@
                 type="button"
               >
                 Cancel</button
-              ><button class="primary-button" type="submit">
-                Add balance
-              </button>
+              ><button class="primary-button" type="submit">Add balance</button>
             </footer>
             <label class="batch-entry-toggle" id="investment-batch-toggle">
               <span>

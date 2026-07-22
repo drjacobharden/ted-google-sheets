@@ -45,7 +45,8 @@
           );
           const contributions = flows.filter((item) => item.amount > 0).length;
           const withdrawals = flows.filter((item) => item.amount < 0).length;
-          return `<tr data-investment-balance-month="${balance.month}" role="button" tabindex="0" aria-label="Edit ${escapeHTML(selected.name)} balance for ${balance.month}"><td><strong>${balance.month}</strong></td><td>${money(netFlows(flows))}<small>${contributions} ${contributions === 1 ? "contribution" : "contributions"} · ${withdrawals} ${withdrawals === 1 ? "withdrawal" : "withdrawals"}</small></td><td class="amount-cell">${money(balance.balance)}</td></tr>`;
+          const monthLabel = window.InvestmentView.formatMonth(balance.month);
+          return `<tr data-investment-balance-month="${balance.month}" role="button" tabindex="0" aria-label="Edit ${escapeHTML(selected.name)} balance for ${monthLabel}"><td><strong>${monthLabel}</strong></td><td><strong>${money(netFlows(flows))}</strong><small>${contributions} ${contributions === 1 ? "contribution" : "contributions"} · ${withdrawals} ${withdrawals === 1 ? "withdrawal" : "withdrawals"}</small></td><td class="amount-cell"><strong>${money(balance.balance)}</strong></td></tr>`;
         })
         .join("");
       empty.hidden = rows.length > 0;

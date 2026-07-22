@@ -209,6 +209,25 @@ test("hydrated balances resolve their cached creator name with an unknown fallba
 
   assert.equal(runtime.api.snapshots()[0].createdByName, "Test User");
   assert.equal(runtime.api.snapshots()[1].createdByName, "Unknown");
+  assert.equal(
+    runtime.api.monthData("account", "2026-06").balance.createdByName,
+    "Test User",
+  );
+});
+
+test("Sheet timestamps normalize to canonical reporting months", () => {
+  const runtime = loadInvestments({ values: {
+    "myFinance.investmentBalances.v1": JSON.stringify([
+      { id: "balance", accountId: "account", month: "2026-07-01T00:00:00.000Z", balance: 1000 },
+    ]),
+    "myFinance.investmentContributions.v1": JSON.stringify([
+      { id: "flow", accountId: "account", month: "2026-07-01T00:00:00.000Z", amount: 100 },
+    ]),
+  } });
+
+  assert.equal(runtime.api.balances()[0].month, "2026-07");
+  assert.equal(runtime.api.contributions()[0].month, "2026-07");
+  assert.equal(runtime.api.monthData("account", "2026-07").balance.id, "balance");
 });
 
 test("investment routes and drawers replace the legacy global screens", () => {
@@ -216,6 +235,7 @@ test("investment routes and drawers replace the legacy global screens", () => {
   const source = [
     "js/investments.js",
     "js/investments-api.js",
+    "js/utils/investment-view.js",
     "js/routes/investment-overview.js",
     "js/routes/investment-accounts.js",
     "js/routes/investment-account-detail.js",
@@ -231,7 +251,7 @@ test("investment routes and drawers replace the legacy global screens", () => {
   assert.doesNotMatch(html, /Balance as of|Balance date/);
   assert.match(html, /id="investment-month-drawer"/);
   assert.match(html, /<select name="accountId" required>/);
-  assert.match(html, /<month-picker label="Reporting month">/);
+  assert.match(html, /<month-picker\s+label="Reporting month"\s+alignment="right"/);
   assert.match(html, /id="investment-contribution-list"/);
   assert.match(html, /id="investment-withdrawal-list"/);
   assert.match(html, /Add another contribution/);
@@ -245,8 +265,11 @@ test("investment routes and drawers replace the legacy global screens", () => {
   assert.match(source, /investment-account-detail/);
   assert.match(source, /investmentReviewId/);
   assert.match(source, /createdByName/);
+  assert.match(source, /formatMonth\(points\[0\]\.month\)/);
+  assert.match(source, /formatMonth\(balance\.month\)/);
   assert.match(source, /amount:\s*sign \* amount/);
   assert.match(source, /suppressSingleDefault = true/);
+  assert.match(source, /monthPicker\.contains\(event\.target\)[\s\S]*?aria-expanded[\s\S]*?trigger\.click\(\)/);
 });
 
 test("primary navigation groups budgeting and investment destinations", () => {

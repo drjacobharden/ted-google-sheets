@@ -24,6 +24,11 @@
   const endpoint = () => window.BudgetAPI.getConfig().endpoint;
   const monthKey = (accountId, month) => `${accountId}|${month}`;
 
+  function canonicalMonth(value) {
+    const match = String(value || "").match(/^(\d{4})-(0[1-9]|1[0-2])/);
+    return match ? `${match[1]}-${match[2]}` : "";
+  }
+
   async function request(action, body) {
     const url = endpoint();
     if (!url) throw new Error("No Apps Script URL is configured.");
@@ -38,10 +43,10 @@
     return { id: account.id, name: account.name, source: ["paycheck", "manual"].includes(account.source) ? account.source : "manual", active: account.active !== false, createdAt: account.createdAt, updatedAt: account.updatedAt };
   }
   function migrateBalance(record) {
-    return { id: record.id, accountId: record.accountId, month: record.month, balance: Number(record.balance || 0), notes: record.notes || "", createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
+    return { id: record.id, accountId: record.accountId, month: canonicalMonth(record.month), balance: Number(record.balance || 0), notes: record.notes || "", createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
   }
   function migrateContribution(record) {
-    return { id: record.id, accountId: record.accountId, month: record.month, amount: Number(record.amount || 0), createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
+    return { id: record.id, accountId: record.accountId, month: canonicalMonth(record.month), amount: Number(record.amount || 0), createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
   }
   function legacyContribution(snapshot) {
     if (snapshot.contribution !== undefined) return Number(snapshot.contribution || 0);
@@ -117,7 +122,8 @@
     };
   }
   function hydrateContribution(record) { const account = accounts().find((item) => item.id === record.accountId); return { ...migrateContribution(record), accountName: account?.name || "Unknown", source: account?.source || "manual" }; }
-  function monthData(accountId, month) { return { accountId, month, balance: balances().find((item) => item.accountId === accountId && item.month === month) || null, contributions: contributions().filter((item) => item.accountId === accountId && item.month === month) }; }
+  function rawMonthData(accountId, month) { const normalizedMonth = canonicalMonth(month); return { accountId, month: normalizedMonth, balance: balances().find((item) => item.accountId === accountId && item.month === normalizedMonth) || null, contributions: contributions().filter((item) => item.accountId === accountId && item.month === normalizedMonth) }; }
+  function monthData(accountId, month) { return hydrateMonth(rawMonthData(accountId, month)); }
   function hydrateMonth(value) {
     if (!value) return null;
     const normalized = normalizeMonth(value);
@@ -194,12 +200,12 @@
   function queueMonth(input) {
     const outbox = monthOutbox(); const key = monthKey(input.accountId, input.month); const index = outbox.findIndex((item) => monthKey(item.accountId, item.month) === key); const pending = index >= 0 ? outbox[index] : null;
     if (pending?.failureCode === "conflict") throw new Error("Review this month’s Sheet conflict before saving another change.");
-    const base = pending?.base || monthData(input.accountId, input.month); const draft = validateMonthInput(input, pending?.draft || base);
+    const base = pending?.base || rawMonthData(input.accountId, input.month); const draft = validateMonthInput(input, pending?.draft || base);
     const operation = { id: pending?.id || uuid(), accountId: input.accountId, month: input.month, draft, base, current: null, revision: (pending?.revision || 0) + 1, status: "pending", attempts: 0, nextRetryAt: 0, error: "", failureCode: "" };
     applyLocalMonth(draft); if (endpoint()) { if (index >= 0) outbox[index] = operation; else outbox.push(operation); write(KEYS.monthOutbox, outbox); scheduleNext(); }
     emit("budget:investments-changed"); emit("budget:sync-changed"); return hydrateMonth(draft);
   }
-  function queueSnapshots(inputs) { return inputs.map((input) => { const existing = monthData(input.accountId, input.month); const amount = Number(input.contribution || 0); return queueMonth({ accountId: input.accountId, month: input.month, balance: input.balance, notes: input.notes, balanceId: existing.balance?.id || input.id, existingContributions: existing.contributions, contributions: amount === 0 ? [] : [{ id: existing.contributions.length === 1 ? existing.contributions[0].id : "", amount }] }); }); }
+  function queueSnapshots(inputs) { return inputs.map((input) => { const existing = rawMonthData(input.accountId, input.month); const amount = Number(input.contribution || 0); return queueMonth({ accountId: input.accountId, month: input.month, balance: input.balance, notes: input.notes, balanceId: existing.balance?.id || input.id, existingContributions: existing.contributions, contributions: amount === 0 ? [] : [{ id: existing.contributions.length === 1 ? existing.contributions[0].id : "", amount }] }); }); }
   function getConflict(id) { const item = monthOutbox().find((entry) => entry.id === id && entry.failureCode === "conflict"); return item ? { id, draft: hydrateMonth(item.draft), current: hydrateMonth(item.current), base: hydrateMonth(item.base) } : null; }
   function resolveConflict(id, input) { const outbox = monthOutbox(); const index = outbox.findIndex((item) => item.id === id && item.failureCode === "conflict"); if (index < 0) throw new Error("That investment conflict is no longer available."); const item = outbox[index]; if (!item.current) throw new Error("Refresh investments before resolving this conflict."); const originalIds = new Set((item.base?.contributions || []).map((flow) => flow.id)); const draftIds = new Set((input.contributions || []).map((flow) => flow.id).filter(Boolean)); const remoteAdditions = item.current.contributions.filter((flow) => !originalIds.has(flow.id) && !draftIds.has(flow.id)); const draft = validateMonthInput({ ...input, accountId: item.accountId, month: item.month, existingContributions: item.draft.contributions, contributions: [...(input.contributions || []), ...remoteAdditions] }, item.current); outbox[index] = { ...item, draft, base: item.current, current: null, revision: item.revision + 1, status: "pending", attempts: 0, nextRetryAt: 0, error: "", failureCode: "" }; applyLocalMonth(draft); write(KEYS.monthOutbox, outbox); emit("budget:investments-changed"); emit("budget:sync-changed"); scheduleNext(); return hydrateMonth(draft); }
 

@@ -10,6 +10,12 @@
     return source === "paycheck" ? "Paycheck deduction" : "Manual transfer";
   }
 
+  function formatMonth(value) {
+    const match = String(value || "").match(/^(\d{4})-(0[1-9]|1[0-2])/);
+    if (!match) return "Unknown month";
+    return `${window.DateUtils.shortMonthNames[Number(match[2]) - 1]} ${match[1]}`;
+  }
+
   function latestByAccount(end = "9999-12") {
     const latest = new Map();
     window.InvestmentAPI.balances()
@@ -111,12 +117,13 @@
       y: height - pad - ((item.value - min) / span) * (height - pad * 2),
     }));
 
-    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Investment balance trend from ${points[0].month} to ${points.at(-1).month}"><path class="trend-area" d="M${coordinates[0].x},${height - pad} ${coordinates.map((point) => `L${point.x},${point.y}`).join(" ")} L${coordinates.at(-1).x},${height - pad} Z"/><path class="trend-line" d="M${coordinates.map((point) => `${point.x},${point.y}`).join(" L")}"/>${coordinates.map((point) => `<circle cx="${point.x}" cy="${point.y}" r="4"><title>${point.month}: ${money(point.value)}</title></circle>`).join("")}<text x="${pad}" y="${height - 8}">${points[0].month}</text><text x="${width - pad}" y="${height - 8}" text-anchor="end">${points.at(-1).month}</text></svg>`;
+    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Investment balance trend from ${formatMonth(points[0].month)} to ${formatMonth(points.at(-1).month)}"><path class="trend-area" d="M${coordinates[0].x},${height - pad} ${coordinates.map((point) => `L${point.x},${point.y}`).join(" ")} L${coordinates.at(-1).x},${height - pad} Z"/><path class="trend-line" d="M${coordinates.map((point) => `${point.x},${point.y}`).join(" L")}"/>${coordinates.map((point) => `<circle cx="${point.x}" cy="${point.y}" r="4"><title>${formatMonth(point.month)}: ${money(point.value)}</title></circle>`).join("")}<text x="${pad}" y="${height - 8}">${formatMonth(points[0].month)}</text><text x="${width - pad}" y="${height - 8}" text-anchor="end">${formatMonth(points.at(-1).month)}</text></svg>`;
   }
 
   window.InvestmentView = {
     card,
     currentMonth,
+    formatMonth,
     latestByAccount,
     metrics,
     sourceLabel,

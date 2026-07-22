@@ -395,6 +395,11 @@ document.addEventListener("DOMContentLoaded", () => {
     remove.closest(".investment-flow-row").remove();
     updateTotals();
   });
+  drawer.addEventListener("click", (event) => {
+    if (monthPicker.contains(event.target)) return;
+    const trigger = monthPicker.querySelector(".month-picker-trigger");
+    if (trigger?.getAttribute("aria-expanded") === "true") trigger.click();
+  });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     message.textContent = "";

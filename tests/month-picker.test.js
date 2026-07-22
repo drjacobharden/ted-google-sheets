@@ -90,7 +90,7 @@ test("month picker is wired into all investment month selections", () => {
   const component = fs.readFileSync("js/components/month-picker.js", "utf8");
   assert.doesNotMatch(html, /type=["']month["']/);
   assert.doesNotMatch(overview + monthDrawer, /type=["']month["']/);
-  assert.match(html, /<month-picker label="Reporting month"><\/month-picker>/);
+  assert.match(html, /<month-picker\s+label="Reporting month"\s+alignment="right"/);
   assert.match(overview, /<month-picker label="From" data-month-start/);
   assert.match(overview, /<month-picker label="To" data-month-end/);
   assert.match(html, /<script src="js\/components\/month-picker\.js" defer><\/script>[\s\S]*<script src="js\/routes\/investment-month-drawer\.js"><\/script>/);
@@ -98,5 +98,5 @@ test("month picker is wired into all investment month selections", () => {
   assert.match(overview, /From month must be before or the same as To month\./);
   assert.match(overview, /data-month-range-error role="alert" aria-live="polite"/);
   assert.match(component, /new Event\("change", \{ bubbles: true \}\)/);
-  assert.match(component, /document\.removeEventListener\("click", this\)/);
+  assert.doesNotMatch(component, /document\.addEventListener\("click"/);
 });
