@@ -1,3 +1,4 @@
+// Legacy editor retained temporarily for deletion after router migration review.
 document.addEventListener("DOMContentLoaded", () => {
   const backdrop = document.getElementById("transaction-drawer-backdrop");
   const drawer = document.getElementById("transaction-drawer");

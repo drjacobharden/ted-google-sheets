@@ -72,6 +72,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const contentParams = { ...params };
     delete contentParams.drawer;
     delete contentParams.transactionId;
+    delete contentParams.entityKind;
+    delete contentParams.entityId;
     const contentKey = `${name}?${new URLSearchParams(contentParams)}`;
 
     if (contentKey === mountedContentKey) return;

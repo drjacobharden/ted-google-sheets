@@ -183,8 +183,13 @@ const EntityDetailRenderEvents = [
       }
     }
 
-    function handleEditButtonClick(event) {
-      selected && window.EntityEditor.open(selected.kind, selected.id);
+    function handleEditButtonClick() {
+      if (!selected) return;
+      window.AppRouter.updateParams({
+        drawer: "entity-edit",
+        entityKind: selected.kind,
+        entityId: selected.id,
+      });
     }
 
     function handleListClick(event) {

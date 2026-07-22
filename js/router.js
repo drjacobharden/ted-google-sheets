@@ -59,15 +59,15 @@
       module: () => window.TransactionsRoute,
     },
 
-    entity: {
-      template: "route-entity",
+    "entity-detail": {
+      template: "route-entity-detail",
       script: "js/routes/entity-detail.js",
       module: () => window.EntityRoute,
     },
 
     settings: {
       template: "route-settings",
-      script: "js/routes/settings",
+      script: "js/routes/settings.js",
       module: () => window.SettingsRoute,
     },
   };

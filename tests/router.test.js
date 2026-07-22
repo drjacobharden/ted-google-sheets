@@ -100,16 +100,45 @@ test("removing drawer parameters preserves entity-detail state", () => {
   );
 });
 
+test("entity editor parameters preserve the underlying detail route", () => {
+  const { window, location } = loadRouter(
+    "#/entity-detail?kind=vendor&id=vendor-1",
+  );
+
+  window.AppRouter.updateParams({
+    drawer: "entity-edit",
+    entityKind: "vendor",
+    entityId: "vendor-1",
+  });
+
+  assert.equal(
+    location.hash,
+    "#/entity-detail?kind=vendor&id=vendor-1&drawer=entity-edit&entityKind=vendor&entityId=vendor-1",
+  );
+
+  window.AppRouter.updateParams({
+    drawer: null,
+    entityKind: null,
+    entityId: null,
+  });
+  assert.equal(location.hash, "#/entity-detail?kind=vendor&id=vendor-1");
+});
+
 test("main treats drawer parameters as overlays rather than new content", () => {
   const main = fs.readFileSync("js/main.js", "utf8");
   const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
+  const entityDrawer = fs.readFileSync("js/routes/entity-drawer.js", "utf8");
 
   assert.match(main, /delete contentParams\.drawer/);
   assert.match(main, /delete contentParams\.transactionId/);
+  assert.match(main, /delete contentParams\.entityKind/);
+  assert.match(main, /delete contentParams\.entityId/);
   assert.match(main, /if \(contentKey === mountedContentKey\) return/);
   assert.match(drawer, /AppRouter\.updateParams/);
   assert.doesNotMatch(drawer, /AppRouter\.navigate\("transactions"/);
   assert.doesNotMatch(drawer, /window\.TransactionEditor/);
+  assert.match(entityDrawer, /budget:reference-data-changed/);
+  assert.doesNotMatch(entityDrawer, /window\.EntityEditor/);
 });
 
 test("settings route delegates state to cached custom-element forms", () => {

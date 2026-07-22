@@ -2039,43 +2039,6 @@ tbody tr:hover {
 body.drawer-open {
   overflow: hidden;
 }
-#transaction-drawer-backdrop:not([hidden]) {
-  background: transparent;
-  backdrop-filter: none;
-}
-#transaction-drawer-backdrop:not([hidden])::before {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  background: rgba(28, 31, 29, 0.58);
-  backdrop-filter: blur(4px);
-  content: "";
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 360ms ease-out;
-}
-#transaction-drawer-backdrop:not([hidden]) > .transaction-drawer {
-  z-index: 1;
-  transform: translateX(100%);
-  transition: transform 250ms cubic-bezier(0.33, 1, 0.68, 1);
-  will-change: transform;
-}
-#transaction-drawer-backdrop.is-open::before {
-  opacity: 1;
-}
-#transaction-drawer-backdrop.is-open > .transaction-drawer {
-  transform: translateX(0);
-}
-#transaction-drawer-backdrop.is-closing::before {
-  opacity: 0;
-  transition-duration: 200ms;
-  transition-timing-function: ease-out;
-}
-#transaction-drawer-backdrop.is-closing > .transaction-drawer {
-  transform: translateX(100%);
-  transition-duration: 200ms;
-  transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
-}
 .transaction-drawer {
   position: absolute;
   top: 0;
