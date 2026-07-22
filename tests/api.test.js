@@ -141,6 +141,72 @@ test("keeps each computer's active user selection local", () => {
   assert.equal(secondComputer.api.getActiveUser().id, users[1].id);
 });
 
+test("hydrates users with reference data and serves repeated user lists from cache", async () => {
+  const seed = connectedSeed();
+  const refreshedUser = {
+    id: "323e4567-e89b-42d3-a456-426614174000",
+    firstName: "Grace",
+    lastName: "Hopper",
+    active: true,
+  };
+  const actions = [];
+  const runtime = loadAPI(seed.values, async (url) => {
+    const action = new URL(String(url)).searchParams.get("action");
+    actions.push(action);
+    const data = {
+      listCategories: seed.values["myFinance.categories.v1"],
+      listVendors: seed.values["myFinance.vendors.v1"],
+      listAssignments: seed.values["myFinance.people.v1"],
+      listUsers: [refreshedUser],
+    }[action];
+    return { ok: true, json: async () => ({ ok: true, data }) };
+  });
+
+  assert.equal(runtime.api.listUsers()[0].id, seed.userId);
+  assert.deepEqual(actions, []);
+
+  const referenceData = await runtime.api.loadReferenceData();
+  assert.deepEqual(actions.sort(), [
+    "listAssignments",
+    "listCategories",
+    "listUsers",
+    "listVendors",
+  ]);
+  assert.equal(referenceData.users[0].id, refreshedUser.id);
+  assert.equal(runtime.api.getActiveUser(), null);
+  assert.equal(
+    runtime.events.some(
+      (event) =>
+        event.type === "budget:active-user-changed" && event.detail === null,
+    ),
+    true,
+  );
+
+  const requestsAfterHydration = actions.length;
+  assert.equal(runtime.api.listUsers()[0].id, refreshedUser.id);
+  assert.equal(runtime.api.listUsers()[0].id, refreshedUser.id);
+  assert.equal(actions.length, requestsAfterHydration);
+});
+
+test("rejects an invalid user list during reference-data hydration", async () => {
+  const seed = connectedSeed();
+  const runtime = loadAPI(seed.values, async (url) => {
+    const action = new URL(String(url)).searchParams.get("action");
+    const data = {
+      listCategories: seed.values["myFinance.categories.v1"],
+      listVendors: seed.values["myFinance.vendors.v1"],
+      listAssignments: seed.values["myFinance.people.v1"],
+      listUsers: { unexpected: true },
+    }[action];
+    return { ok: true, json: async () => ({ ok: true, data }) };
+  });
+
+  await assert.rejects(
+    () => runtime.api.loadReferenceData(),
+    /did not include a user list/,
+  );
+});
+
 function connectedSeed() {
   const userId = "123e4567-e89b-42d3-a456-426614174000";
   const vendorId = "223e4567-e89b-42d3-a456-426614174000";

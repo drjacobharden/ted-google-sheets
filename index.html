@@ -30,6 +30,9 @@
     <script src="js/components/category-select.js" defer></script>
     <script src="js/components/vendor-input.js" defer></script>
     <script src="js/components/people-select.js" defer></script>
+    <script src="js/components/table-title.js" defer></script>
+    <script src="js/components/user-form.js" defer></script>
+    <script src="js/components/url-form.js" defer></script>
 
     <!-- Screen imports -->
     <!-- TODO: Put screen imports here -->
@@ -631,7 +634,7 @@
             </section>
           </template>
           <!-- Entity drill down tab -->
-          <template id="route-entity-detail">
+          <template id="route-entity">
             <section class="screen" data-screen="entity-detail">
               <div class="page-heading heading-row">
                 <div>
@@ -720,179 +723,71 @@
             </section>
           </template>
           <!-- Settings tab -->
-          <section class="screen" data-screen="settings" hidden>
-            <div class="page-heading">
-              <p class="eyebrow">Preferences</p>
-              <h1>Settings</h1>
-              <p class="heading-copy">
-                Manage your profile and connect this app to Google Sheets.
-              </p>
-            </div>
-
-            <div class="settings-grid">
-              <form
-                class="settings-card user-settings-card"
-                id="user-form"
-                novalidate
-              >
-                <div class="settings-card-heading">
-                  <div>
-                    <h2>User profile</h2>
-                    <p>Choose who is using this copy of the app.</p>
-                  </div>
-                  <span
-                    class="profile-monogram settings-monogram"
-                    id="settings-monogram"
-                    aria-hidden="true"
-                    >?</span
-                  >
-                </div>
-
-                <label class="form-field">
-                  <span>Active user</span>
-                  <select id="user-switcher" name="activeUser">
-                    <option value="">Choose a user</option>
-                  </select>
-                  <small
-                    >Users connected to the same Sheet are available on every
-                    computer.</small
-                  >
-                </label>
-
-                <input name="userId" type="hidden" />
-                <div class="user-name-fields">
-                  <label class="form-field">
-                    <span>First name</span>
-                    <input
-                      name="firstName"
-                      type="text"
-                      maxlength="80"
-                      autocomplete="given-name"
-                      required
-                    />
-                  </label>
-                  <label class="form-field">
-                    <span>Last name</span>
-                    <input
-                      name="lastName"
-                      type="text"
-                      maxlength="80"
-                      autocomplete="family-name"
-                      required
-                    />
-                  </label>
-                </div>
-
-                <p class="user-form-message" aria-live="polite"></p>
-                <div class="form-actions left-aligned">
-                  <button class="secondary-button" id="new-user" type="button">
-                    Add another user
-                  </button>
-                  <button class="primary-button" id="save-user" type="submit">
-                    Add user
-                  </button>
-                </div>
-              </form>
-
-              <form class="settings-card" id="connection-form">
-                <div class="settings-card-heading">
-                  <div>
-                    <h2>Google Apps Script</h2>
-                    <p>
-                      Copy the production <strong>Web app URL</strong> from your
-                      Apps Script deployment, then paste it here.
-                    </p>
-                  </div>
-                  <span class="mode-badge" data-connection-label
-                    >Local mode</span
-                  >
-                </div>
-
-                <label class="form-field">
-                  <span>Web app URL</span>
-                  <input
-                    name="endpoint"
-                    type="url"
-                    placeholder="https://script.google.com/macros/s/…/exec"
-                  />
-                  <small
-                    >Keep this URL private. Leave it blank to use browser
-                    storage while developing.</small
-                  >
-                </label>
-
-                <p class="settings-message" aria-live="polite"></p>
-                <div class="form-actions left-aligned">
-                  <button
-                    class="secondary-button"
-                    id="copy-connection"
-                    type="button"
-                    disabled
-                  >
-                    Copy connection URL
-                  </button>
-                  <button
-                    class="secondary-button"
-                    id="test-connection"
-                    type="button"
-                  >
-                    Test connection
-                  </button>
-                  <button class="primary-button" type="submit">
-                    Save settings
-                  </button>
-                </div>
-              </form>
-
-              <aside class="contract-card">
-                <p class="eyebrow">Expected API</p>
-                <h2>Apps Script contract</h2>
-                <p>
-                  The frontend sends normalized transaction and entity actions:
+          <template id="route-settings">
+            <section class="screen" data-screen="settings">
+              <div class="page-heading">
+                <p class="eyebrow">Preferences</p>
+                <h1>Settings</h1>
+                <p class="heading-copy">
+                  Manage your profile and connect this app to Google Sheets.
                 </p>
-                <dl>
-                  <div>
-                    <dt>GET</dt>
-                    <dd><code>?action=health</code></dd>
-                  </div>
-                  <div>
-                    <dt>GET</dt>
-                    <dd><code>?action=listTransactions</code></dd>
-                  </div>
-                  <div>
-                    <dt>POST</dt>
-                    <dd>
-                      <code>add/update Transactions</code>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>GET</dt>
-                    <dd><code>?action=listUsers</code></dd>
-                  </div>
-                  <div>
-                    <dt>POST</dt>
-                    <dd><code>addUser / updateUser</code></dd>
-                  </div>
-                  <div>
-                    <dt>GET</dt>
-                    <dd>
-                      <code
-                        >listCategories / listVendors / listAssignments</code
-                      >
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>POST</dt>
-                    <dd><code>addEntities / update / archive entity</code></dd>
-                  </div>
-                </dl>
-                <p class="contract-note">
-                  List responses can be a JSON array or
-                  <code>{ "data": [...] }</code>.
-                </p>
-              </aside>
-            </div>
-          </section>
+              </div>
+              <div class="settings-grid">
+                <user-form></user-form>
+                <url-form></url-form>
+                <aside class="contract-card">
+                  <p class="eyebrow">Expected API</p>
+                  <h2>Apps Script contract</h2>
+                  <p>
+                    The frontend sends normalized transaction and entity
+                    actions:
+                  </p>
+                  <dl>
+                    <div>
+                      <dt>GET</dt>
+                      <dd><code>?action=health</code></dd>
+                    </div>
+                    <div>
+                      <dt>GET</dt>
+                      <dd><code>?action=listTransactions</code></dd>
+                    </div>
+                    <div>
+                      <dt>POST</dt>
+                      <dd>
+                        <code>add/update Transactions</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>GET</dt>
+                      <dd><code>?action=listUsers</code></dd>
+                    </div>
+                    <div>
+                      <dt>POST</dt>
+                      <dd><code>addUser / updateUser</code></dd>
+                    </div>
+                    <div>
+                      <dt>GET</dt>
+                      <dd>
+                        <code
+                          >listCategories / listVendors / listAssignments</code
+                        >
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>POST</dt>
+                      <dd>
+                        <code>addEntities / update / archive entity</code>
+                      </dd>
+                    </div>
+                  </dl>
+                  <p class="contract-note">
+                    List responses can be a JSON array or
+                    <code>{ "data": [...] }</code>.
+                  </p>
+                </aside>
+              </div>
+            </section>
+          </template>
           <!-- Investment overview tab -->
           <section class="screen" data-screen="investment-overview" hidden>
             <div class="page-heading">
@@ -1538,7 +1433,7 @@
     <script src="js/toast.js"></script>
     <script src="js/sync-notifications.js"></script>
     <script src="js/onboarding.js"></script>
-    <script src="js/users.js"></script>
+    <!-- <script src="js/users.js"></script> -->
 
     <script src="js/router.js"></script>
     <script src="js/routes/transaction-drawer.js"></script>
@@ -1550,6 +1445,7 @@
     <script src="js/routes/people.js"></script>
     <script src="js/routes/sync.js"></script>
     <script src="js/routes/entity-detail.js"></script>
+    <script src="js/routes/settings.js"></script>
 
     <!-- <script src="js/categories.js"></script> -->
     <!-- <script src="js/vendors.js"></script> -->

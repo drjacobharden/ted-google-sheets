@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
       people: window.PeopleRoute,
       transactions: window.TransactionsRoute,
       sync: window.SyncRoute,
+      settings: window.SettingsRoute,
       "entity-detail": window.EntityRoute,
     };
 
@@ -61,26 +62,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const screens = document.querySelectorAll(".screen[data-screen]");
   const appNotice = document.getElementById("app-notice");
   let appNoticeTimer;
-
-  const currency = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-  const dateFormatter = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-
-  function updateConnectionUI() {
-    const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
-    document.body.dataset.connected = String(connected);
-    document.getElementById("copy-connection").disabled = !connected;
-    document.querySelectorAll("[data-connection-label]").forEach((element) => {
-      element.textContent = connected ? "Sheet connected" : "Local mode";
-    });
-  }
 
   // TODO: Remove later. Currently for compatibility while we migrate to routing.
   function showTab(name) {
@@ -125,8 +106,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (["transactions", "entity-detail"].includes(name) && !state.loaded) {
-      await ensureReferenceData();
       await loadTransactions();
+      await ensureReferenceData();
     }
 
     if (name.startsWith("investment-")) {
@@ -135,10 +116,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (name === "dashboard" || name.startsWith("investment-")) {
       window.InvestmentUI?.load();
-    }
-    if (name === "settings") {
-      loadSettings();
-      window.UserUI?.load();
     }
   }
 
@@ -236,15 +213,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return transactionLoadPromise;
   }
 
-  const settingsForm = document.getElementById("connection-form");
-  const settingsMessage = settingsForm.querySelector(".settings-message");
-
-  function loadSettings() {
-    settingsForm.elements.endpoint.value =
-      window.BudgetAPI.getConfig().endpoint;
-    settingsMessage.textContent = "";
-  }
-
   function ensureReferenceData() {
     if (!referenceDataPromise) {
       referenceDataPromise = window.BudgetAPI.loadReferenceData().catch(
@@ -268,99 +236,6 @@ document.addEventListener("DOMContentLoaded", () => {
   async function initializeData() {
     await ensureReferenceData();
   }
-
-  settingsForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const endpoint = settingsForm.elements.endpoint.value.trim();
-    if (endpoint && !endpoint.startsWith("https://script.google.com/")) {
-      settingsMessage.className = "settings-message error";
-      settingsMessage.textContent =
-        "Use the HTTPS web app URL provided by Google Apps Script.";
-      return;
-    }
-    try {
-      window.BudgetAPI.saveConfig({ endpoint });
-    } catch (error) {
-      settingsMessage.className = "settings-message error";
-      settingsMessage.textContent = error.message;
-      return;
-    }
-    updateConnectionUI();
-    window.UserUI?.load();
-    window.BudgetAPI.loadReferenceData()
-      .then(loadTransactions)
-      .catch((error) => {
-        settingsMessage.className = "settings-message error";
-        settingsMessage.textContent = `Settings saved, but data refresh failed: ${error.message}`;
-      });
-    settingsMessage.className = "settings-message success";
-    settingsMessage.textContent = endpoint
-      ? "Settings saved. New requests will use your sheet."
-      : "Settings saved. Using local mode.";
-  });
-
-  document
-    .getElementById("test-connection")
-    .addEventListener("click", async (event) => {
-      const endpoint = settingsForm.elements.endpoint.value.trim();
-      if (!endpoint) {
-        settingsMessage.className = "settings-message error";
-        settingsMessage.textContent = "Paste a web app URL before testing.";
-        return;
-      }
-      const button = event.currentTarget;
-      button.disabled = true;
-      button.textContent = "Testing…";
-      settingsMessage.textContent = "";
-      try {
-        await window.BudgetAPI.testConnection(endpoint);
-        settingsMessage.className = "settings-message success";
-        settingsMessage.textContent = "Connection successful.";
-      } catch (error) {
-        settingsMessage.className = "settings-message error";
-        settingsMessage.textContent = `Connection failed: ${error.message}`;
-      } finally {
-        button.disabled = false;
-        button.textContent = "Test connection";
-      }
-    });
-
-  document
-    .getElementById("copy-connection")
-    .addEventListener("click", async () => {
-      const endpoint = window.BudgetAPI.getConfig().endpoint;
-      if (!endpoint) {
-        settingsMessage.className = "settings-message error";
-        settingsMessage.textContent =
-          "Save a connection URL before copying it.";
-        return;
-      }
-      try {
-        await navigator.clipboard.writeText(endpoint);
-        settingsMessage.className = "settings-message success";
-        settingsMessage.textContent =
-          "Connection URL copied. Share it only with trusted household members.";
-      } catch (error) {
-        settingsForm.elements.endpoint.value = endpoint;
-        settingsForm.elements.endpoint.focus();
-        settingsForm.elements.endpoint.select();
-        try {
-          if (document.execCommand("copy")) {
-            settingsMessage.className = "settings-message success";
-            settingsMessage.textContent =
-              "Connection URL copied. Share it only with trusted household members.";
-          } else {
-            settingsMessage.textContent =
-              "The URL is selected. Press Ctrl+C or Command+C to copy it.";
-          }
-        } catch (fallbackError) {
-          settingsMessage.textContent =
-            "The URL is selected. Press Ctrl+C or Command+C to copy it.";
-        }
-      }
-    });
-
-  window.addEventListener("budget:connection-changed", updateConnectionUI);
 
   //  Inserts or updates a transaction when something is added or edited so we don't have to refetch everything
   function upsertTransactions(transactions) {
@@ -424,7 +299,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   window.addEventListener("budget:onboarding-complete", () => {
-    updateConnectionUI();
+    const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
+    document.body.dataset.connected = String(connected);
     initializeData();
   });
 
@@ -433,7 +309,6 @@ document.addEventListener("DOMContentLoaded", () => {
     showTab,
     loadTransactions,
     initializeData,
-    updateConnectionUI,
     getTransactions: () => state.transactions.slice(),
     renameEntityTransactions,
     getTransaction: (id) =>
@@ -441,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
     areTransactionsLoaded: () => state.loaded,
     isReferenceDataLoaded: () => referenceDataLoaded,
   };
-  updateConnectionUI();
+
   if (!window.OnboardingUI?.isBlocking()) initializeData();
 
   window.AppRouter.start();

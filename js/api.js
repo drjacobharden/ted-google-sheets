@@ -203,14 +203,18 @@
   }
 
   function cacheUsers(users) { writeArray(KEYS.users, users); }
-  async function listUsers() {
+  function listUsers() {
     ensureLocalData();
-    const users = getConfig().endpoint ? await request("listUsers") : active(readArray(KEYS.users));
+    return active(readArray(KEYS.users));
+  }
+  function replaceCachedUsers(users) {
     if (!Array.isArray(users)) throw new Error("The sheet response did not include a user list.");
     cacheUsers(users);
     const activeId = localStorage.getItem(KEYS.activeUser);
-    if (activeId && !users.some((user) => user.id === activeId && user.active !== false)) localStorage.removeItem(KEYS.activeUser);
-    return active(users);
+    if (activeId && !users.some((user) => user.id === activeId && user.active !== false)) {
+      localStorage.removeItem(KEYS.activeUser);
+      window.dispatchEvent(new CustomEvent("budget:active-user-changed", { detail: null }));
+    }
   }
   async function addUser(input) {
     const timestamp = now();
@@ -545,8 +549,8 @@
     ensureLocalData();
     if (getConfig().endpoint) {
       const queuedAtStart = new Set(getEntityOutbox().map((item) => item.record.id));
-      const [categories, vendors, assignments] = await Promise.all([
-        request("listCategories"), request("listVendors"), request("listAssignments"),
+      const [categories, vendors, assignments, users] = await Promise.all([
+        request("listCategories"), request("listVendors"), request("listAssignments"), request("listUsers"),
       ]);
       function preserveInFlight(serverRecords, key) {
         const merged = serverRecords.slice();
@@ -557,10 +561,11 @@
       writeArray(KEYS.categories, preserveInFlight(categories, KEYS.categories));
       writeArray(KEYS.vendors, preserveInFlight(vendors, KEYS.vendors));
       writeArray(KEYS.assignments, preserveInFlight(assignments, KEYS.assignments));
+      replaceCachedUsers(users);
       restoreQueuedEntities();
     }
     window.dispatchEvent(new CustomEvent("budget:reference-data-changed"));
-    return { categories: listCategories(), vendors: listVendors(), assignments: listPeople() };
+    return { categories: listCategories(), vendors: listVendors(), assignments: listPeople(), users: listUsers() };
   }
 
   function hydrateTransaction(transaction) {

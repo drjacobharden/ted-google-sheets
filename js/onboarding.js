@@ -91,7 +91,7 @@
     window.BudgetAPI.saveConfig({ endpoint: value });
     try {
       await window.BudgetAPI.loadReferenceData();
-      const users = await window.BudgetAPI.listUsers();
+      const users = window.BudgetAPI.listUsers();
       window.dispatchEvent(
         new CustomEvent("budget:connection-changed", {
           detail: { endpoint: value },
@@ -388,7 +388,7 @@
         '<div class="spinner" aria-hidden="true"></div><p>Loading household profiles…</p>';
       elements.next.disabled = true;
       try {
-        connectedUsers = await window.BudgetAPI.listUsers();
+        connectedUsers = window.BudgetAPI.listUsers();
         profileMode = connectedUsers.length ? "select" : "create";
       } catch (error) {
         setMessage(`Couldn’t load profiles: ${error.message}`, "error");

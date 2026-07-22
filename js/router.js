@@ -58,6 +58,18 @@
       script: "js/routes/transactions.js",
       module: () => window.TransactionsRoute,
     },
+
+    entity: {
+      template: "route-entity",
+      script: "js/routes/entity-detail.js",
+      module: () => window.EntityRoute,
+    },
+
+    settings: {
+      template: "route-settings",
+      script: "js/routes/settings",
+      module: () => window.SettingsRoute,
+    },
   };
 
   function loadScript(path) {

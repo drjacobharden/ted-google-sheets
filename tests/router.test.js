@@ -111,3 +111,23 @@ test("main treats drawer parameters as overlays rather than new content", () => 
   assert.doesNotMatch(drawer, /AppRouter\.navigate\("transactions"/);
   assert.doesNotMatch(drawer, /window\.TransactionEditor/);
 });
+
+test("settings route delegates state to cached custom-element forms", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  const main = fs.readFileSync("js/main.js", "utf8");
+  const route = fs.readFileSync("js/routes/settings.js", "utf8");
+  const userForm = fs.readFileSync("js/components/user-form.js", "utf8");
+  const urlForm = fs.readFileSync("js/components/url-form.js", "utf8");
+
+  assert.match(html, /id="route-settings"[\s\S]*<user-form><\/user-form>[\s\S]*<url-form><\/url-form>/);
+  assert.match(html, /js\/routes\/settings\.js/);
+  assert.match(main, /settings: window\.SettingsRoute/);
+  assert.doesNotMatch(route, /querySelector|addEventListener/);
+  assert.match(userForm, /const users = window\.BudgetAPI\.listUsers\(\)/);
+  assert.doesNotMatch(userForm, /await window\.BudgetAPI\.listUsers/);
+  assert.match(userForm, /budget:reference-data-changed/);
+  assert.match(
+    urlForm,
+    /await window\.BudgetAPI\.loadReferenceData\(\)[\s\S]*await window\.BudgetUI\.loadTransactions\(\)[\s\S]*budget:connection-changed/,
+  );
+});

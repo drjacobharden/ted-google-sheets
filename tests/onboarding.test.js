@@ -21,11 +21,11 @@ function loadOnboarding(options = {}) {
     loadReferenceData: async () => {
       calls.push(["loadReferenceData"]);
       if (options.referenceError) throw new Error(options.referenceError);
+      if (options.userError) throw new Error(options.userError);
       return {};
     },
-    listUsers: async () => {
+    listUsers: () => {
       calls.push(["listUsers"]);
-      if (options.userError) throw new Error(options.userError);
       return users;
     },
     addUser: async (input) => { activeUser = { id: "user-id", ...input }; return activeUser; },
@@ -90,14 +90,16 @@ test("connects and retains an endpoint only after all startup data loads", async
 test("markup and controller keep onboarding modal, verification, and endpoint sharing guarded", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const source = fs.readFileSync("js/onboarding.js", "utf8");
-  const main = fs.readFileSync("js/main.js", "utf8");
+  const urlForm = fs.readFileSync("js/components/url-form.js", "utf8");
   assert.match(html, /id="onboarding-dialog"[\s\S]*role="dialog"[\s\S]*aria-modal="true"/);
   assert.doesNotMatch(html, /onboarding-close/);
-  assert.match(html, /js\/api\.js[\s\S]*js\/onboarding\.js[\s\S]*js\/users\.js/);
+  assert.match(html, /js\/api\.js/);
+  assert.match(html, /js\/onboarding\.js/);
+  assert.match(html, /js\/components\/user-form\.js/);
   assert.match(source, /event\.key === "Escape"/);
   assert.match(source, /appShell\.inert = true/);
   assert.match(source, /id="onboarding-verified"/);
   assert.match(source, /budget:onboarding-complete/);
-  assert.match(main, /navigator\.clipboard\.writeText\(endpoint\)/);
-  assert.match(main, /Share it only with trusted household members/);
+  assert.match(urlForm, /navigator\.clipboard\.writeText\(endpoint\)/);
+  assert.match(urlForm, /Share it only with trusted household members/);
 });
