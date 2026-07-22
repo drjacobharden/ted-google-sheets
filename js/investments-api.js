@@ -101,10 +101,39 @@
   function monthOutbox() { return migrateMonthOutbox(read(KEYS.monthOutbox)); }
   function hasUnsynced() { return accountOutbox().length > 0 || monthOutbox().length > 0; }
   function hydrateAccount(account) { return migrateAccount(account); }
-  function hydrateBalance(balance) { const account = accounts().find((item) => item.id === balance.accountId); return { ...migrateBalance(balance), accountName: account?.name || "Unknown", source: account?.source || "manual" }; }
+  function hydrateBalance(balance) {
+    const migrated = migrateBalance(balance);
+    const account = accounts().find((item) => item.id === migrated.accountId);
+    const creator = window.BudgetAPI
+      ?.listUsers?.()
+      .find((item) => item.id === migrated.createdBy);
+    return {
+      ...migrated,
+      accountName: account?.name || "Unknown",
+      source: account?.source || "manual",
+      createdByName: creator
+        ? `${creator.firstName || ""} ${creator.lastName || ""}`.trim()
+        : "Unknown",
+    };
+  }
   function hydrateContribution(record) { const account = accounts().find((item) => item.id === record.accountId); return { ...migrateContribution(record), accountName: account?.name || "Unknown", source: account?.source || "manual" }; }
   function monthData(accountId, month) { return { accountId, month, balance: balances().find((item) => item.accountId === accountId && item.month === month) || null, contributions: contributions().filter((item) => item.accountId === accountId && item.month === month) }; }
-  function hydrateMonth(value) { if (!value) return null; const account = accounts().find((item) => item.id === value.accountId); return { ...normalizeMonth(value), accountName: account?.name || "Unknown", source: account?.source || "manual" }; }
+  function hydrateMonth(value) {
+    if (!value) return null;
+    const normalized = normalizeMonth(value);
+    const account = accounts().find(
+      (item) => item.id === normalized.accountId,
+    );
+    return {
+      ...normalized,
+      balance: normalized.balance
+        ? hydrateBalance(normalized.balance)
+        : null,
+      contributions: normalized.contributions.map(hydrateContribution),
+      accountName: account?.name || "Unknown",
+      source: account?.source || "manual",
+    };
+  }
   function snapshots() {
     return balances().map((balance) => ({ ...hydrateBalance(balance), contribution: contributions().filter((item) => item.accountId === balance.accountId && item.month === balance.month).reduce((sum, item) => sum + item.amount, 0) }));
   }

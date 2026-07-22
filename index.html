@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="css/responsiveness.css" />
 
     <!-- Component imports -->
+    <script src="js/components/page-title.js" defer></script>
     <script src="js/components/date-picker.js" defer></script>
     <script src="js/components/currency-input.js" defer></script>
     <script src="js/components/close-button.js" defer></script>
@@ -186,19 +187,9 @@
                 <span>Accounts</span>
               </button>
               <button
-                class="nav-item nav-subitem"
-                type="button"
-                data-tab="investment-balances"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 20h16M6 16V9M12 16V4M18 16v-5" />
-                </svg>
-                <span>Balance history</span>
-              </button>
-              <button
                 class="nav-item nav-subitem nav-action-item"
                 type="button"
-                data-tab="investment-update"
+                data-new-investment-balance
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
@@ -325,11 +316,7 @@
           <!-- Transaction list tab -->
           <template id="route-transactions">
             <section class="screen" data-screen="transactions">
-              <div class="page-heading heading-row">
-                <div>
-                  <p class="eyebrow">Overview</p>
-                  <h1>Transactions</h1>
-                </div>
+              <page-title eyebrow="Overview" title="Transactions">
                 <button
                   class="primary-button compact"
                   type="button"
@@ -337,7 +324,7 @@
                 >
                   <span aria-hidden="true">+</span> Add transaction
                 </button>
-              </div>
+              </page-title>
 
               <date-range-picker preset="week"></date-range-picker>
               <div class="summary-grid" aria-label="Budget summary">
@@ -469,15 +456,11 @@
           <!-- Categories tab -->
           <template id="route-categories">
             <section class="screen" data-screen="categories">
-              <div class="page-heading heading-row">
-                <div>
-                  <p class="eyebrow">Organize spending</p>
-                  <h1>Categories</h1>
-                  <p class="heading-copy">
-                    Manage the labels used to organize your transactions.
-                  </p>
-                </div>
-              </div>
+              <page-title
+                eyebrow="Organize spending"
+                title="Categories"
+                subtitle="Manage the labels used to organize your transactions."
+              ></page-title>
 
               <div class="category-layout">
                 <section
@@ -521,17 +504,11 @@
           <!-- Vendors tab -->
           <template id="route-vendors">
             <section class="screen" data-screen="vendors">
-              <div class="page-heading heading-row">
-                <div>
-                  <p class="eyebrow">Track payees</p>
-                  <h1>Vendors</h1>
-                  <p class="heading-copy">
-                    Manage the people and businesses attached to your
-                    transactions.
-                  </p>
-                </div>
-              </div>
-
+              <page-title
+                eyebrow="Track payees"
+                title="Vendors"
+                subtitle="Manage the people and businesses attached to your transactions."
+              ></page-title>
               <div class="category-layout">
                 <section
                   class="category-panel"
@@ -585,15 +562,11 @@
           <!-- People tab -->
           <template id="route-people">
             <section class="screen" data-screen="people">
-              <div class="page-heading heading-row">
-                <div>
-                  <p class="eyebrow">View assignments</p>
-                  <h1>People</h1>
-                  <p class="heading-copy">
-                    See how spending breaks down across your household.
-                  </p>
-                </div>
-              </div>
+              <page-title
+                eyebrow="View assignments"
+                title="People"
+                subtitle="See how spending breaks down across your household."
+              ></page-title>
 
               <div class="category-layout">
                 <section
@@ -637,11 +610,7 @@
           <!-- Entity drill down tab -->
           <template id="route-entity-detail">
             <section class="screen" data-screen="entity-detail">
-              <div class="page-heading heading-row">
-                <div>
-                  <p class="eyebrow" id="entity-detail-eyebrow">Details</p>
-                  <h1 id="entity-detail-title">Entity</h1>
-                </div>
+              <page-title eyebrow="Details" title="Entity">
                 <button
                   class="primary-button compact"
                   id="edit-entity"
@@ -649,7 +618,7 @@
                 >
                   Edit entity
                 </button>
-              </div>
+              </page-title>
               <date-range-picker preset="month"></date-range-picker>
               <div
                 class="summary-grid entity-summary-grid"
@@ -692,13 +661,11 @@
           <!-- Sync tab -->
           <template id="route-sync">
             <section class="screen" data-screen="sync">
-              <div class="page-heading">
-                <p class="eyebrow">Background activity</p>
-                <h1>Sync</h1>
-                <p class="heading-copy">
-                  Review changes waiting to be saved to your Google Sheet.
-                </p>
-              </div>
+              <page-title
+                eyebrow="Background activity"
+                title="Sync"
+                subtitle="Review changes waiting to be saved to your Google Sheet."
+              ></page-title>
               <div class="sync-card">
                 <div class="table-header">
                   <div>
@@ -726,13 +693,12 @@
           <!-- Settings tab -->
           <template id="route-settings">
             <section class="screen" data-screen="settings">
-              <div class="page-heading">
-                <p class="eyebrow">Preferences</p>
-                <h1>Settings</h1>
-                <p class="heading-copy">
-                  Manage your profile and connect this app to Google Sheets.
-                </p>
-              </div>
+              <page-title
+                eyebrow="Preferences"
+                title="Settings"
+                subtitle="Manage your profile and connect this app to Google Sheets."
+              ></page-title>
+
               <div class="settings-grid">
                 <user-form></user-form>
                 <url-form></url-form>
@@ -790,15 +756,13 @@
             </section>
           </template>
           <!-- Investment overview tab -->
-          <section class="screen" data-screen="investment-overview" hidden>
-            <div class="page-heading">
-              <p class="eyebrow">Long-term savings</p>
-              <h1>Investment overview</h1>
-              <p class="heading-copy">
-                Balances, contributions, and contribution-adjusted growth for
-                retirement planning.
-              </p>
-            </div>
+          <template id="route-investment-overview">
+          <section class="screen" data-screen="investment-overview">
+            <page-title
+              eyebrow="Long-term savings"
+              title="Investment overview"
+              subtitle="Balances, contributions, and contribution-adjusted growth for retirement planning."
+            ></page-title>
             <div class="month-range-filter" data-month-range></div>
             <div class="summary-grid" id="investment-summary"></div>
             <section class="ledger-card chart-card">
@@ -816,20 +780,17 @@
               ></div>
             </section>
           </section>
+          </template>
           <!-- Investment accounts tab -->
-          <section class="screen" data-screen="investment-accounts" hidden>
-            <div class="page-heading heading-row">
-              <div>
-                <p class="eyebrow">Investments</p>
-                <h1>Accounts</h1>
-                <p class="heading-copy">
-                  Manage the investment accounts included in household
-                  reporting.
-                </p>
-              </div>
-            </div>
+          <template id="route-investment-accounts">
+          <section class="screen" data-screen="investment-accounts">
+            <page-title
+              eyebrow="Investments"
+              title="Accounts"
+              subtitle="Manage the investment accounts included in household reporting."
+            ></page-title>
             <div class="investment-layout">
-              <section class="ledger-card">
+              <section class="ledger-card investment-account-list-card">
                 <div class="table-header">
                   <div>
                     <h2>Accounts</h2>
@@ -872,91 +833,51 @@
               </form>
             </div>
           </section>
-          <!-- Investment balances tab -->
-          <section class="screen" data-screen="investment-balances" hidden>
-            <div class="page-heading heading-row">
-              <div>
-                <p class="eyebrow">Investments</p>
-                <h1>Balance history</h1>
-                <p class="heading-copy">
-                  Review every reported account balance and contribution.
-                </p>
-              </div>
+          </template>
+          <!-- Investment account detail -->
+          <template id="route-investment-account-detail">
+          <section class="screen" data-screen="investment-account-detail">
+            <page-title
+              eyebrow="Investments"
+              title="Investment account"
+              subtitle="Monthly balance history"
+            >
               <button
-                class="secondary-button compact"
-                id="open-investment-import"
+                class="primary-button compact"
+                id="edit-investment-account"
                 type="button"
               >
-                Import history
+                Edit account
               </button>
-            </div>
+            </page-title>
             <section class="ledger-card">
               <div class="table-header">
                 <div>
-                  <h2>Monthly snapshots</h2>
-                  <p id="investment-history-count">0 snapshots</p>
+                  <h2>Balance history</h2>
+                  <p id="investment-account-history-count">0 balances</p>
                 </div>
               </div>
-              <div class="table-wrap" id="investment-history-wrap">
+              <div class="table-wrap" id="investment-account-history-wrap">
                 <table>
                   <thead>
                     <tr>
                       <th>Month</th>
-                      <th>Account</th>
-                      <th>Source</th>
-                      <th>Contribution</th>
+                      <th>Net contribution</th>
                       <th class="amount-cell">Ending balance</th>
                     </tr>
                   </thead>
-                  <tbody id="investment-history-body"></tbody>
+                  <tbody id="investment-account-history-body"></tbody>
                 </table>
               </div>
-              <div id="investment-history-empty" class="investment-empty">
+              <div
+                id="investment-account-history-empty"
+                class="investment-empty"
+              >
                 No monthly balances have been recorded.
               </div>
             </section>
           </section>
-          <!-- Investment update balances tab -->
-          <section class="screen" data-screen="investment-update" hidden>
-            <div class="page-heading">
-              <p class="eyebrow">Investments</p>
-              <h1>Update balances</h1>
-              <p class="heading-copy">
-                Select an account to record its ending balance, contributions,
-                and withdrawals.
-              </p>
-            </div>
-            <section class="ledger-card investment-entry-card">
-              <div class="table-header">
-                <div>
-                  <h2>Monthly update</h2>
-                  <p>
-                    Click an account to edit its month-ending balance and
-                    itemized investment flows.
-                  </p>
-                </div>
-                <div class="investment-period-controls">
-                  <month-picker
-                    label="Reporting month"
-                    alignment="right"
-                  ></month-picker>
-                </div>
-              </div>
-              <div class="table-wrap">
-                <table class="investment-grid">
-                  <thead>
-                    <tr>
-                      <th>Account</th>
-                      <th>Ending balance</th>
-                      <th>Net contribution</th>
-                      <th>Entries</th>
-                    </tr>
-                  </thead>
-                  <tbody id="investment-month-list"></tbody>
-                </table>
-              </div>
-            </section>
-          </section>
+          </template>
         </div>
       </section>
     </main>
@@ -1091,7 +1012,7 @@
     </div>
     <!-- Investment account right sidebar -->
     <div
-      class="transaction-drawer-backdrop"
+      class="drawer-overlay"
       id="investment-account-drawer-backdrop"
       hidden
     >
@@ -1135,7 +1056,6 @@
             Paycheck deductions count toward Total savings. Manual transfers
             allocate savings that the budget has already counted.
           </p>
-          <div id="investment-account-history" class="account-history"></div>
           <p class="form-message" role="status"></p>
           <footer class="transaction-drawer-actions">
             <button class="secondary-button" type="button" data-account-archive>
@@ -1149,7 +1069,7 @@
     </div>
     <!-- Investment contribution right sidebar -->
     <div
-      class="transaction-drawer-backdrop"
+      class="drawer-overlay"
       id="investment-month-drawer-backdrop"
       hidden
     >
@@ -1176,6 +1096,23 @@
           </button>
         </header>
         <form id="investment-month-form" novalidate>
+          <div class="investment-month-targets">
+            <label class="form-field">
+              <span>Account</span>
+              <select name="accountId" required>
+                <option value="">Choose an account</option>
+              </select>
+            </label>
+            <month-picker label="Reporting month"></month-picker>
+          </div>
+          <p
+            class="investment-existing-notice"
+            id="investment-month-existing"
+            hidden
+          >
+            A balance already exists for this account and month. Saving will
+            update it.
+          </p>
           <section
             class="investment-month-conflict"
             id="investment-month-conflict"
@@ -1284,74 +1221,35 @@
             id="investment-month-message"
             role="status"
           ></p>
-          <footer class="transaction-drawer-actions">
-            <button
-              class="secondary-button"
-              id="cancel-investment-month"
-              type="button"
+          <div class="transaction-drawer-controls">
+            <footer class="transaction-drawer-actions">
+              <button
+                class="secondary-button"
+                id="cancel-investment-month"
+                type="button"
+              >
+                Cancel</button
+              ><button class="primary-button" type="submit">
+                Add balance
+              </button>
+            </footer>
+            <label class="batch-entry-toggle" id="investment-batch-toggle">
+              <span>
+                <strong>Batch input</strong>
+                <small>Keep this month and add another account</small>
+              </span>
+              <input type="checkbox" name="batchEntry" role="switch" />
+            </label>
+            <div
+              class="transaction-metadata"
+              id="investment-balance-metadata"
+              hidden
             >
-              Cancel</button
-            ><button class="primary-button" type="submit">
-              Save monthly update
-            </button>
-          </footer>
+              <p id="investment-balance-created"></p>
+            </div>
+          </div>
         </form>
       </aside>
-    </div>
-    <!-- Import modal -->
-    <div class="overlay" id="investment-import-overlay" hidden>
-      <section
-        class="onboarding-dialog import-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="investment-import-title"
-      >
-        <header class="page-heading" style="margin-bottom: 24px">
-          <p class="eyebrow">Historical data</p>
-          <h1>Import investment history</h1>
-          <p class="heading-copy">
-            Paste CSV or tab-separated rows. Existing account-month records are
-            shown as updates before import.
-          </p>
-        </header>
-
-        <label class="form-field">
-          <span>CSV or pasted table</span>
-          <textarea
-            id="investment-import-text"
-            rows="9"
-            placeholder="Account,Source,Month,Balance,Contribution,Notes"
-          ></textarea>
-        </label>
-        <div id="investment-import-preview" class="import-preview"></div>
-        <p
-          id="investment-import-message"
-          class="settings-message"
-          role="status"
-        ></p>
-        <footer class="onboarding-actions">
-          <button
-            class="secondary-button"
-            id="cancel-investment-import"
-            type="button"
-          >
-            Cancel</button
-          ><button
-            class="secondary-button"
-            id="preview-investment-import"
-            type="button"
-          >
-            Preview</button
-          ><button
-            class="primary-button"
-            id="confirm-investment-import"
-            type="button"
-            disabled
-          >
-            Import rows
-          </button>
-        </footer>
-      </section>
     </div>
     <!-- Toast notifications -->
     <div
@@ -1428,15 +1326,19 @@
     <script src="js/utils/app-utils.js"></script>
     <script src="js/utils/date-utils.js"></script>
     <script src="js/utils/transaction-row.js"></script>
+    <script src="js/utils/investment-view.js"></script>
 
     <script src="js/api.js"></script>
     <script src="js/investments-api.js"></script>
     <script src="js/toast.js"></script>
     <script src="js/sync-notifications.js"></script>
     <script src="js/onboarding.js"></script>
+    <script src="js/investments.js"></script>
     <script src="js/router.js"></script>
     <script src="js/routes/transaction-drawer.js"></script>
     <script src="js/routes/entity-drawer.js"></script>
+    <script src="js/routes/investment-account-drawer.js"></script>
+    <script src="js/routes/investment-month-drawer.js"></script>
     <script src="js/main.js"></script>
 
     <script src="js/routes/transactions.js"></script>
@@ -1446,7 +1348,8 @@
     <script src="js/routes/sync.js"></script>
     <script src="js/routes/entity-detail.js"></script>
     <script src="js/routes/settings.js"></script>
-
-    <script src="js/investments.js"></script>
+    <script src="js/routes/investment-overview.js"></script>
+    <script src="js/routes/investment-accounts.js"></script>
+    <script src="js/routes/investment-account-detail.js"></script>
   </body>
 </html>

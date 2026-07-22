@@ -15,6 +15,7 @@ function loadInvestments(options = {}) {
     BudgetAPI: {
       getConfig: () => ({ endpoint: options.endpoint || "" }),
       getActiveUser: () => ({ id: "123e4567-e89b-42d3-a456-426614174000" }),
+      listUsers: () => [{ id: "123e4567-e89b-42d3-a456-426614174000", firstName: "Test", lastName: "User" }],
       listPeople: () => [{ id: "00000000-0000-4000-8000-000000000101", name: "Shared" }],
       getSyncItems: () => [],
     },
@@ -198,44 +199,76 @@ test("rebasing a conflict retains a contribution independently added in the Shee
   assert.equal(runtime.api.monthData(accountId, "2026-07").contributions.some((item) => item.id === remote.id), true);
 });
 
-test("investment UI includes monthly account summaries and the contribution-withdrawal drawer", () => {
+test("hydrated balances resolve their cached creator name with an unknown fallback", () => {
+  const runtime = loadInvestments({ values: {
+    "myFinance.investmentBalances.v1": JSON.stringify([
+      { id: "known", accountId: "account", month: "2026-06", balance: 1000, createdBy: "123e4567-e89b-42d3-a456-426614174000" },
+      { id: "unknown", accountId: "account", month: "2026-07", balance: 1200, createdBy: "removed-user" },
+    ]),
+  } });
+
+  assert.equal(runtime.api.snapshots()[0].createdByName, "Test User");
+  assert.equal(runtime.api.snapshots()[1].createdByName, "Unknown");
+});
+
+test("investment routes and drawers replace the legacy global screens", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const source = fs.readFileSync("js/investments.js", "utf8") + fs.readFileSync("js/investments-api.js", "utf8");
+  const source = [
+    "js/investments.js",
+    "js/investments-api.js",
+    "js/routes/investment-overview.js",
+    "js/routes/investment-accounts.js",
+    "js/routes/investment-account-detail.js",
+    "js/routes/investment-account-drawer.js",
+    "js/routes/investment-month-drawer.js",
+  ].map((file) => fs.readFileSync(file, "utf8")).join("\n");
   assert.match(html, /data-screen="dashboard"/);
-  assert.match(html, /data-screen="investment-overview"/);
-  assert.match(html, /data-screen="investment-accounts"/);
-  assert.match(html, /data-screen="investment-balances"/);
-  assert.match(html, /data-screen="investment-update"/);
-  assert.match(html, /id="investment-month-list"/);
+  assert.match(html, /id="route-investment-overview"/);
+  assert.match(html, /id="route-investment-accounts"/);
+  assert.match(html, /id="route-investment-account-detail"/);
+  assert.doesNotMatch(html, /data-screen="investment-balances"/);
+  assert.doesNotMatch(html, /data-screen="investment-update"/);
   assert.doesNotMatch(html, /Balance as of|Balance date/);
   assert.match(html, /id="investment-month-drawer"/);
+  assert.match(html, /<select name="accountId" required>/);
+  assert.match(html, /<month-picker label="Reporting month">/);
   assert.match(html, /id="investment-contribution-list"/);
   assert.match(html, /id="investment-withdrawal-list"/);
   assert.match(html, /Add another contribution/);
   assert.match(html, /Add another withdrawal/);
-  assert.match(html, /id="investment-import-overlay"/);
+  assert.match(html, /id="investment-batch-toggle"/);
+  assert.match(html, /id="investment-balance-created"/);
+  assert.doesNotMatch(html, /id="investment-import-overlay"/);
   assert.match(source, /totalSavings: budgetSurplus \+ paycheckContributions/);
   assert.doesNotMatch(html, /Employee payroll|Employer match|Institution|Account Type/);
-  assert.match(source, /parseDelimited/);
-  assert.match(source, /duplicate account and month/);
-  assert.match(source, /amount:sign\*amount/);
+  assert.doesNotMatch(source, /parseDelimited/);
+  assert.match(source, /investment-account-detail/);
+  assert.match(source, /investmentReviewId/);
+  assert.match(source, /createdByName/);
+  assert.match(source, /amount:\s*sign \* amount/);
+  assert.match(source, /suppressSingleDefault = true/);
 });
 
 test("primary navigation groups budgeting and investment destinations", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const source = fs.readFileSync("js/main.js", "utf8");
-  const styles = fs.readFileSync("styles.css", "utf8");
+  const styles = fs.readFileSync("styles.css", "utf8") + fs.readFileSync("css/navigation-bar.css", "utf8");
   assert.match(html, /data-nav-section="budgeting"/);
   assert.match(html, /data-tab="transactions"/);
-  assert.match(html, /data-tab="new-transaction"/);
+  assert.match(html, /data-new-transaction/);
   assert.match(html, /data-nav-section="investments"/);
   assert.match(html, /data-tab="investment-overview"/);
   assert.match(html, /data-tab="investment-accounts"/);
-  assert.match(html, /data-tab="investment-balances"/);
-  assert.match(html, /data-tab="investment-update"/);
+  assert.match(html, /data-new-investment-balance/);
+  assert.doesNotMatch(html, /data-tab="investment-balances"/);
+  assert.doesNotMatch(html, /data-tab="investment-update"/);
   assert.doesNotMatch(html, /data-tab="investments"/);
   assert.match(source, /name\.startsWith\("investment-"\)/);
+  assert.match(source, /name === "investment-account-detail" \? "investment-accounts"/);
+  assert.match(source, /delete contentParams\.investmentAccountId/);
+  assert.match(source, /delete contentParams\.investmentMonth/);
+  assert.match(source, /delete contentParams\.investmentReviewId/);
   assert.match(source, /data-nav-section-toggle/);
   assert.match(styles, /\.nav-section\.collapsed \.nav-submenu/);
-  assert.match(styles, /\.sidebar-footer \{[\s\S]*?display: grid/);
+  assert.match(styles, /\.nav-footer \{/);
 });

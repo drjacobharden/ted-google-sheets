@@ -124,6 +124,32 @@ test("entity editor parameters preserve the underlying detail route", () => {
   assert.equal(location.hash, "#/entity-detail?kind=vendor&id=vendor-1");
 });
 
+test("investment drawers preserve the account-detail route", () => {
+  const { window, location } = loadRouter(
+    "#/investment-account-detail?accountId=account-1",
+  );
+
+  window.AppRouter.updateParams({
+    drawer: "investment-month",
+    investmentAccountId: "account-1",
+    investmentMonth: "2026-07",
+  });
+  assert.equal(
+    location.hash,
+    "#/investment-account-detail?accountId=account-1&drawer=investment-month&investmentAccountId=account-1&investmentMonth=2026-07",
+  );
+
+  window.AppRouter.updateParams({
+    drawer: null,
+    investmentAccountId: null,
+    investmentMonth: null,
+  });
+  assert.equal(
+    location.hash,
+    "#/investment-account-detail?accountId=account-1",
+  );
+});
+
 test("main treats drawer parameters as overlays rather than new content", () => {
   const main = fs.readFileSync("js/main.js", "utf8");
   const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
@@ -133,6 +159,9 @@ test("main treats drawer parameters as overlays rather than new content", () => 
   assert.match(main, /delete contentParams\.transactionId/);
   assert.match(main, /delete contentParams\.entityKind/);
   assert.match(main, /delete contentParams\.entityId/);
+  assert.match(main, /delete contentParams\.investmentAccountId/);
+  assert.match(main, /delete contentParams\.investmentMonth/);
+  assert.match(main, /delete contentParams\.investmentReviewId/);
   assert.match(main, /if \(contentKey === mountedContentKey\) return/);
   assert.match(drawer, /AppRouter\.updateParams/);
   assert.doesNotMatch(drawer, /AppRouter\.navigate\("transactions"/);

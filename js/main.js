@@ -38,6 +38,9 @@ document.addEventListener("DOMContentLoaded", () => {
       sync: window.SyncRoute,
       settings: window.SettingsRoute,
       "entity-detail": window.EntityRoute,
+      "investment-overview": window.InvestmentOverviewRoute,
+      "investment-accounts": window.InvestmentAccountsRoute,
+      "investment-account-detail": window.InvestmentAccountDetailRoute,
     };
 
     const routeModule = routeModules[name];
@@ -74,6 +77,9 @@ document.addEventListener("DOMContentLoaded", () => {
     delete contentParams.transactionId;
     delete contentParams.entityKind;
     delete contentParams.entityId;
+    delete contentParams.investmentAccountId;
+    delete contentParams.investmentMonth;
+    delete contentParams.investmentReviewId;
     const contentKey = `${name}?${new URLSearchParams(contentParams)}`;
 
     if (contentKey === mountedContentKey) return;
@@ -82,8 +88,10 @@ document.addEventListener("DOMContentLoaded", () => {
     screens.forEach((screen) => {
       screen.hidden = screen.dataset.screen !== name;
     });
+    const activeTab =
+      name === "investment-account-detail" ? "investment-accounts" : name;
     document.querySelectorAll(".nav-item[data-tab]").forEach((item) => {
-      const active = item.dataset.tab === name;
+      const active = item.dataset.tab === activeTab;
       item.classList.toggle("active", active);
       active
         ? item.setAttribute("aria-current", "page")
@@ -112,17 +120,15 @@ document.addEventListener("DOMContentLoaded", () => {
       await ensureReferenceData();
     }
 
-    if (name.startsWith("investment-")) {
-      await window.InvestmentUI?.load?.();
-    }
-
-    if (name === "dashboard" || name.startsWith("investment-")) {
-      window.InvestmentUI?.load();
-    }
+    if (name.startsWith("investment-")) await window.InvestmentUI?.load?.();
   }
 
   function updateNavigationSection(name) {
-    const activeNav = document.querySelector(`.nav-item[data-tab="${name}"]`);
+    const activeTab =
+      name === "investment-account-detail" ? "investment-accounts" : name;
+    const activeNav = document.querySelector(
+      `.nav-item[data-tab="${activeTab}"]`,
+    );
     const activeSection = activeNav?.closest("[data-nav-section]");
     if (activeSection) {
       activeSection.classList.remove("collapsed");

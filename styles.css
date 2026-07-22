@@ -219,6 +219,9 @@ body.onboarding-open {
   gap: 20px;
   margin-top: 8px;
 }
+.investment-layout > .ledger-card {
+  margin-top: 0;
+}
 .chart-card {
   margin-top: 20px;
 }
@@ -367,9 +370,38 @@ body.onboarding-open {
   outline: 3px solid rgba(80, 124, 74, 0.25);
   outline-offset: -3px;
 }
-.investment-month-drawer form {
-  display: grid;
+.investment-month-drawer form,
+#investment-account-edit-form {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
   gap: 22px;
+}
+.investment-month-targets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.7fr);
+  gap: 14px;
+}
+.investment-existing-notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-small);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+#investment-account-drawer,
+#investment-month-drawer {
+  display: flex;
+  flex-direction: column;
+}
+#investment-account-edit-form .transaction-drawer-actions {
+  margin-top: auto;
+  padding-top: 22px;
+}
+#investment-balance-metadata p {
+  margin: 0;
 }
 .investment-month-conflict {
   padding: 18px;
@@ -559,6 +591,9 @@ body.onboarding-open {
     padding-inline: 4px;
   }
   .investment-conflict-comparison {
+    grid-template-columns: 1fr;
+  }
+  .investment-month-targets {
     grid-template-columns: 1fr;
   }
   .investment-conflict-actions {

@@ -146,7 +146,12 @@
               transactionId: item.id,
             });
           if (["investmentSnapshot", "investmentMonth"].includes(item.source))
-            window.InvestmentUI?.reviewMonth(item.id);
+            window.AppRouter.updateParams({
+              drawer: "investment-month",
+              investmentAccountId: item.record.accountId,
+              investmentMonth: item.record.month,
+              investmentReviewId: item.id,
+            });
         }
         if (action === "retry") {
           if (item.source === "transaction")

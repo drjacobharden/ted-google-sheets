@@ -29,8 +29,7 @@
     "settings",
     "investment-overview",
     "investment-accounts",
-    "investment-balances",
-    "investment-update",
+    "investment-account-detail",
   ]);
 
   // The names of the routes and their associated scripts and modules
@@ -69,6 +68,24 @@
       template: "route-settings",
       script: "js/routes/settings.js",
       module: () => window.SettingsRoute,
+    },
+
+    "investment-overview": {
+      template: "route-investment-overview",
+      script: "js/routes/investment-overview.js",
+      module: () => window.InvestmentOverviewRoute,
+    },
+
+    "investment-accounts": {
+      template: "route-investment-accounts",
+      script: "js/routes/investment-accounts.js",
+      module: () => window.InvestmentAccountsRoute,
+    },
+
+    "investment-account-detail": {
+      template: "route-investment-account-detail",
+      script: "js/routes/investment-account-detail.js",
+      module: () => window.InvestmentAccountDetailRoute,
     },
   };
 
