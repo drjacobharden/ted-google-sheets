@@ -1,7 +1,7 @@
 // HTML Template: Remove the ` ` at the start and end to edit but put them back before saving
 const currencyInputTemplate = () => `
   <label class="form-field">
-    <span>Amount</span>
+    <span>Amount <small>(use a negative value for refunds)</small></span>
     <div class="input-shell">
       <span class="input-prefix">$</span>
       <input
@@ -9,7 +9,6 @@ const currencyInputTemplate = () => `
         name="amount"
         type="number"
         inputmode="decimal"
-        min="0.01"
         step="0.01"
         placeholder="0.00"
         required
@@ -20,7 +19,7 @@ const currencyInputTemplate = () => `
 
 (function () {
   class CurrencyInput extends HTMLElement {
-    #inputEl = null;
+    #input = null;
 
     connectedCallback() {
       this.render();
@@ -28,24 +27,26 @@ const currencyInputTemplate = () => `
 
     render() {
       this.innerHTML = currencyInputTemplate();
-      this.#inputEl = this.querySelector(".currency-field");
+      this.#input = this.querySelector(".currency-field");
 
-      if (this.#inputEl) {
-        this.#inputEl.addEventListener("input", this);
-        this.#inputEl.addEventListener("blur", this);
+      if (this.#input) {
+        this.#input.addEventListener("input", this);
       }
     }
 
     handleEvent(event) {
-      if (event.type === "input") {
-        this.handleInput(event);
-      } else if (event.type === "blur") {
-        this.handleBlur(event);
+      switch (event.type) {
+        case "input":
+          this.#handleInput(event);
+          break;
+
+        default:
+          break;
       }
     }
 
     // Block inputs beyond two decimals
-    handleInput = (e) => {
+    #handleInput = (e) => {
       const value = e.target.value;
       if (value.includes(".")) {
         const parts = value.split(".");
@@ -55,19 +56,10 @@ const currencyInputTemplate = () => `
       }
     };
 
-    // Formats the text to automatically show cents when the input blurs
-    handleBlur = (e) => {
-      const value = parseFloat(e.target.value);
-      if (!isNaN(value)) {
-        e.target.value = value.toFixed(2);
-      }
-    };
-
     // Cleans up the listeners when the input is removed from the DOM
     disconnectedCallback() {
-      if (this.#inputEl) {
-        this.#inputEl.removeEventListener("input", this);
-        this.#inputEl.removeEventListener("blur", this);
+      if (this.#input) {
+        this.#input.removeEventListener("input", this);
       }
     }
   }

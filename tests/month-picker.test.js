@@ -20,7 +20,7 @@ function loadMonthPicker() {
     }
   }
   const context = {
-    window: {},
+    window: { DateUtils: { shortMonthNames: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] } },
     HTMLElement: FakeHTMLElement,
     customElements: {
       define: (name, constructor) => {
@@ -35,7 +35,7 @@ function loadMonthPicker() {
     Math,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("js/month-picker.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("js/components/month-picker.js", "utf8"), context);
   return { helpers: context.window.MonthPickerUI, MonthPicker };
 }
 
@@ -83,19 +83,19 @@ test("value, min, and max properties reflect valid values and clear invalid ones
   assert.equal(picker.min, "");
 });
 
-test("month picker is wired into all investment month selections", () => {
+test("month and date-range pickers are wired into investment selections", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const investments = fs.readFileSync("js/investments.js", "utf8");
-  const component = fs.readFileSync("js/month-picker.js", "utf8");
+  const overview = fs.readFileSync("js/routes/investment-overview.js", "utf8");
+  const monthDrawer = fs.readFileSync("js/routes/investment-month-drawer.js", "utf8");
+  const component = fs.readFileSync("js/components/month-picker.js", "utf8");
   assert.doesNotMatch(html, /type=["']month["']/);
-  assert.doesNotMatch(investments, /type=["']month["']/);
-  assert.match(html, /<month-picker\s+id="investment-entry-month"\s+label="Reporting month"/);
-  assert.match(investments, /<month-picker label="From" data-month-start/);
-  assert.match(investments, /<month-picker label="To" data-month-end/);
-  assert.match(html, /<script src="js\/month-picker\.js"><\/script>[\s\S]*<script src="js\/investments\.js"><\/script>/);
-  assert.match(investments, /entryMonth\.addEventListener\("change", renderMonthList\)/);
-  assert.match(investments, /From month must be before or the same as To month\./);
-  assert.match(investments, /data-month-range-error role="alert" aria-live="polite"/);
+  assert.doesNotMatch(overview + monthDrawer, /type=["']month["']/);
+  assert.match(html, /<month-picker\s+label="Reporting month"\s+alignment="right"/);
+  assert.match(html, /id="route-investment-overview"[\s\S]*<date-range-picker preset="month"><\/date-range-picker>/);
+  assert.match(html, /<script src="js\/components\/month-picker\.js" defer><\/script>[\s\S]*<script src="js\/routes\/investment-month-drawer\.js"><\/script>/);
+  assert.match(monthDrawer, /monthPicker\.addEventListener\("change", changeTarget\)/);
+  assert.match(overview, /date-range-changed/);
+  assert.match(overview, /monthRangeFromDates/);
   assert.match(component, /new Event\("change", \{ bubbles: true \}\)/);
-  assert.match(component, /removeEventListener\("click", this\._handleDocumentClick\)/);
+  assert.doesNotMatch(component, /document\.addEventListener\("click"/);
 });

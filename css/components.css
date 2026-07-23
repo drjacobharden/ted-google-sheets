@@ -119,3 +119,12 @@ The
 .month-range-filter {
   margin: 22px 0;
 }
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  background-color: var(--accent-muted);
+  height: 44;
+  width: 44;
+  border-radius: 8px;
+}

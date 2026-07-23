@@ -83,6 +83,20 @@ const datePickerTemplate = () => `
       this.setAttribute("value", v);
     }
 
+    get isOpen() {
+      return Boolean(this.#popoverElement && !this.#popoverElement.hidden);
+    }
+
+    reportSelectionError() {
+      this.#triggerElement?.setAttribute("aria-invalid", "true");
+      this.#triggerElement?.focus();
+    }
+
+    closePopup({ focusTrigger = false } = {}) {
+      this.#closeCalendar();
+      if (focusTrigger) this.#triggerElement?.focus();
+    }
+
     connectedCallback() {
       // Set the html to display
       this.innerHTML = datePickerTemplate();
@@ -98,7 +112,7 @@ const datePickerTemplate = () => `
       this.#hiddenInput = this.querySelector('input[type="hidden"]');
 
       // Set the date value
-      if (!this.#value) {
+      if (!this.#value && !this.hasAttribute("allow-empty")) {
         this.value = toISODate(new Date()); // Call shared utility
       }
 
@@ -120,6 +134,7 @@ const datePickerTemplate = () => `
 
       if (name === "value") {
         this.#value = newValue;
+        this.#triggerElement?.removeAttribute("aria-invalid");
 
         if (this.#hiddenInput) {
           this.#hiddenInput.value = newValue;
@@ -134,6 +149,8 @@ const datePickerTemplate = () => `
           this.#visibleMonth = new Date(date.getFullYear(), date.getMonth(), 1);
           if (this.#popoverElement && !this.#popoverElement.hidden)
             this.#renderCalendar();
+        } else if (this.#displayElement) {
+          this.#displayElement.textContent = "Select a date";
         }
       }
 

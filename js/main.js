@@ -1,60 +1,141 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const state = { transactions: [], search: "", type: "all", loaded: false };
-  let activeRange = { start: "", end: "", preset: "all" };
+  let unmountCurrentRoute = null;
+  let appDataPromise;
+  let referenceDataLoaded = false;
+  let mountedContentKey = "";
 
-  const navItems = document.querySelectorAll("[data-tab]");
+  window.addEventListener("budget:reference-data-changed", () => {
+    referenceDataLoaded = true;
+  });
+
+  // Mount the template for the route provided.
+  //  - 1: unmount the currently mounted route if it exists
+  //  - 2: find the template for the new route (error if no template exists)
+  //  - 3: if the template exists, mount its content inside the outlet
+  //  - 4: get the module for the route and mount its associated data and listeners
+  //  - 5: set the unmount to the current route's unmount function so that all listeners can be removed when navigating away
+  function mountTemplate(name, params = {}) {
+    unmountCurrentRoute?.();
+
+    const outlet = document.getElementById("route-outlet");
+    const template = document.getElementById(`route-${name}`);
+
+    if (!template) {
+      console.error(`Missing template for route: ${name}`);
+      return;
+    }
+
+    outlet.replaceChildren(template.content.cloneNode(true));
+
+    const screen = outlet.querySelector("[data-screen]");
+
+    const routeModules = {
+      dashboard: window.DashboardRoute,
+      categories: window.CategoryRoute,
+      vendors: window.VendorRoute,
+      people: window.PeopleRoute,
+      import: window.ImportRoute,
+      transactions: window.TransactionsRoute,
+      sync: window.SyncRoute,
+      settings: window.SettingsRoute,
+      "entity-detail": window.EntityRoute,
+      "entity-archive": window.EntityArchiveRoute,
+      "investment-overview": window.InvestmentOverviewRoute,
+      "investment-accounts": window.InvestmentAccountsRoute,
+      "investment-account-detail": window.InvestmentAccountDetailRoute,
+    };
+
+    const routeModule = routeModules[name];
+
+    if (!routeModule) {
+      console.error(`Missing route module for: ${name}`);
+      return;
+    }
+
+    screen.hidden = false;
+    routeModule.mount(screen, { route: name, params });
+
+    unmountCurrentRoute = () => {
+      routeModule?.unmount();
+      outlet.replaceChildren();
+    };
+  }
+
+  const state = { transactions: [], search: "", type: "all", loaded: false };
+
   const navSections = document.querySelectorAll("[data-nav-section]");
   const screens = document.querySelectorAll(".screen[data-screen]");
   const appNotice = document.getElementById("app-notice");
+  const appShell = document.querySelector(".app-shell");
+  const loadingSplash = document.getElementById("app-loading-splash");
+  const loadingSplashMessage = document.getElementById("app-loading-message");
+  const loadingSplashRetry = document.getElementById("app-loading-retry");
+  const refreshIndicator = document.getElementById("app-refresh-indicator");
+  const refreshIndicatorText = document.getElementById("app-refresh-text");
+  const refreshIndicatorRetry = document.getElementById("app-refresh-retry");
   let appNoticeTimer;
 
-  const currency = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-  const dateFormatter = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-
-  function updateConnectionUI() {
-    const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
-    document.body.dataset.connected = String(connected);
-    document.getElementById("copy-connection").disabled = !connected;
-    document.querySelectorAll("[data-connection-label]").forEach((element) => {
-      element.textContent = connected ? "Sheet connected" : "Local mode";
-    });
+  // TODO: Remove later. Currently for compatibility while we migrate to routing.
+  function showTab(name) {
+    window.AppRouter.navigate(name);
   }
 
-  function showTab(name) {
+  function renderRoute(name, params = {}) {
+    const contentParams = { ...params };
+    delete contentParams.drawer;
+    delete contentParams.transactionId;
+    delete contentParams.entityKind;
+    delete contentParams.entityId;
+    delete contentParams.investmentAccountId;
+    delete contentParams.investmentMonth;
+    delete contentParams.investmentReviewId;
+    const contentKey = `${name}?${new URLSearchParams(contentParams)}`;
+
+    if (contentKey === mountedContentKey) return;
+
+    mountedContentKey = contentKey;
     screens.forEach((screen) => {
       screen.hidden = screen.dataset.screen !== name;
     });
+    const activeTab =
+      name === "investment-account-detail" ? "investment-accounts" : name;
     document.querySelectorAll(".nav-item[data-tab]").forEach((item) => {
-      const active = item.dataset.tab === name;
+      const active = item.dataset.tab === activeTab;
       item.classList.toggle("active", active);
       active
         ? item.setAttribute("aria-current", "page")
         : item.removeAttribute("aria-current");
     });
-    if ((name === "transactions" || name === "dashboard") && !state.loaded)
-      loadTransactions();
-    if (name === "dashboard" || name.startsWith("investment-"))
-      window.InvestmentUI?.load();
-    if (name === "new-transaction")
-      document.querySelector('[name="amount"]')?.focus();
-    if (name === "categories") window.CategoryUI?.load();
-    if (name === "vendors") window.VendorUI?.load();
-    if (name === "people") window.PeopleUI?.load();
-    if (name === "entity-detail") window.EntityDetailUI?.render();
-    if (name === "sync") window.SyncUI?.render();
-    if (name === "settings") {
-      loadSettings();
-      window.UserUI?.load();
+
+    enterRoute(name).catch(() => {});
+    updateNavigationSection(name);
+    mountTemplate(name, contentParams);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function enterRoute(name) {
+    if (name === "dashboard") {
+      await initializeData();
     }
-    const activeNav = document.querySelector(`.nav-item[data-tab="${name}"]`);
+
+    if (["transactions", "entity-detail"].includes(name) && !state.loaded) {
+      await initializeData();
+    }
+
+    if (name === "import") {
+      await initializeData();
+    }
+
+    if (name.startsWith("investment-")) await initializeData();
+  }
+
+  function updateNavigationSection(name) {
+    const activeTab =
+      name === "investment-account-detail" ? "investment-accounts" : name;
+    const activeNav = document.querySelector(
+      `.nav-item[data-tab="${activeTab}"]`,
+    );
     const activeSection = activeNav?.closest("[data-nav-section]");
     if (activeSection) {
       activeSection.classList.remove("collapsed");
@@ -70,12 +151,22 @@ document.addEventListener("DOMContentLoaded", () => {
             ?.setAttribute("aria-expanded", "false");
         });
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  navItems.forEach((item) =>
-    item.addEventListener("click", () => showTab(item.dataset.tab)),
-  );
+  //  Listens for a click on a navigation button and routes to its associated route
+  document.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-tab]");
+    if (!item) return;
+
+    event.preventDefault();
+    window.AppRouter.navigate(item.dataset.tab);
+  });
+
+  //  Listen for the change in route from router.js and render the route's data.
+  window.addEventListener("app:route-changed", (event) => {
+    renderRoute(event.detail.route, event.detail.params);
+  });
+
   document.querySelectorAll("[data-nav-section-toggle]").forEach((toggle) =>
     toggle.addEventListener("click", () => {
       const section = toggle.closest("[data-nav-section]");
@@ -111,293 +202,119 @@ document.addEventListener("DOMContentLoaded", () => {
     showAppNotice(event.detail),
   );
 
-  function amountFor(transaction) {
-    const amount = Number(transaction.amount) || 0;
-    return transaction.type === "income" ? amount : -amount;
+  function retryAppData() {
+    loadingSplashMessage.textContent = "Loading your budget…";
+    loadingSplashRetry.hidden = true;
+    refreshIndicatorRetry.hidden = true;
+    initializeData({ refresh: true, startup: !loadingSplash.hidden }).catch(() => {});
   }
 
-  function updateSummary() {
-    const ranged = state.transactions.filter((transaction) => {
-      const { start, end } = activeRange;
-      return (
-        (!start || transaction.date >= start) &&
-        (!end || transaction.date <= end)
-      );
-    });
+  loadingSplashRetry.addEventListener("click", retryAppData);
+  refreshIndicatorRetry.addEventListener("click", retryAppData);
 
-    const income = ranged
-      .filter((item) => item.type === "income")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const expenses = ranged
-      .filter((item) => item.type !== "income")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const balance = ranged.reduce((sum, item) => sum + amountFor(item), 0);
-
-    document.getElementById("summary-balance").textContent =
-      currency.format(balance);
-    document.getElementById("summary-income").textContent =
-      currency.format(income);
-    document.getElementById("summary-expenses").textContent =
-      currency.format(expenses);
-  }
-
-  function filteredTransactions() {
-    const query = state.search.toLowerCase().trim();
-    return state.transactions
-      .filter((item) => {
-        const { start, end } = activeRange;
-        return (!start || item.date >= start) && (!end || item.date <= end);
-      })
-      .filter((item) => state.type === "all" || item.type === state.type)
-      .filter(
-        (item) =>
-          !query ||
-          [
-            item.category,
-            item.vendor,
-            item.assignment || "Shared",
-            item.notes,
-          ].some((value) =>
-            String(value || "")
-              .toLowerCase()
-              .includes(query),
-          ),
-      )
-      .sort(
-        (a, b) =>
-          String(b.date).localeCompare(String(a.date)) ||
-          String(b.createdAt).localeCompare(String(a.createdAt)),
-      );
-  }
-
-  function renderTransactions() {
-    const items = filteredTransactions();
-    const tableWrap = document.getElementById("transaction-table-wrap");
-    const message = document.getElementById("transaction-state");
-    const list = document.getElementById("transaction-list");
-    const total = items.length;
-    document.getElementById("transaction-count").textContent =
-      `${total} ${total === 1 ? "transaction" : "transactions"}`;
-
-    if (!items.length) {
-      tableWrap.hidden = true;
-      message.hidden = false;
-      const filtered = Boolean(
-        state.search || state.type !== "all" || activeRange.preset !== "all",
-      );
-      message.innerHTML = `<div class="empty-symbol" aria-hidden="true">${filtered ? "?" : "$"}</div><h3>${filtered ? "No matches found" : "Your ledger is ready"}</h3><p>${filtered ? "Try changing your search or filter." : "Add your first transaction and it will appear here."}</p>`;
+  window.addEventListener("budget:data-refresh-started", (event) => {
+    if (!event.detail.connected) return;
+    loadingSplashRetry.hidden = true;
+    refreshIndicatorRetry.hidden = true;
+    if (event.detail.coldStart) {
+      loadingSplash.hidden = false;
+      loadingSplashMessage.textContent = "Loading your budget…";
+      appShell.inert = true;
       return;
     }
+    refreshIndicator.hidden = false;
+    refreshIndicatorText.textContent = "Refreshing data…";
+  });
 
-    list.replaceChildren(...items.map(createTransactionRow));
-    message.hidden = true;
-    tableWrap.hidden = false;
-  }
+  window.addEventListener("budget:data-refresh-complete", () => {
+    loadingSplash.hidden = true;
+    refreshIndicator.hidden = true;
+    loadingSplashRetry.hidden = true;
+    refreshIndicatorRetry.hidden = true;
+    if (!window.OnboardingUI?.isBlocking()) appShell.inert = false;
+  });
 
-  function createTransactionRow(transaction) {
-    const row = document.createElement("tr");
-    row.dataset.transactionId = transaction.id;
-    row.tabIndex = 0;
-    row.setAttribute("role", "button");
-    row.setAttribute(
-      "aria-label",
-      `Edit ${transaction.vendor || transaction.category || "transaction"} from ${transaction.date}`,
-    );
-    const isIncome = transaction.type === "income";
-    const category = String(
-      transaction.category || (isIncome ? "Income" : "Other"),
-    );
-    const initial = category.charAt(0).toUpperCase();
-    const note = String(transaction.notes || "").trim();
-    const syncStatus = transaction.syncStatus;
-    const syncBadge = syncStatus
-      ? `<span class="transaction-sync-badge ${syncStatus}" title="${escapeHTML(transaction.syncError || "Waiting to sync")}">${syncStatus === "failed" ? "Needs attention" : "Pending"}</span>`
-      : "";
-    row.innerHTML = `
-        <td>${dateFormatter.format(new Date(`${transaction.date}T00:00:00Z`))}${syncBadge}</td>
-        <td><div class="transaction-name"><span class="category-icon${isIncome ? " income-category-icon" : ""}" aria-hidden="true">${escapeHTML(initial)}</span><strong class="${isIncome ? "income-category-title" : ""}">${escapeHTML(category)}</strong></div></td>
-        <td class="vendor-cell">${escapeHTML(isIncome ? "---" : transaction.vendor || "---")}</td>
-        <td><span class="assignment-chip">${escapeHTML(transaction.assignment || "Shared")}</span></td>
-        <td class="note-cell"><span title="${escapeHTML(note)}">${escapeHTML(note || "---")}</span></td>
-        <td class="amount-cell ${isIncome ? "amount-income" : "amount-expense"}">${isIncome ? "+" : "−"}${currency.format(Math.abs(Number(transaction.amount) || 0))}</td>`;
-    return row;
-  }
-
-  function escapeHTML(value) {
-    return String(value).replace(
-      /[&<>'"]/g,
-      (char) =>
-        ({
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          "'": "&#39;",
-          '"': "&quot;",
-        })[char],
-    );
-  }
-
-  async function loadTransactions() {
-    const message = document.getElementById("transaction-state");
-    document.getElementById("transaction-table-wrap").hidden = true;
-    message.hidden = false;
-    message.innerHTML =
-      '<div class="spinner" aria-hidden="true"></div><p>Loading your transactions…</p>';
-    try {
-      state.transactions = await window.BudgetAPI.listTransactions();
-      state.loaded = true;
-      updateSummary();
-      renderTransactions();
-    } catch (error) {
-      message.innerHTML = `<div class="empty-symbol" aria-hidden="true">!</div><h3>We couldn’t load your sheet</h3><p>${escapeHTML(error.message)} Check the URL and deployment access in Settings.</p>`;
+  window.addEventListener("budget:data-refresh-failed", (event) => {
+    if (!event.detail.connected) return;
+    if (!loadingSplash.hidden && !event.detail.showingCachedData) {
+      loadingSplashMessage.textContent = `We couldn’t load your budget. ${event.detail.error.message}`;
+      loadingSplashRetry.hidden = false;
+      return;
     }
+    refreshIndicator.hidden = false;
+    refreshIndicatorText.textContent = "Showing saved data · refresh failed";
+    refreshIndicatorRetry.hidden = false;
+  });
+
+  function loadTransactions() {
+    return state.loaded ? Promise.resolve(state.transactions.slice()) : initializeData();
   }
 
-  document
-    .getElementById("transaction-search")
-    .addEventListener("input", (event) => {
-      state.search = event.target.value;
-      renderTransactions();
-    });
-  document.getElementById("type-filter").addEventListener("change", (event) => {
-    state.type = event.target.value;
-    renderTransactions();
-  });
-  window.addEventListener("date-range-changed", (e) => {
-    activeRange = e.detail;
-    updateSummary();
-    renderTransactions();
-  });
-  document
-    .getElementById("transaction-list")
-    .addEventListener("click", (event) => {
-      const row = event.target.closest("tr[data-transaction-id]");
-      if (row) window.TransactionEditor?.open(row.dataset.transactionId);
-    });
-  document
-    .getElementById("transaction-list")
-    .addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      const row = event.target.closest("tr[data-transaction-id]");
-      if (!row) return;
-      event.preventDefault();
-      window.TransactionEditor?.open(row.dataset.transactionId);
-    });
-
-  const settingsForm = document.getElementById("connection-form");
-  const settingsMessage = settingsForm.querySelector(".settings-message");
-
-  function loadSettings() {
-    settingsForm.elements.endpoint.value =
-      window.BudgetAPI.getConfig().endpoint;
-    settingsMessage.textContent = "";
-  }
-
-  async function initializeData() {
-    try {
-      await window.BudgetAPI.loadReferenceData();
-    } catch (error) {
-      window.dispatchEvent(
-        new CustomEvent("budget:api-warning", {
-          detail: `Couldn’t refresh lists: ${error.message}`,
-        }),
+  function initializeData(options = {}) {
+    if (options.refresh) {
+      appDataPromise = null;
+      state.loaded = false;
+      referenceDataLoaded = false;
+    }
+    if (!appDataPromise) {
+      const cachedTransactions = window.BudgetAPI.getCachedTransactions?.();
+      const usingCache = !state.loaded && cachedTransactions !== null && cachedTransactions !== undefined;
+      if (usingCache) {
+        state.transactions = cachedTransactions;
+        state.loaded = true;
+        window.dispatchEvent(new CustomEvent("budget:transactions-loaded", {
+          detail: { source: "cache" },
+        }));
+      }
+      const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
+      const coldStart = Boolean(
+        options.startup &&
+        connected &&
+        !state.loaded,
       );
-    }
-    await Promise.all([loadTransactions(), window.InvestmentUI?.load?.()]);
-  }
-
-  settingsForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const endpoint = settingsForm.elements.endpoint.value.trim();
-    if (endpoint && !endpoint.startsWith("https://script.google.com/")) {
-      settingsMessage.className = "settings-message error";
-      settingsMessage.textContent =
-        "Use the HTTPS web app URL provided by Google Apps Script.";
-      return;
-    }
-    try {
-      window.BudgetAPI.saveConfig({ endpoint });
-    } catch (error) {
-      settingsMessage.className = "settings-message error";
-      settingsMessage.textContent = error.message;
-      return;
-    }
-    updateConnectionUI();
-    window.UserUI?.load();
-    window.BudgetAPI.loadReferenceData()
-      .then(loadTransactions)
-      .catch((error) => {
-        settingsMessage.className = "settings-message error";
-        settingsMessage.textContent = `Settings saved, but data refresh failed: ${error.message}`;
-      });
-    settingsMessage.className = "settings-message success";
-    settingsMessage.textContent = endpoint
-      ? "Settings saved. New requests will use your sheet."
-      : "Settings saved. Using local mode.";
-  });
-
-  document
-    .getElementById("test-connection")
-    .addEventListener("click", async (event) => {
-      const endpoint = settingsForm.elements.endpoint.value.trim();
-      if (!endpoint) {
-        settingsMessage.className = "settings-message error";
-        settingsMessage.textContent = "Paste a web app URL before testing.";
-        return;
-      }
-      const button = event.currentTarget;
-      button.disabled = true;
-      button.textContent = "Testing…";
-      settingsMessage.textContent = "";
-      try {
-        await window.BudgetAPI.testConnection(endpoint);
-        settingsMessage.className = "settings-message success";
-        settingsMessage.textContent = "Connection successful.";
-      } catch (error) {
-        settingsMessage.className = "settings-message error";
-        settingsMessage.textContent = `Connection failed: ${error.message}`;
-      } finally {
-        button.disabled = false;
-        button.textContent = "Test connection";
-      }
-    });
-
-  document
-    .getElementById("copy-connection")
-    .addEventListener("click", async () => {
-      const endpoint = window.BudgetAPI.getConfig().endpoint;
-      if (!endpoint) {
-        settingsMessage.className = "settings-message error";
-        settingsMessage.textContent =
-          "Save a connection URL before copying it.";
-        return;
-      }
-      try {
-        await navigator.clipboard.writeText(endpoint);
-        settingsMessage.className = "settings-message success";
-        settingsMessage.textContent =
-          "Connection URL copied. Share it only with trusted household members.";
-      } catch (error) {
-        settingsForm.elements.endpoint.value = endpoint;
-        settingsForm.elements.endpoint.focus();
-        settingsForm.elements.endpoint.select();
-        try {
-          if (document.execCommand("copy")) {
-            settingsMessage.className = "settings-message success";
-            settingsMessage.textContent =
-              "Connection URL copied. Share it only with trusted household members.";
-          } else {
-            settingsMessage.textContent =
-              "The URL is selected. Press Ctrl+C or Command+C to copy it.";
+      window.dispatchEvent(new CustomEvent("budget:data-refresh-started", {
+        detail: { source: usingCache ? "cache" : "network", coldStart, connected },
+      }));
+      appDataPromise = window.BudgetAPI.loadAppData({ refresh: options.refresh })
+        .then(async (data) => {
+          state.transactions = data.transactions || [];
+          state.loaded = true;
+          referenceDataLoaded = true;
+          await window.InvestmentAPI.load();
+          window.dispatchEvent(new CustomEvent("budget:transactions-loaded", {
+            detail: { source: "server" },
+          }));
+          window.dispatchEvent(new CustomEvent("budget:data-refresh-complete", {
+            detail: { source: "server" },
+          }));
+          return data;
+        })
+        .catch((error) => {
+          appDataPromise = null;
+          if (!state.loaded) {
+            window.dispatchEvent(
+              new CustomEvent("budget:transactions-load-error", {
+                detail: { error },
+              }),
+            );
           }
-        } catch (fallbackError) {
-          settingsMessage.textContent =
-            "The URL is selected. Press Ctrl+C or Command+C to copy it.";
-        }
-      }
-    });
+          window.dispatchEvent(new CustomEvent("budget:data-refresh-failed", {
+            detail: { error, showingCachedData: state.loaded, connected },
+          }));
+          window.dispatchEvent(
+            new CustomEvent("budget:api-warning", {
+              detail: state.loaded
+                ? `Showing saved data. Couldn’t refresh Google Sheets: ${error.message}`
+                : `Couldn’t load app data: ${error.message}`,
+            }),
+          );
+          throw error;
+        });
+    }
+    return appDataPromise;
+  }
 
-  window.addEventListener("budget:connection-changed", updateConnectionUI);
+  //  Inserts or updates a transaction when something is added or edited so we don't have to refetch everything
   function upsertTransactions(transactions) {
     const incoming = new Map(
       transactions.map((transaction) => [transaction.id, transaction]),
@@ -406,9 +323,8 @@ document.addEventListener("DOMContentLoaded", () => {
       (transaction) => !incoming.has(transaction.id),
     );
     state.transactions.push(...incoming.values());
-    updateSummary();
-    renderTransactions();
   }
+
   function renameEntityTransactions(kind, id, name) {
     const idField = {
       category: "categoryId",
@@ -425,15 +341,22 @@ document.addEventListener("DOMContentLoaded", () => {
         ? { ...transaction, [nameField]: name }
         : transaction,
     );
-    updateSummary();
-    renderTransactions();
   }
+
+  //  Add or update the transactions tate when a transaction starts syncing
   window.addEventListener("budget:transaction-queued", (event) =>
     upsertTransactions([event.detail.transaction]),
   );
+  window.addEventListener("budget:transactions-queued", (event) =>
+    upsertTransactions(event.detail.transactions || []),
+  );
+
+  //  Add or update the tranasaction state when a transaction is saved
   window.addEventListener("budget:transaction-saved", (event) =>
     upsertTransactions(event.detail.saved || []),
   );
+
+  //  Update the transaction state when a transactions sync state changes
   window.addEventListener("budget:transaction-sync-changed", (event) => {
     const queued = event.detail.transactions || [];
     const queuedIds = new Set(queued.map((transaction) => transaction.id));
@@ -442,32 +365,39 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     upsertTransactions(queued);
   });
+
+  //  Update the transaction state when a transaction is restored
   window.addEventListener("budget:transaction-restored", (event) =>
     upsertTransactions([event.detail.transaction]),
   );
+
+  //  Update the transaction state when a transaction is removed
   window.addEventListener("budget:transaction-removed", (event) => {
     state.transactions = state.transactions.filter(
       (transaction) => transaction.id !== event.detail.id,
     );
-    updateSummary();
-    renderTransactions();
   });
+
   window.addEventListener("budget:onboarding-complete", () => {
-    updateConnectionUI();
-    initializeData();
+    const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
+    document.body.dataset.connected = String(connected);
+    initializeData().catch(() => {});
   });
 
   window.BudgetUI = {
+    renderRoute,
     showTab,
     loadTransactions,
     initializeData,
-    updateConnectionUI,
     getTransactions: () => state.transactions.slice(),
-    createTransactionRow,
     renameEntityTransactions,
     getTransaction: (id) =>
       state.transactions.find((transaction) => transaction.id === id) || null,
+    areTransactionsLoaded: () => state.loaded,
+    isReferenceDataLoaded: () => referenceDataLoaded,
   };
-  updateConnectionUI();
-  if (!window.OnboardingUI?.isBlocking()) initializeData();
+
+  if (!window.OnboardingUI?.isBlocking()) initializeData({ startup: true }).catch(() => {});
+
+  window.AppRouter.start();
 });

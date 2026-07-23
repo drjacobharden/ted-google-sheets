@@ -163,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!item) return;
     try {
       if (action === "review") {
-        if (item.source === "transaction") window.TransactionEditor.open(item.id, { review: true });
+        if (item.source === "transaction") window.TransactionEditor.openEdit(item.id, { review: true });
         if (["investmentSnapshot", "investmentMonth"].includes(item.source)) window.InvestmentUI?.reviewMonth(item.id);
       }
       if (action === "retry") {

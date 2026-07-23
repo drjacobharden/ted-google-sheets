@@ -159,14 +159,14 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   list.addEventListener("click", (event) => {
     const row = event.target.closest("tr[data-transaction-id]");
-    if (row) window.TransactionEditor.open(row.dataset.transactionId);
+    if (row) window.TransactionEditor.openEdit(row.dataset.transactionId);
   });
   list.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     const row = event.target.closest("tr[data-transaction-id]");
     if (!row) return;
     event.preventDefault();
-    window.TransactionEditor.open(row.dataset.transactionId);
+    window.TransactionEditor.openEdit(row.dataset.transactionId);
   });
   [
     "budget:date-range-changed",

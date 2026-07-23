@@ -235,27 +235,6 @@ document.addEventListener("DOMContentLoaded", () => {
     populateCategories(event.detail?.id || categorySelect.value);
   });
 
-  async function addTypedVendor() {
-    const name = vendorInput.value.trim();
-    if (!name) return;
-    inlineVendorMessage.textContent = "";
-    try {
-      selectVendor(await window.BudgetAPI.addVendor({ name }));
-    } catch (error) {
-      inlineVendorMessage.className = "inline-vendor-message error";
-      inlineVendorMessage.textContent = error.message;
-    }
-  }
-  function chooseVendorOption(option) {
-    if (option.dataset.addVendor !== undefined) {
-      addTypedVendor();
-      return;
-    }
-    const vendor = window.BudgetAPI.listVendors().find(
-      (item) => item.id === option.dataset.vendorId,
-    );
-    if (vendor) selectVendor(vendor);
-  }
   function moveVendorOption(direction) {
     const options = [...vendorList.querySelectorAll('[role="option"]')];
     if (!options.length) return;
@@ -298,13 +277,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeVendorList();
     }
   });
-  vendorList.addEventListener("click", (event) => {
-    const option = event.target.closest('[role="option"]');
-    if (option) chooseVendorOption(option);
-  });
-  document.addEventListener("click", (event) => {
-    if (!vendorCombobox.contains(event.target)) closeVendorList();
-  });
+
   window.addEventListener("budget:vendors-changed", (event) => {
     if (event.detail?.oldId === vendorIdInput.value) selectVendor(event.detail);
     else if (vendorIdInput.value) {

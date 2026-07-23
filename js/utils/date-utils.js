@@ -14,18 +14,42 @@ const shortDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   year: "numeric",
+  timeZone: "UTC",
 });
 
 const longDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "long",
   day: "numeric",
   year: "numeric",
+  timeZone: "UTC",
 });
 
 const monthFormatter = new Intl.DateTimeFormat("en-US", {
   month: "long",
   year: "numeric",
+  timeZone: "UTC",
 });
+
+const createdDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+const monthNames = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const shortMonthNames = monthNames.map((name) => name.slice(0, 3));
 
 window.DateUtils = {
   toISODate,
@@ -33,4 +57,6 @@ window.DateUtils = {
   longDateFormatter,
   monthFormatter,
   shortDateFormatter,
+  shortMonthNames,
+  createdDateTimeFormatter,
 };

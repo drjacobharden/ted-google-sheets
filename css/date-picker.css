@@ -7,8 +7,8 @@ inherited by the range pickers
 
 /* LEAVE THESE ALONE! Necessary for popover to show */
 date-range-picker,
-.date-picker-container,
-.month-picker {
+month-picker,
+.date-picker-container {
   position: relative;
   display: inline-block;
 }
@@ -172,6 +172,9 @@ date-range-picker,
   outline: 0;
   box-shadow: 0 0 0 4px rgba(111, 157, 102, 0.12);
 }
+.date-picker-trigger[aria-invalid="true"] {
+  border-color: #d49898;
+}
 
 .date-picker-trigger svg,
 .month-picker-trigger svg {
@@ -280,7 +283,7 @@ Provides styling for the month picker input field and the popover that allows fo
 ========================================================================================  */
 
 /* Root of the input field. Sets a minimum width to adhere to. */
-.month-picker {
+month-picker {
   min-width: 200px;
 }
 

@@ -1,13 +1,17 @@
-const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
-    <span class="month-picker-label" id="${labelId}"></span>
+const monthPickerLabelClass = "month-picker-label";
+const monthPickerTriggerClass = "month-picker-trigger";
+const monthPickerTriggerDisplayClass = "month-picker-display";
+const monthPickerPopoverClass = "month-picker-popover";
+
+const monthPickerTemplate = ({ alignmentClass }) => `
+    <span class="month-picker-label"></span>
     <button
       class="month-picker-trigger"
       type="button"
       aria-haspopup="dialog"
       aria-expanded="false"
-      aria-labelledby="${labelId} ${displayId}"
     >
-      <span id="${displayId}" data-month-picker-display></span>
+      <span class="month-picker-display" data-month-picker-display></span>
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <rect x="3.5" y="5" width="17" height="15" rx="2"></rect>
         <path d="M7.5 3v4M16.5 3v4M3.5 9h17"></path>
@@ -37,6 +41,8 @@ const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
   `;
 
 (function () {
+  const { shortMonthNames } = window.DateUtils;
+
   const MONTH_VALUE_PATTERN = /^(?!0000)(\d{4})-(0[1-9]|1[0-2])$/;
   const MONTH_NAMES = [
     "January",
@@ -52,8 +58,6 @@ const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
     "November",
     "December",
   ];
-  const SHORT_MONTH_NAMES = MONTH_NAMES.map((name) => name.slice(0, 3));
-  let pickerIndex = 0;
 
   function normalizeMonth(value) {
     const match = String(value || "").match(MONTH_VALUE_PATTERN);
@@ -99,47 +103,34 @@ const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
       return ["label", "value", "min", "max", "alignment"];
     }
 
-    constructor() {
-      super();
-      this._initialized = false;
-      this._visibleYear = new Date().getFullYear();
-      this._handleDocumentClick = this._handleDocumentClick.bind(this);
-    }
+    // In-memory properties
+    #isOpen = false;
+    #visibleYear = new Date().getFullYear();
 
-    connectedCallback() {
-      if (!this._initialized) this._initialize();
-      document.addEventListener("click", this._handleDocumentClick);
-      this._update();
-    }
+    // Elements Cache
+    #label = null;
+    #trigger = null;
+    #display = null;
+    #popover = null;
+    #yearDisplay = null;
+    #grid = null;
+    #previous = null;
+    #next = null;
 
-    disconnectedCallback() {
-      document.removeEventListener("click", this._handleDocumentClick);
-    }
-
-    attributeChangedCallback() {
-      if (this._initialized) this._update();
-    }
-
-    // 3. Javascript property getter
     get alignment() {
-      // Default to 'left' if the attribute is missing or invalid
       const val = this.getAttribute("alignment");
       return val === "right" ? "right" : "left";
     }
 
-    // 4. Javascript property setter
     set alignment(value) {
-      if (value === "right" || value === "left") {
+      if (value === "right" || value === "left")
         this.setAttribute("alignment", value);
-      } else {
-        this.removeAttribute("alignment");
-      }
+      else this.removeAttribute("alignment");
     }
 
     get value() {
       return normalizeMonth(this.getAttribute("value"));
     }
-
     set value(value) {
       const normalized = normalizeMonth(value);
       if (normalized) this.setAttribute("value", normalized);
@@ -149,7 +140,6 @@ const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
     get min() {
       return normalizeMonth(this.getAttribute("min"));
     }
-
     set min(value) {
       const normalized = normalizeMonth(value);
       if (normalized) this.setAttribute("min", normalized);
@@ -159,95 +149,144 @@ const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
     get max() {
       return normalizeMonth(this.getAttribute("max"));
     }
-
     set max(value) {
       const normalized = normalizeMonth(value);
       if (normalized) this.setAttribute("max", normalized);
       else this.removeAttribute("max");
     }
 
-    _initialize() {
-      pickerIndex += 1;
-      const labelId = `month-picker-label-${pickerIndex}`;
-      const displayId = `month-picker-display-${pickerIndex}`;
+    connectedCallback() {
       const alignmentClass =
         this.alignment === "right"
           ? "month-picker-popover-right-align"
           : "month-picker-popover-left-align";
 
-      this.classList.add("month-picker");
-      this.innerHTML = monthPickerTemplate({
-        labelId,
-        displayId,
-        alignmentClass,
-      });
+      // Set the html to display
+      this.innerHTML = monthPickerTemplate({ alignmentClass });
 
-      this._label = this.querySelector(".month-picker-label");
-      this._trigger = this.querySelector(".month-picker-trigger");
-      this._display = this.querySelector("[data-month-picker-display]");
-      this._popover = this.querySelector(".month-picker-popover");
-      this._yearDisplay = this.querySelector("[data-month-picker-year]");
-      this._grid = this.querySelector(".month-picker-grid");
-      this._previous = this.querySelector("[data-month-picker-previous]");
-      this._next = this.querySelector("[data-month-picker-next]");
+      // Set the references for the component
+      this.#label = this.querySelector(".month-picker-label");
+      this.#trigger = this.querySelector(".month-picker-trigger");
+      this.#display = this.querySelector(".month-picker-display");
+      this.#popover = this.querySelector(".month-picker-popover");
+      this.#yearDisplay = this.querySelector(".calendar-month");
+      this.#grid = this.querySelector(".month-picker-grid");
+      this.#previous = this.querySelector(".previous-month");
+      this.#next = this.querySelector(".next-month");
 
-      this._trigger.addEventListener("click", () => {
-        if (this._popover.hidden) this._open();
-        else this._close();
+      // Create each of the buttons on the popover
+      const buttons = shortMonthNames.map(() => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.setAttribute("role", "gridcell");
+        return button;
       });
-      this._previous.addEventListener("click", () => {
-        if (this._canShowYear(this._visibleYear - 1)) {
-          this._visibleYear -= 1;
-          this._renderMonths();
-        }
-      });
-      this._next.addEventListener("click", () => {
-        if (this._canShowYear(this._visibleYear + 1)) {
-          this._visibleYear += 1;
-          this._renderMonths();
-        }
-      });
-      this._popover.addEventListener("keydown", (event) =>
-        this._handlePopoverKeydown(event),
-      );
-      this._initialized = true;
+      this.#grid.replaceChildren(...buttons);
+
+      // Centralized router configuration to stop double triggering
+      this.addEventListener("click", this);
+      this.addEventListener("keydown", this);
+
+      this.#update();
     }
 
-    _update() {
-      const label = this.getAttribute("label") || "Month";
-      this._label.textContent = label;
-      this._display.textContent = formatMonth(this.value);
-      this._popover.setAttribute("aria-label", `Choose ${label.toLowerCase()}`);
-      if (!this._popover.hidden) this._renderMonths();
+    disconnectedCallback() {
+      this.removeEventListener("click", this);
+      this.removeEventListener("keydown", this);
     }
 
-    _open() {
-      const initial = this.value || currentMonth();
-      this._visibleYear = Number(initial.slice(0, 4));
-      if (!this._canShowYear(this._visibleYear)) {
-        if (this.min) this._visibleYear = Number(this.min.slice(0, 4));
-        else if (this.max) this._visibleYear = Number(this.max.slice(0, 4));
+    attributeChangedCallback(name, oldValue, newValue) {
+      if (oldValue === newValue) return;
+      this.#update();
+    }
+
+    handleEvent(event) {
+      if (event.type === "click") {
+        this.#handleClick(event);
+      } else if (event.type === "keydown") {
+        this.#handleKeydown(event);
       }
-      this._renderMonths();
-      this._popover.hidden = false;
-      this._trigger.setAttribute("aria-expanded", "true");
+    }
+
+    #handleClick(event) {
+      if (!this.contains(event.target)) {
+        this.#closeCalendar();
+        return;
+      }
+
+      if (event.target.closest(".month-picker-trigger")) {
+        this.#popover.hidden ? this.#openCalendar() : this.#closeCalendar();
+        return;
+      } else if (event.target.closest("[data-month-picker-previous]")) {
+        if (this.#canShowYear(this.#visibleYear - 1)) {
+          this.#visibleYear -= 1;
+          this.#renderMonths();
+        }
+        return;
+      } else if (event.target.closest("[data-month-picker-next]")) {
+        if (this.#canShowYear(this.#visibleYear + 1)) {
+          this.#visibleYear += 1;
+          this.#renderMonths();
+        }
+        return;
+      }
+
+      const mtnButton = event.target.closest("[data-month-value]");
+      if (mtnButton) {
+        this.#select(mtnButton.dataset.monthValue);
+      }
+    }
+
+    #update() {
+      if (this.#label) {
+        const label = this.getAttribute("label") || "Month";
+        this.#label.textContent = label;
+      }
+
+      if (this.#display) {
+        this.#display.textContent = formatMonth(this.value);
+      }
+
+      if (this.#isOpen) {
+        this.#renderMonths();
+      }
+    }
+
+    #openCalendar() {
+      this.#popover.hidden = false;
+      this.#isOpen = true;
+      const initial = this.value || currentMonth();
+      this.#visibleYear = Number(initial.slice(0, 4));
+      if (!this.#canShowYear(this.#visibleYear)) {
+        if (this.min) this.#visibleYear = Number(this.min.slice(0, 4));
+        else if (this.max) this.#visibleYear = Number(this.max.slice(0, 4));
+      }
+      this.#renderMonths();
+
+      this.#popover.style.display = "block";
+      this.#trigger.setAttribute("aria-expanded", "true");
+
       requestAnimationFrame(() => {
         const preferred =
-          this._grid.querySelector(".selected") ||
-          this._grid.querySelector(".current") ||
-          this._grid.querySelector("button:not(:disabled)");
+          this.#grid.querySelector(".selected") ||
+          this.#grid.querySelector(".current") ||
+          this.#grid.querySelector("button:not(:disabled)");
         preferred?.focus();
       });
     }
 
-    _close({ restoreFocus = false } = {}) {
-      if (!this._initialized) return;
-      this._popover.hidden = true;
-      this._trigger.setAttribute("aria-expanded", "false");
-      if (restoreFocus) this._trigger.focus();
+    #closeCalendar({ restoreFocus = false } = {}) {
+      if (!this.#trigger || !this.#popover) return;
+
+      this.#popover.hidden = true;
+      this.#isOpen = false;
+      this.#popover.style.display = "none";
+      this.#trigger.setAttribute("aria-expanded", "false");
+
+      if (restoreFocus) this.#trigger.focus();
     }
 
-    _canShowYear(year) {
+    #canShowYear(year) {
       if (!Number.isInteger(year) || year < 1 || year > 9999) return false;
       const yearText = String(year).padStart(4, "0");
       return (
@@ -256,62 +295,69 @@ const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
       );
     }
 
-    _renderMonths() {
-      const year = String(this._visibleYear).padStart(4, "0");
+    #renderMonths() {
+      const year = String(this.#visibleYear).padStart(4, "0");
       const selected = this.value;
       const today = currentMonth();
-      this._yearDisplay.textContent = year;
-      this._previous.disabled = !this._canShowYear(this._visibleYear - 1);
-      this._next.disabled = !this._canShowYear(this._visibleYear + 1);
+      this.#yearDisplay.textContent = year;
+      this.#previous.disabled = !this.#canShowYear(this.#visibleYear - 1);
+      this.#next.disabled = !this.#canShowYear(this.#visibleYear + 1);
 
-      const buttons = SHORT_MONTH_NAMES.map((name, index) => {
+      const buttons = this.#grid.children;
+
+      shortMonthNames.forEach((name, index) => {
         const value = `${year}-${String(index + 1).padStart(2, "0")}`;
-        const button = document.createElement("button");
-        button.type = "button";
+        const button = buttons[index];
+
         button.textContent = name;
         button.dataset.monthValue = value;
-        button.setAttribute("role", "gridcell");
         button.setAttribute("aria-label", formatMonth(value));
         button.setAttribute("aria-selected", String(value === selected));
         button.disabled = !isWithinBounds(value, this.min, this.max);
-        if (value === selected) button.classList.add("selected");
+
+        button.classList.toggle("selected", value === selected);
         if (value === today) {
           button.classList.add("current");
           button.setAttribute("aria-current", "date");
+        } else {
+          button.classList.remove("current");
+          button.removeAttribute("aria-current");
         }
-        button.addEventListener("click", () => this._select(value));
-        return button;
       });
-      this._grid.replaceChildren(...buttons);
     }
 
-    _select(value) {
+    #select(value) {
       if (!isWithinBounds(value, this.min, this.max)) return;
       this.value = value;
-      this._close({ restoreFocus: true });
+      this.#closeCalendar({ restoreFocus: true });
       this.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
-    _focusMonth(value) {
+    #focusMonth(value) {
       if (!isWithinBounds(value, this.min, this.max)) return;
-      this._visibleYear = Number(value.slice(0, 4));
-      this._renderMonths();
-      this._grid.querySelector(`[data-month-value="${value}"]`)?.focus();
+      this.#visibleYear = Number(value.slice(0, 4));
+      this.#renderMonths();
+      this.#grid.querySelector(`[data-month-value="${value}"]`)?.focus();
     }
 
-    _handlePopoverKeydown(event) {
+    #handleKeydown(event) {
+      if (event.type !== "keydown") return;
+
       if (event.key === "Escape") {
         event.preventDefault();
-        this._close({ restoreFocus: true });
+        this.#closeCalendar({ restoreFocus: true });
         return;
       }
+
       const monthButton = event.target.closest("[data-month-value]");
       if (!monthButton) return;
+
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        this._select(monthButton.dataset.monthValue);
+        this.#select(monthButton.dataset.monthValue);
         return;
       }
+
       const offsets = {
         ArrowLeft: -1,
         ArrowRight: 1,
@@ -321,22 +367,15 @@ const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
       let destination = offsets[event.key]
         ? shiftMonth(monthButton.dataset.monthValue, offsets[event.key])
         : "";
+
       if (event.key === "Home")
         destination = `${monthButton.dataset.monthValue.slice(0, 4)}-01`;
       if (event.key === "End")
         destination = `${monthButton.dataset.monthValue.slice(0, 4)}-12`;
+
       if (!destination) return;
       event.preventDefault();
-      this._focusMonth(destination);
-    }
-
-    _handleDocumentClick(event) {
-      const path =
-        typeof event.composedPath === "function" ? event.composedPath() : [];
-      const occurredWithin = path.length
-        ? path.includes(this)
-        : this.contains(event.target);
-      if (!occurredWithin) this._close();
+      this.#focusMonth(destination);
     }
   }
 
@@ -346,5 +385,6 @@ const monthPickerTemplate = ({ labelId, displayId, alignmentClass }) => `
     shiftMonth,
     isWithinBounds,
   };
+
   customElements.define("month-picker", MonthPicker);
 })();

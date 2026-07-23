@@ -9,6 +9,7 @@
     assignments: "myFinance.people.v1",
     users: "myFinance.users.v1",
     activeUser: "myFinance.activeUser.v1",
+    confirmedTransactions: "myFinance.confirmedTransactions.v1",
     transactionOutbox: "myFinance.transactionOutbox.v2",
     legacyTransactionOutbox: "myFinance.transactionOutbox.v1",
     entityOutbox: "myFinance.entityOutbox.v1",
@@ -30,6 +31,12 @@
     { id: "00000000-0000-4000-8000-000000000010", name: "Other", type: "expense" },
   ]);
   const OUTBOX_BATCH_SIZE = 50;
+  const CONFIRMED_TRANSACTION_CACHE_VERSION = 1;
+  const TRANSACTION_FIELDS = Object.freeze([
+    "id", "createdAt", "createdBy", "type", "amount", "date",
+    "categoryId", "vendorId", "assignmentId", "notes",
+    "category", "vendor", "assignment", "createdByName",
+  ]);
   const RETRY_DELAYS = Object.freeze([2000, 5000, 15000, 30000, 60000]);
   let syncPromise = null;
   let retryTimer = null;
@@ -38,6 +45,8 @@
   let entitySyncPromise = null;
   let entityRetryTimer = null;
   let batchEntitiesSupported = null;
+  let appDataPromise = null;
+  let archivedEntitiesPromise = null;
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -90,6 +99,8 @@
     batchTransactionsSupported = null;
     batchTransactionUpdatesSupported = null;
     batchEntitiesSupported = null;
+    appDataPromise = null;
+    archivedEntitiesPromise = null;
   }
 
   function migrateLocalData() {
@@ -203,14 +214,18 @@
   }
 
   function cacheUsers(users) { writeArray(KEYS.users, users); }
-  async function listUsers() {
+  function listUsers() {
     ensureLocalData();
-    const users = getConfig().endpoint ? await request("listUsers") : active(readArray(KEYS.users));
+    return active(readArray(KEYS.users));
+  }
+  function replaceCachedUsers(users) {
     if (!Array.isArray(users)) throw new Error("The sheet response did not include a user list.");
     cacheUsers(users);
     const activeId = localStorage.getItem(KEYS.activeUser);
-    if (activeId && !users.some((user) => user.id === activeId && user.active !== false)) localStorage.removeItem(KEYS.activeUser);
-    return active(users);
+    if (activeId && !users.some((user) => user.id === activeId && user.active !== false)) {
+      localStorage.removeItem(KEYS.activeUser);
+      window.dispatchEvent(new CustomEvent("budget:active-user-changed", { detail: null }));
+    }
   }
   async function addUser(input) {
     const timestamp = now();
@@ -240,6 +255,51 @@
   function listVendors() { ensureLocalData(); return active(readArray(KEYS.vendors)).sort((a, b) => a.name.localeCompare(b.name)); }
   function listPeople() { ensureLocalData(); return active(readArray(KEYS.assignments)).sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)); }
 
+  function archivedEntityCollections() {
+    ensureLocalData();
+    const archived = (key) =>
+      readArray(key)
+        .filter((item) => item.active === false && !item.isDefault)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      categories: archived(KEYS.categories),
+      vendors: archived(KEYS.vendors),
+      assignments: archived(KEYS.assignments),
+    };
+  }
+
+  function mergeArchivedEntityCollections(collections) {
+    [
+      ["categories", KEYS.categories],
+      ["vendors", KEYS.vendors],
+      ["assignments", KEYS.assignments],
+    ].forEach(([name, key]) => {
+      const incoming = Array.isArray(collections?.[name])
+        ? collections[name]
+        : [];
+      const activeRecords = readArray(key).filter((item) => item.active !== false);
+      writeArray(key, [...activeRecords, ...incoming]);
+    });
+  }
+
+  async function listArchivedEntities(options = {}) {
+    ensureLocalData();
+    if (!getConfig().endpoint) return archivedEntityCollections();
+    if (options.refresh) archivedEntitiesPromise = null;
+    if (!archivedEntitiesPromise) {
+      archivedEntitiesPromise = request("listArchivedEntities")
+        .then((collections) => {
+          mergeArchivedEntityCollections(collections);
+          return archivedEntityCollections();
+        })
+        .catch((error) => {
+          archivedEntitiesPromise = null;
+          throw error;
+        });
+    }
+    return archivedEntitiesPromise;
+  }
+
   function entityStorageKey(kind) {
     return { category: KEYS.categories, vendor: KEYS.vendors, assignment: KEYS.assignments }[kind];
   }
@@ -257,11 +317,23 @@
   function addEntity(kind, input) {
     const name = String(input.name || "").trim();
     if (!name) throw new Error(`Enter a ${kind === "assignment" ? "person’s" : kind} name.`);
-    const records = kind === "category" ? listCategories({ type: input.type || "expense" }) : kind === "vendor" ? listVendors() : listPeople();
-    if (records.some((item) => item.name.toLowerCase() === name.toLowerCase())) throw new Error(`That ${kind} already exists.`);
-    const record = canonicalRecord({ id: uuid(), name, active: true, isDefault: false, ...(kind === "category" ? { type: input.type || "expense" } : {}) });
     const key = entityStorageKey(kind);
-    const all = readArray(key); all.push(record); writeArray(key, all);
+    const type = kind === "category" ? input.type || "expense" : "";
+    const all = readArray(key);
+    const matching = all.find(
+      (item) =>
+        entityNameKey(kind, item) === entityNameKey(kind, { name, type }),
+    );
+    if (matching && matching.active !== false) throw new Error(`That ${kind} already exists.`);
+    const record = matching
+      ? { ...matching, name, active: true, updatedAt: now() }
+      : canonicalRecord({ id: uuid(), name, active: true, isDefault: false, ...(kind === "category" ? { type } : {}) });
+    if (matching) {
+      all[all.findIndex((item) => item.id === matching.id)] = record;
+    } else {
+      all.push(record);
+    }
+    writeArray(key, all);
     if (getConfig().endpoint) {
       const outbox = getEntityOutbox();
       outbox.push({ kind, record, status: "pending", attempts: 0, nextRetryAt: 0, error: "" });
@@ -272,6 +344,29 @@
     window.dispatchEvent(new CustomEvent(entityEvent(kind), { detail: record }));
     return record;
   }
+  function createImportedEntityDraft(kind, input) {
+    if (!entityStorageKey(kind)) throw new Error("Choose a supported import entity type.");
+    const name = String(input?.name || "").trim().replace(/\s+/g, " ");
+    if (!name) throw new Error(`Enter a ${kind === "assignment" ? "person’s" : kind} name.`);
+    const type = kind === "category" && input?.type === "income" ? "income" : "expense";
+    const existing = readArray(entityStorageKey(kind));
+    const match = existing.find((item) => entityNameKey(kind, item) === entityNameKey(kind, { name, type }));
+    if (match && match.active !== false) return { ...match, provisional: false };
+    if (match) {
+      return {
+        ...match,
+        name,
+        active: true,
+        updatedAt: now(),
+        provisional: false,
+        _reactivate: true,
+      };
+    }
+    return canonicalRecord({
+      id: input?.id || uuid(), name, active: true, isDefault: false,
+      ...(kind === "category" ? { type } : {}),
+    });
+  }
   const addCategory = (input) => addEntity("category", { ...input, type: input.type || "expense" });
   const addVendor = (input) => addEntity("vendor", input);
   const addPerson = (input) => addEntity("assignment", input);
@@ -281,12 +376,21 @@
     const records = readArray(key); const index = records.findIndex((item) => item.id === input.id);
     if (index < 0) throw new Error(`That ${kind} could not be found.`);
     const record = { ...records[index], ...input, name: String(input.name || records[index].name).trim(), updatedAt: now() };
+    if (records.some((item) => item.id !== record.id && item.active !== false && entityNameKey(kind, item) === entityNameKey(kind, record))) {
+      throw new Error(`That ${kind} already exists.`);
+    }
     const action = { category: "updateCategory", vendor: "updateVendor", assignment: "updateAssignment" }[kind];
     const saved = getConfig().endpoint ? await request(action, { body: { [kind]: record } }) : record;
     records[index] = saved; writeArray(key, records);
     window.dispatchEvent(new CustomEvent(entityEvent(kind), { detail: saved }));
     return saved;
   }
+  function getEntity(kind, id) {
+    const key = entityStorageKey(kind);
+    return key ? readArray(key).find((item) => item.id === id) || null : null;
+  }
+  const reactivateEntity = (kind, input) =>
+    updateEntity(kind, { ...input, active: true });
   async function archiveEntity(kind, id) {
     const key = { category: KEYS.categories, vendor: KEYS.vendors, assignment: KEYS.assignments }[kind];
     const records = readArray(key); const index = records.findIndex((item) => item.id === id);
@@ -400,7 +504,15 @@
       try {
         const bodyKey = entityBodyKey(item.kind);
         const record = await request(entityAction(item.kind), { body: { [bodyKey]: item.record } });
-        saved.push({ kind: item.kind, record });
+        if (record.id !== item.record.id) {
+          reconciled.push({
+            kind: item.kind,
+            requestedId: item.record.id,
+            record,
+          });
+        } else {
+          saved.push({ kind: item.kind, record });
+        }
       } catch (error) {
         if (!error.isApiError) throw error;
         if (/already exists/i.test(error.message)) {
@@ -415,6 +527,43 @@
       }
     }
     return { saved, reconciled, failed };
+  }
+
+  async function commitImportedEntities(entities, onProgress) {
+    if (!getConfig().endpoint) throw new Error("Connect a Google Sheet before committing this import.");
+    if (browserIsOffline()) throw new Error("Reconnect to the internet before committing this import.");
+    const prepared = (entities || []).map((item) => {
+      const requested = item.record || item;
+      return {
+        kind: item.kind,
+        requestedId: requested.id,
+        record: createImportedEntityDraft(item.kind, requested),
+      };
+    });
+    const resolved = prepared.filter((item) => item.record.id !== item.requestedId && !item.record._reactivate)
+      .map((item) => ({ kind: item.kind, requestedId: item.requestedId, record: item.record }));
+    const items = prepared.filter((item) => item.record.id === item.requestedId || item.record._reactivate);
+    for (let offset = 0; offset < items.length; offset += OUTBOX_BATCH_SIZE) {
+      const batch = items.slice(offset, offset + OUTBOX_BATCH_SIZE);
+      const result = await sendEntityBatch(batch);
+      result.saved.forEach((item) => {
+        replaceCachedEntity(item.kind, item.record.id, item.record);
+        window.dispatchEvent(new CustomEvent(entityEvent(item.kind), { detail: item.record }));
+        resolved.push({ kind: item.kind, requestedId: batch.find((entry) => entry.record.id === item.record.id)?.requestedId || item.record.id, record: item.record });
+      });
+      result.reconciled.forEach((item) => {
+        reconcileEntity(item.kind, item.requestedId, item.record);
+        resolved.push(item);
+      });
+      onProgress?.({ completed: Math.min(offset + batch.length, items.length), total: items.length });
+      if (result.failed.length) {
+        const error = new Error(result.failed.map((failure) => failure.error).join(" ") || "One or more imported items could not be created.");
+        error.partialResults = resolved.slice();
+        error.failures = result.failed;
+        throw error;
+      }
+    }
+    return resolved;
   }
 
   function scheduleEntitySync(delay = 0) {
@@ -541,26 +690,34 @@
     return normalizeResponse(await response.json());
   }
 
+  function applyReferenceData(data, queuedAtStart = new Set()) {
+    const collections = {
+      categories: [data.categories, KEYS.categories],
+      vendors: [data.vendors, KEYS.vendors],
+      assignments: [data.assignments, KEYS.assignments],
+    };
+    Object.entries(collections).forEach(([name, [serverRecords, key]]) => {
+      if (!Array.isArray(serverRecords)) throw new Error(`The sheet response did not include a ${name} list.`);
+      const merged = serverRecords.slice();
+      const known = new Set(merged.map((record) => record.id));
+      readArray(key).filter((record) => queuedAtStart.has(record.id) && !known.has(record.id)).forEach((record) => merged.push(record));
+      writeArray(key, merged);
+    });
+    replaceCachedUsers(data.users);
+    restoreQueuedEntities();
+  }
+
   async function loadReferenceData() {
     ensureLocalData();
     if (getConfig().endpoint) {
       const queuedAtStart = new Set(getEntityOutbox().map((item) => item.record.id));
-      const [categories, vendors, assignments] = await Promise.all([
-        request("listCategories"), request("listVendors"), request("listAssignments"),
+      const [categories, vendors, assignments, users] = await Promise.all([
+        request("listCategories"), request("listVendors"), request("listAssignments"), request("listUsers"),
       ]);
-      function preserveInFlight(serverRecords, key) {
-        const merged = serverRecords.slice();
-        const known = new Set(merged.map((record) => record.id));
-        readArray(key).filter((record) => queuedAtStart.has(record.id) && !known.has(record.id)).forEach((record) => merged.push(record));
-        return merged;
-      }
-      writeArray(KEYS.categories, preserveInFlight(categories, KEYS.categories));
-      writeArray(KEYS.vendors, preserveInFlight(vendors, KEYS.vendors));
-      writeArray(KEYS.assignments, preserveInFlight(assignments, KEYS.assignments));
-      restoreQueuedEntities();
+      applyReferenceData({ categories, vendors, assignments, users }, queuedAtStart);
     }
     window.dispatchEvent(new CustomEvent("budget:reference-data-changed"));
-    return { categories: listCategories(), vendors: listVendors(), assignments: listPeople() };
+    return { categories: listCategories(), vendors: listVendors(), assignments: listPeople(), users: listUsers() };
   }
 
   function hydrateTransaction(transaction) {
@@ -569,13 +726,51 @@
     const vendor = vendors.find((item) => item.id === transaction.vendorId);
     const assignment = assignments.find((item) => item.id === transaction.assignmentId);
     const creator = users.find((item) => item.id === transaction.createdBy);
-    return { ...transaction, category: category?.name || "Unknown", vendor: vendor?.name || "", assignment: assignment?.name || "Unknown", createdByName: creator ? `${creator.firstName} ${creator.lastName}` : "Unknown" };
+    return {
+      ...transaction,
+      category: category?.name || transaction.category || "Unknown",
+      vendor: vendor?.name || transaction.vendor || "",
+      assignment: assignment?.name || transaction.assignment || "Unknown",
+      createdByName: creator
+        ? `${creator.firstName} ${creator.lastName}`
+        : transaction.createdByName || "Unknown",
+    };
   }
-  async function listTransactions() {
-    ensureLocalData();
-    const data = getConfig().endpoint ? await request("listTransactions") : readArray(KEYS.transactions).map(hydrateTransaction);
+  function confirmedTransactionRecord(transaction) {
+    return Object.fromEntries(TRANSACTION_FIELDS.map((field) => [field, transaction[field] ?? ""]));
+  }
+  function readConfirmedTransactionCache() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(KEYS.confirmedTransactions));
+      if (!cached || cached.version !== CONFIRMED_TRANSACTION_CACHE_VERSION) return null;
+      if (!getConfig().endpoint || cached.endpoint !== getConfig().endpoint) return null;
+      if (!Array.isArray(cached.transactions)) return null;
+      return cached;
+    } catch {
+      return null;
+    }
+  }
+  function writeConfirmedTransactionCache(transactions) {
+    const endpoint = getConfig().endpoint;
+    if (!endpoint || !Array.isArray(transactions)) return;
+    localStorage.setItem(KEYS.confirmedTransactions, JSON.stringify({
+      version: CONFIRMED_TRANSACTION_CACHE_VERSION,
+      endpoint,
+      cachedAt: new Date().toISOString(),
+      transactions: transactions.map(confirmedTransactionRecord),
+    }));
+  }
+  function updateConfirmedTransactionCache(transactions) {
+    const cached = readConfirmedTransactionCache();
+    if (!cached || !Array.isArray(transactions) || !transactions.length) return;
+    const byId = new Map(cached.transactions.map((transaction) => [transaction.id, transaction]));
+    transactions.forEach((transaction) => byId.set(transaction.id, confirmedTransactionRecord(transaction)));
+    writeConfirmedTransactionCache([...byId.values()]);
+  }
+  function mergeServerTransactions(data) {
     if (!Array.isArray(data)) throw new Error("The sheet response did not include a transaction list.");
-    const serverIds = new Set(data.map((transaction) => transaction.id));
+    const hydrated = data.map(hydrateTransaction);
+    const serverIds = new Set(hydrated.map((transaction) => transaction.id));
     const outbox = getOutbox();
     const remaining = outbox.filter((item) => item.operation === "update" || !serverIds.has(item.record.id));
     if (remaining.length !== outbox.length) {
@@ -583,19 +778,81 @@
       emitSyncStatus();
     }
     const optimisticIds = new Set(remaining.map((item) => item.record.id));
-    return [...data.filter((transaction) => !optimisticIds.has(transaction.id)), ...remaining.map(outboxTransaction)];
+    return [...hydrated.filter((transaction) => !optimisticIds.has(transaction.id)), ...remaining.map(outboxTransaction)];
+  }
+
+  async function listTransactions() {
+    ensureLocalData();
+    const data = getConfig().endpoint ? await request("listTransactions") : readArray(KEYS.transactions).map(hydrateTransaction);
+    if (getConfig().endpoint) writeConfirmedTransactionCache(data);
+    return mergeServerTransactions(data);
+  }
+
+  function getCachedTransactions() {
+    ensureLocalData();
+    restoreQueuedEntities();
+    const cached = readConfirmedTransactionCache();
+    if (!cached) return null;
+    return mergeServerTransactions(cached.transactions);
+  }
+
+  async function fetchAppData() {
+    ensureLocalData();
+    if (!getConfig().endpoint) {
+      const referenceData = await loadReferenceData();
+      const transactions = await listTransactions();
+      const investments = await window.InvestmentAPI?.load?.();
+      const importProfiles = await window.ImportAPI?.listProfiles?.();
+      return { ...referenceData, transactions, importProfiles: importProfiles || [], ...(investments || {}) };
+    }
+
+    const queuedAtStart = new Set(getEntityOutbox().map((item) => item.record.id));
+    try {
+      const data = await request("bootstrap");
+      if (!data || typeof data !== "object") throw new Error("The sheet response did not include bootstrap data.");
+      applyReferenceData(data, queuedAtStart);
+      writeConfirmedTransactionCache(data.transactions);
+      const transactions = mergeServerTransactions(data.transactions);
+      window.InvestmentAPI?.applyBootstrapData?.(data);
+      window.ImportAPI?.applyBootstrapData?.(data);
+      window.dispatchEvent(new CustomEvent("budget:reference-data-changed"));
+      return { ...data, transactions };
+    } catch (error) {
+      if (!(error.isApiError && /unknown action/i.test(error.message))) throw error;
+      const [referenceData, transactions, investments, importProfiles] = await Promise.all([
+        loadReferenceData(),
+        listTransactions(),
+        window.InvestmentAPI?.load?.({ refresh: true }),
+        window.ImportAPI?.listProfiles?.({ refresh: true }),
+      ]);
+      return { ...referenceData, transactions, importProfiles: importProfiles || [], ...(investments || {}) };
+    }
+  }
+
+  function loadAppData(options = {}) {
+    if (options.refresh) appDataPromise = null;
+    if (!appDataPromise) {
+      appDataPromise = fetchAppData().catch((error) => {
+        appDataPromise = null;
+        throw error;
+      });
+    }
+    return appDataPromise;
   }
 
   function createTransactionRecord(transaction) {
     ensureLocalData();
     const activeUser = getActiveUser(); if (!activeUser) throw new Error("Choose or add a user in Settings first.");
-    const category = listCategories({ type: transaction.type }).find((item) => item.id === transaction.categoryId);
+    const type = transaction.type === "income" ? "income" : "expense";
+    const category = listCategories({ type }).find((item) => item.id === transaction.categoryId);
     const assignment = listPeople().find((item) => item.id === transaction.assignmentId);
-    const vendor = transaction.type === "income" ? null : listVendors().find((item) => item.id === transaction.vendorId);
+    const vendor = type === "income" ? null : listVendors().find((item) => item.id === transaction.vendorId);
     if (!category) throw new Error("Choose a valid category for this transaction type.");
     if (!assignment) throw new Error("Choose a valid assignment.");
-    if (transaction.type !== "income" && !vendor) throw new Error("Choose a valid vendor.");
-    return { ...transaction, vendorId: transaction.type === "income" ? "" : transaction.vendorId, id: transaction.id || uuid(), createdAt: transaction.createdAt || now(), createdBy: transaction.createdBy || activeUser.id };
+    if (type !== "income" && !vendor) throw new Error("Choose a valid vendor.");
+    const amount = Number(transaction.amount);
+    if (!Number.isFinite(amount) || amount === 0) throw new Error("Amount must be a non-zero value.");
+    return { ...transaction, type, amount: Math.round(amount * 100) / 100, vendorId: type === "income" ? "" : transaction.vendorId, id: transaction.id || uuid(), createdAt: transaction.createdAt || now(), createdBy: transaction.createdBy || activeUser.id };
   }
 
   async function addTransaction(transaction) {
@@ -677,6 +934,36 @@
     return queued;
   }
 
+  function queueImportedTransactions(transactions) {
+    if (!Array.isArray(transactions) || !transactions.length) throw new Error("Choose at least one ready transaction.");
+    const records = transactions.map(createTransactionRecord);
+    const ids = new Set();
+    records.forEach((record) => {
+      if (ids.has(record.id)) throw new Error("An imported transaction can only be queued once.");
+      ids.add(record.id);
+    });
+    const existingItems = getOutbox();
+    if (existingItems.some((item) => ids.has(item.record.id))) throw new Error("An imported transaction is already queued.");
+    if (!getConfig().endpoint) {
+      const all = readArray(KEYS.transactions);
+      all.push(...records);
+      writeArray(KEYS.transactions, all);
+      const saved = records.map(hydrateTransaction);
+      window.dispatchEvent(new CustomEvent("budget:transaction-saved", { detail: { saved, operation: "create" } }));
+      return saved;
+    }
+    const additions = records.map((record) => ({
+      operation: "create", record, baseRecord: null, revision: 1,
+      status: "pending", attempts: 0, nextRetryAt: 0, error: "",
+    }));
+    writeOutbox(existingItems.concat(additions));
+    const queued = additions.map(outboxTransaction);
+    window.dispatchEvent(new CustomEvent("budget:transactions-queued", { detail: { transactions: queued } }));
+    emitSyncStatus();
+    scheduleSync(0);
+    return queued;
+  }
+
   function createUpdatedTransactionRecord(transaction, base) {
     if (!base?.id || transaction.id !== base.id) throw new Error("That transaction could not be edited.");
     const type = transaction.type === "income" ? "income" : "expense";
@@ -687,7 +974,7 @@
     if (!assignment && transaction.assignmentId !== base.assignmentId) throw new Error("Choose a valid assignment.");
     if (type !== "income" && !vendor && transaction.vendorId !== base.vendorId) throw new Error("Choose a valid vendor.");
     const amount = Number(transaction.amount);
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
+    if (!Number.isFinite(amount) || amount === 0) throw new Error("Amount must be a non-zero value.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(transaction.date || ""))) throw new Error("Choose a valid transaction date.");
     return {
       id: base.id, createdAt: base.createdAt, createdBy: base.createdBy,
@@ -835,6 +1122,7 @@
             return [{ ...item, status: "failed", error: "The Sheet did not return a result for this transaction.", nextRetryAt: 0 }];
           });
           writeOutbox(items);
+          updateConfirmedTransactionCache(result.saved);
           if (result.saved.length) window.dispatchEvent(new CustomEvent("budget:transaction-saved", { detail: { saved: result.saved, operation } }));
           emitSyncStatus(result.saved, operation);
           if (result.saved.length) window.dispatchEvent(new CustomEvent("budget:sync-succeeded", { detail: { count: result.saved.length, kind: "transaction", operation } }));
@@ -871,6 +1159,27 @@
       }
     })();
     return syncPromise;
+  }
+
+  async function awaitImportedTransactions(ids, onProgress) {
+    const targets = new Set((ids || []).map(String));
+    if (!targets.size) return [];
+    while (targets.size) {
+      if (browserIsOffline()) throw new Error("The import paused because the browser went offline.");
+      const items = [...targets].map((id) => getTransactionOutboxItem(id)).filter(Boolean);
+      const failed = items.find((item) => item.status === "failed");
+      if (failed) throw new Error(failed.error || "A transaction could not be saved.");
+      [...targets].forEach((id) => {
+        if (!getTransactionOutboxItem(id)) targets.delete(id);
+      });
+      onProgress?.({ completed: ids.length - targets.size, total: ids.length });
+      if (!targets.size) break;
+      const retrying = items.find((item) => item.status === "pending" && item.attempts > 0 && item.nextRetryAt > Date.now());
+      if (retrying) throw new Error(retrying.error || "The transaction sync paused and is ready to retry.");
+      await syncOutbox();
+      await Promise.resolve();
+    }
+    return ids;
   }
 
   function retryFailedTransactions() {
@@ -968,14 +1277,16 @@
   recoverInterruptedSync();
   window.BudgetAPI = {
     INCOME_CATEGORY_ID, SHARED_ASSIGNMENT_ID,
-    getConfig, saveConfig, loadReferenceData,
-    listTransactions, addTransaction, queueTransaction, queueTransactionUpdate, syncOutbox,
+    getConfig, saveConfig, loadReferenceData, loadAppData, getCachedTransactions,
+    listTransactions, addTransaction, queueTransaction, queueImportedTransactions, queueTransactionUpdate, syncOutbox,
     getOutboxTransactions, getOutboxStatus, getTransactionOutboxItem, getSyncItems,
     retryFailedTransactions, retryTransaction, discardTransactionChange, removeFailedTransactions,
     getEntitySyncStatus, getEntityOutboxStatus, syncEntityOutbox, retryEntity, discardEntityChange, removeFailedEntity,
-    listCategories, addCategory, updateCategory: (input) => updateEntity("category", input), archiveCategory: (id) => archiveEntity("category", id),
-    listVendors, addVendor, updateVendor: (input) => updateEntity("vendor", input), archiveVendor: (id) => archiveEntity("vendor", id),
-    listPeople, addPerson, updatePerson: (input) => updateEntity("assignment", input), archivePerson: (id) => archiveEntity("assignment", id),
+    createImportedEntityDraft, commitImportedEntities, awaitImportedTransactions,
+    listArchivedEntities, getEntity,
+    listCategories, addCategory, updateCategory: (input) => updateEntity("category", input), reactivateCategory: (input) => reactivateEntity("category", input), archiveCategory: (id) => archiveEntity("category", id),
+    listVendors, addVendor, updateVendor: (input) => updateEntity("vendor", input), reactivateVendor: (input) => reactivateEntity("vendor", input), archiveVendor: (id) => archiveEntity("vendor", id),
+    listPeople, addPerson, updatePerson: (input) => updateEntity("assignment", input), reactivatePerson: (input) => reactivateEntity("assignment", input), archivePerson: (id) => archiveEntity("assignment", id),
     listUsers, addUser, updateUser, getActiveUser, setActiveUser,
     testConnection,
   };

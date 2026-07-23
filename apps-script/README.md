@@ -12,6 +12,9 @@ plain values rather than formulas.
 - `Assignments`: household assignments, including the seeded `Shared` record.
 - `Users`: app users referenced by each transaction's `createdBy` UUID.
 - `InvestmentAccounts`: UUID-backed accounts with a `paycheck` or `manual` contribution source.
+- `ImportProfiles`: reusable budget or investment CSV header and column mappings.
+- `ImportVendorMappings`: exact, profile-specific source-description to Vendor UUID mappings.
+- `ImportPersonMappings`: exact, profile-specific source-description to Assignment UUID mappings.
 - `InvestmentBalances`: one ending balance per account and reporting month.
 - `InvestmentContributions`: itemized signed investment flows; contributions are positive and withdrawals are negative.
 - `Ledger`: resolved names, native filters, and hidden ID columns.
@@ -27,6 +30,9 @@ template. Recipients do not paste or edit Apps Script source.
 1. Create a blank Google Sheet and choose **Extensions → Apps Script**.
 2. Add this folder's `Code.gs` and `Setup.gs` to the bound Apps Script
    project. Copy the settings from `appsscript.json` into the project manifest.
+   The manifest enables the Advanced Sheets v4 service used to batch the
+   initial data read. If the project uses a standard Google Cloud project,
+   enable the Google Sheets API there as well.
 3. Save the project and reload the Sheet.
 4. Verify that **My Finance → Set up budget** initializes the Sheet and displays
    a completion message. Remove any sample financial data before distribution.
@@ -106,6 +112,7 @@ repair.
 - Vendors: `listVendors`, `addVendor`, `updateVendor`, `archiveVendor`
 - Assignments: `listAssignments`, `addAssignment`, `updateAssignment`, `archiveAssignment`
 - Investments: `listInvestmentAccounts`, `addInvestmentAccounts`, `updateInvestmentAccount`, `archiveInvestmentAccount`, `listInvestmentBalances`, `listInvestmentContributions`, `saveInvestmentMonths`
+- Imports: `listImportProfiles`, `getImportProfileBundle`, `createImportProfile`, `updateImportProfile`, `archiveImportProfile`, `upsertImportMappings`
 - Maintenance: `health`, `rebuildLedger`
 
 POST bodies use `{ "action": "...", ... }`. Transaction responses contain

@@ -3,8 +3,8 @@
 const APP = Object.freeze({
   spreadsheetIdProperty: 'SPREADSHEET_ID',
   setupVersionProperty: 'SETUP_VERSION',
-  setupVersion: '6',
-  apiVersion: 8,
+  setupVersion: '7',
+  apiVersion: 10,
   ledgerDirtyProperty: 'LEDGER_DIRTY',
   incomeCategoryId: '00000000-0000-4000-8000-000000000001',
   sharedAssignmentId: '00000000-0000-4000-8000-000000000101',
@@ -51,6 +51,21 @@ const TABLES = Object.freeze({
     headers: ['ID', 'Account ID', 'Month', 'Amount', 'Created At', 'Created By', 'Updated At', 'Updated By'],
     fields: ['id', 'accountId', 'month', 'amount', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'],
   },
+  importProfiles: {
+    name: 'ImportProfiles',
+    headers: ['ID', 'Name', 'Target', 'Investment Account ID', 'Header Signature', 'Column Mapping JSON', 'Date Format', 'Amount Mode', 'Amount Multiplier', 'Active', 'Created At', 'Updated At'],
+    fields: ['id', 'name', 'target', 'investmentAccountId', 'headerSignature', 'columnMappingJson', 'dateFormat', 'amountMode', 'amountMultiplier', 'active', 'createdAt', 'updatedAt'],
+  },
+  importVendorMappings: {
+    name: 'ImportVendorMappings',
+    headers: ['ID', 'Import Profile ID', 'Source Description', 'Normalized Source Description', 'Vendor ID', 'Active', 'Created At', 'Updated At'],
+    fields: ['id', 'importProfileId', 'sourceDescription', 'normalizedSourceDescription', 'vendorId', 'active', 'createdAt', 'updatedAt'],
+  },
+  importPersonMappings: {
+    name: 'ImportPersonMappings',
+    headers: ['ID', 'Import Profile ID', 'Source Description', 'Normalized Source Description', 'Assignment ID', 'Active', 'Created At', 'Updated At'],
+    fields: ['id', 'importProfileId', 'sourceDescription', 'normalizedSourceDescription', 'assignmentId', 'active', 'createdAt', 'updatedAt'],
+  },
   ledger: {
     name: 'Ledger',
     headers: ['Date', 'Type', 'Category', 'Vendor', 'Assignment', 'Created By', 'Notes', 'Amount', 'Transaction ID', 'Category ID', 'Vendor ID', 'Assignment ID', 'Created By ID', 'Created At'],
@@ -90,7 +105,8 @@ function handleRequest_(request) {
   try {
     assertInitialized_();
     switch (String(request.action || '')) {
-      case 'health': return success_({ status: 'ok', apiVersion: APP.apiVersion, features: ['batchTransactions', 'batchEntities', 'batchTransactionUpdates', 'investmentAccounts', 'investmentMonthlyFlows', 'batchInvestmentMonths'], ledgerNeedsRebuild: isLedgerDirty_() });
+      case 'health': return success_({ status: 'ok', apiVersion: APP.apiVersion, features: ['bootstrap', 'batchTransactions', 'batchEntities', 'batchTransactionUpdates', 'investmentAccounts', 'investmentMonthlyFlows', 'batchInvestmentMonths', 'importProfiles', 'importMappings'], ledgerNeedsRebuild: isLedgerDirty_() });
+      case 'bootstrap': return success_(bootstrap_());
       case 'listTransactions': return success_(listTransactions_());
       case 'addTransaction': return successResult_(addTransaction_(request.transaction));
       case 'addTransactions': return successResult_(addTransactions_(request.transactions));
@@ -101,6 +117,7 @@ function handleRequest_(request) {
       case 'addUser': return success_(withScriptLock_(function () { return addUser_(request.user); }));
       case 'updateUser': return successResult_(withScriptLock_(function () { return updateUser_(request.user); }));
       case 'listCategories': return success_(listActiveRecords_(TABLES.categories));
+      case 'listArchivedEntities': return success_(listArchivedEntities_());
       case 'addCategory': return success_(addEntityCompatibility_('category', request.category));
       case 'updateCategory': return successResult_(withScriptLock_(function () { return updateCategory_(request.category); }));
       case 'archiveCategory': return success_(withScriptLock_(function () { return archiveRecord_(TABLES.categories, request.id); }));
@@ -121,6 +138,12 @@ function handleRequest_(request) {
       case 'listInvestmentContributions': return success_(listInvestmentContributions_());
       case 'saveInvestmentMonth': return success_(saveInvestmentMonths_([request.month]));
       case 'saveInvestmentMonths': return success_(saveInvestmentMonths_(request.months));
+      case 'listImportProfiles': return success_(listImportProfiles_());
+      case 'getImportProfileBundle': return success_(getImportProfileBundle_(request.id));
+      case 'createImportProfile': return success_(withScriptLock_(function () { return createImportProfile_(request.profile); }));
+      case 'updateImportProfile': return success_(withScriptLock_(function () { return updateImportProfile_(request.profile); }));
+      case 'archiveImportProfile': return success_(withScriptLock_(function () { return archiveImportProfile_(request.id); }));
+      case 'upsertImportMappings': return success_(upsertImportMappings_(request.importProfileId, request.vendorMappings, request.personMappings));
       case 'listInvestmentSnapshots': return success_(listLegacyInvestmentSnapshots_());
       case 'saveInvestmentSnapshots': throw new Error('This app version cannot safely write itemized investment contributions. Update the My Finance app.');
       case 'rebuildLedger': return success_(rebuildLedger());
@@ -158,6 +181,9 @@ function ensureDataModel_() {
   migrateInvestmentModelV6_();
   getTableSheet_(TABLES.investmentBalances);
   getTableSheet_(TABLES.investmentContributions);
+  getTableSheet_(TABLES.importProfiles);
+  getTableSheet_(TABLES.importVendorMappings);
+  getTableSheet_(TABLES.importPersonMappings);
   seedDefaults_();
   getTransactionSheet_();
   getLedgerSheet_();
@@ -191,6 +217,121 @@ function listTransactions_() {
   const records = readRecordsFromSheet_(requiredSheet_(spreadsheet, TABLES.transactions), TABLES.transactions, true);
   const references = referenceMapsFromSpreadsheet_(spreadsheet);
   return records.map(function (transaction) { return hydrateTransaction_(transaction, references); });
+}
+
+function bootstrap_() {
+  let recordsBySheet = null;
+  try {
+    recordsBySheet = readBootstrapWithSheetsApi_();
+  } catch (error) {
+    console.warn('Sheets API batch bootstrap failed; using SpreadsheetApp fallback: ' + errorMessage_(error));
+  }
+  if (!recordsBySheet) recordsBySheet = readBootstrapWithSpreadsheetApp_();
+  return buildBootstrapPayload_(recordsBySheet);
+}
+
+function bootstrapSpecs_() {
+  return [
+    TABLES.transactions,
+    TABLES.categories,
+    TABLES.vendors,
+    TABLES.assignments,
+    TABLES.users,
+    TABLES.investmentAccounts,
+    TABLES.investmentBalances,
+    TABLES.investmentContributions,
+    TABLES.importProfiles,
+  ];
+}
+
+function readBootstrapWithSheetsApi_() {
+  if (typeof Sheets === 'undefined' || !Sheets.Spreadsheets || !Sheets.Spreadsheets.Values) return null;
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty(APP.spreadsheetIdProperty);
+  if (!spreadsheetId) return null;
+  const specs = bootstrapSpecs_();
+  const ranges = specs.map(function (spec) {
+    return "'" + spec.name.replace(/'/g, "''") + "'!A:" + columnLabel_(spec.headers.length);
+  });
+  const response = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, {
+    ranges: ranges,
+    majorDimension: 'ROWS',
+    valueRenderOption: 'UNFORMATTED_VALUE',
+    dateTimeRenderOption: 'SERIAL_NUMBER',
+  });
+  const valueRanges = response && response.valueRanges;
+  if (!Array.isArray(valueRanges) || valueRanges.length !== specs.length) {
+    throw new Error('The Sheets API did not return every bootstrap range.');
+  }
+  const recordsBySheet = {};
+  specs.forEach(function (spec, index) {
+    const values = valueRanges[index].values || [];
+    if (!values.length || !headersMatch_(values[0], spec.headers)) {
+      throw new Error('The ' + spec.name + ' sheet headers do not match the expected schema.');
+    }
+    recordsBySheet[spec.name] = values.slice(1)
+      .filter(function (row) { return row[0] !== '' && row[0] !== undefined && row[0] !== null; })
+      .map(function (row) { return rowToRecord_(spec, normalizeBatchRow_(spec, row)); });
+  });
+  return recordsBySheet;
+}
+
+function readBootstrapWithSpreadsheetApp_() {
+  const spreadsheet = getSpreadsheet_();
+  const recordsBySheet = {};
+  bootstrapSpecs_().forEach(function (spec) {
+    recordsBySheet[spec.name] = readRecordsFromSheet_(requiredSheet_(spreadsheet, spec), spec, true);
+  });
+  return recordsBySheet;
+}
+
+function buildBootstrapPayload_(recordsBySheet) {
+  const transactions = recordsBySheet[TABLES.transactions.name];
+  const categories = recordsBySheet[TABLES.categories.name];
+  const vendors = recordsBySheet[TABLES.vendors.name];
+  const assignments = recordsBySheet[TABLES.assignments.name];
+  const users = recordsBySheet[TABLES.users.name];
+  const references = {
+    categories: new Map(categories.map(function (item) { return [item.id, item]; })),
+    vendors: new Map(vendors.map(function (item) { return [item.id, item]; })),
+    assignments: new Map(assignments.map(function (item) { return [item.id, item]; })),
+    users: new Map(users.map(function (item) { return [item.id, item]; })),
+  };
+  function active(records) {
+    return records.filter(function (record) { return record.active !== false; });
+  }
+  return {
+    transactions: transactions.map(function (transaction) { return hydrateTransaction_(transaction, references); }),
+    categories: active(categories),
+    vendors: active(vendors),
+    assignments: active(assignments),
+    users: active(users),
+    importProfiles: active(recordsBySheet[TABLES.importProfiles.name]).map(publicImportProfile_),
+    investmentAccounts: recordsBySheet[TABLES.investmentAccounts.name],
+    investmentBalances: recordsBySheet[TABLES.investmentBalances.name],
+    investmentContributions: recordsBySheet[TABLES.investmentContributions.name],
+  };
+}
+
+function columnLabel_(count) {
+  let value = count, label = '';
+  while (value > 0) {
+    value -= 1;
+    label = String.fromCharCode(65 + value % 26) + label;
+    value = Math.floor(value / 26);
+  }
+  return label;
+}
+
+function normalizeBatchRow_(spec, row) {
+  return spec.fields.map(function (field, index) {
+    const value = row[index] === undefined || row[index] === null ? '' : row[index];
+    if (typeof value !== 'number') return value;
+    if (field !== 'date' && field !== 'month' && !/At$/.test(field)) return value;
+    const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
+    if (field === 'date') return Utilities.formatDate(date, 'UTC', 'yyyy-MM-dd');
+    if (field === 'month') return Utilities.formatDate(date, 'UTC', 'yyyy-MM');
+    return Utilities.formatDate(date, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+  });
 }
 
 function addTransaction_(input) {
@@ -332,7 +473,7 @@ function validateUpdatedTransaction_(input, existing, references) {
   const type = cleanText_(input.type, 20).toLowerCase();
   if (type !== 'income' && type !== 'expense') throw new Error('Transaction type must be income or expense.');
   const amount = Number(input.amount);
-  if (!isFinite(amount) || amount <= 0) throw new Error('Amount must be greater than zero.');
+  if (!isFinite(amount) || amount === 0) throw new Error('Amount must be a non-zero value.');
   const date = cleanText_(input.date, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidISODate_(date)) throw new Error('Date must be a valid YYYY-MM-DD value.');
 
@@ -373,7 +514,7 @@ function validateTransaction_(input, references) {
   const type = cleanText_(input.type, 20).toLowerCase();
   if (type !== 'income' && type !== 'expense') throw new Error('Transaction type must be income or expense.');
   const amount = Number(input.amount);
-  if (!isFinite(amount) || amount <= 0) throw new Error('Amount must be greater than zero.');
+  if (!isFinite(amount) || amount === 0) throw new Error('Amount must be a non-zero value.');
   const date = cleanText_(input.date, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidISODate_(date)) throw new Error('Date must be a valid YYYY-MM-DD value.');
 
@@ -708,6 +849,179 @@ function listLegacyInvestmentSnapshots_() {
   });
 }
 
+function publicImportProfile_(record) {
+  let columnMapping = {};
+  try { columnMapping = JSON.parse(record.columnMappingJson || '{}'); }
+  catch (error) { columnMapping = {}; }
+  return {
+    id: record.id, name: record.name, target: record.target,
+    investmentAccountId: record.investmentAccountId || '',
+    headerSignature: record.headerSignature || '[]', columnMapping: columnMapping,
+    dateFormat: record.dateFormat, amountMode: record.amountMode,
+    amountMultiplier: Number(record.amountMultiplier) || 1,
+    active: record.active !== false, createdAt: record.createdAt, updatedAt: record.updatedAt,
+  };
+}
+
+function listImportProfiles_() {
+  return listActiveRecords_(TABLES.importProfiles).map(publicImportProfile_);
+}
+
+function getImportProfileBundle_(id) {
+  const profile = getRecordById_(TABLES.importProfiles, requireUuid_(id, 'Import profile ID'));
+  if (!profile || profile.active === false) throw new Error('That import profile could not be found.');
+  return {
+    profile: publicImportProfile_(profile),
+    vendorMappings: readRecords_(TABLES.importVendorMappings, false).filter(function (item) { return item.importProfileId === profile.id; }),
+    personMappings: readRecords_(TABLES.importPersonMappings, false).filter(function (item) { return item.importProfileId === profile.id; }),
+  };
+}
+
+function parseImportJson_(value, label, fallback) {
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value === undefined ? fallback : value);
+  if (serialized.length > 50000) throw new Error(label + ' is too large.');
+  try { return { value: JSON.parse(serialized), serialized: serialized }; }
+  catch (error) { throw new Error(label + ' must be valid JSON.'); }
+}
+
+function normalizeImportProfile_(input, existing) {
+  if (!input || typeof input !== 'object') throw new Error('An import profile is required.');
+  const timestamp = new Date().toISOString();
+  const target = String(input.target || '').toLowerCase();
+  if (target !== 'budget' && target !== 'investment') throw new Error('Import target must be budget or investment.');
+  const signature = parseImportJson_(input.headerSignature || '[]', 'Header signature', []);
+  if (!Array.isArray(signature.value)) throw new Error('Header signature must be an array.');
+  const mapping = parseImportJson_(input.columnMapping === undefined ? input.columnMappingJson || '{}' : input.columnMapping, 'Column mapping', {});
+  if (!mapping.value || typeof mapping.value !== 'object' || Array.isArray(mapping.value)) throw new Error('Column mapping must be an object.');
+  let investmentAccountId = '';
+  if (target === 'investment') {
+    investmentAccountId = requireUuid_(input.investmentAccountId, 'Investment account ID');
+    const account = getRecordById_(TABLES.investmentAccounts, investmentAccountId);
+    if (!account || account.active === false) throw new Error('Choose an active investment account.');
+  }
+  const dateFormats = ['YYYY-MM-DD', 'MM/DD/YYYY', 'MM/DD/YY', 'DD/MM/YYYY', 'DD/MM/YY', 'YYYY-MM'];
+  const dateFormat = String(input.dateFormat || (target === 'investment' ? 'YYYY-MM' : 'YYYY-MM-DD'));
+  if (dateFormats.indexOf(dateFormat) < 0) throw new Error('Choose a supported date format.');
+  const amountMode = target === 'investment' ? 'monthly' : input.amountMode === 'debitCredit' ? 'debitCredit' : 'unified';
+  const multiplier = Number(input.amountMultiplier);
+  if (multiplier !== 1 && multiplier !== -1) throw new Error('Amount multiplier must be 1 or -1.');
+  return {
+    id: existing ? existing.id : requireUuid_(input.id || Utilities.getUuid(), 'Import profile ID'),
+    name: requiredName_(input.name), target: target, investmentAccountId: investmentAccountId,
+    headerSignature: signature.serialized, columnMappingJson: mapping.serialized,
+    dateFormat: dateFormat, amountMode: amountMode, amountMultiplier: multiplier,
+    active: input.active !== false, createdAt: existing ? existing.createdAt : normalizeDateTime_(input.createdAt || timestamp),
+    updatedAt: timestamp,
+  };
+}
+
+function assertUniqueImportProfileName_(record) {
+  const name = record.name.toLowerCase();
+  readRecords_(TABLES.importProfiles, true).forEach(function (item) {
+    if (item.id !== record.id && item.active !== false && item.name.toLowerCase() === name) throw new Error('That import profile name already exists.');
+  });
+}
+
+function createImportProfile_(input) {
+  const record = normalizeImportProfile_(input, null);
+  if (getRecordById_(TABLES.importProfiles, record.id)) throw new Error('That import profile ID already exists.');
+  assertUniqueImportProfileName_(record);
+  appendRows_(getTableSheet_(TABLES.importProfiles), [recordToRow_(TABLES.importProfiles, record)]);
+  return publicImportProfile_(record);
+}
+
+function updateImportProfile_(input) {
+  const sheet = getTableSheet_(TABLES.importProfiles);
+  const row = findRowById_(sheet, input && input.id);
+  if (!row) throw new Error('That import profile could not be found.');
+  const existing = rowToRecord_(TABLES.importProfiles, sheet.getRange(row, 1, 1, TABLES.importProfiles.headers.length).getValues()[0]);
+  const record = normalizeImportProfile_({ ...publicImportProfile_(existing), ...input }, existing);
+  assertUniqueImportProfileName_(record);
+  sheet.getRange(row, 1, 1, TABLES.importProfiles.headers.length).setValues([recordToRow_(TABLES.importProfiles, record)]);
+  return publicImportProfile_(record);
+}
+
+function archiveImportProfile_(id) {
+  return publicImportProfile_(archiveRecord_(TABLES.importProfiles, id));
+}
+
+function normalizeImportDescription_(value) {
+  return String(value === null || value === undefined ? '' : value).trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+function plainImportText_(value, maxLength) {
+  const text = String(value === null || value === undefined ? '' : value).trim();
+  if (text.length > maxLength) throw new Error('An import mapping field is too long.');
+  return /^[=+\-@]/.test(text) ? "'" + text : text;
+}
+
+function validateImportMappingInputs_(inputs, idField, references) {
+  if (!Array.isArray(inputs)) throw new Error('Import mappings must be an array.');
+  if (inputs.length > 500) throw new Error('A maximum of 500 mappings of each type can be saved at once.');
+  const seen = new Set();
+  inputs.forEach(function (input) {
+    const source = plainImportText_(input && input.sourceDescription, 500);
+    const normalized = normalizeImportDescription_(input && (input.normalizedSourceDescription || source));
+    if (!normalized) throw new Error('A source description is required.');
+    if (seen.has(normalized)) throw new Error('A source description can only appear once in a mapping batch.');
+    seen.add(normalized);
+    if (input && input.id) requireUuid_(input.id, 'Import mapping ID');
+    const referenceId = requireUuid_(input && input[idField], idField === 'vendorId' ? 'Vendor ID' : 'Assignment ID');
+    const reference = references.get(referenceId);
+    if (!reference || reference.active === false) throw new Error('Choose an active ' + (idField === 'vendorId' ? 'vendor.' : 'assignment.'));
+  });
+}
+
+function upsertImportMappingKind_(spec, profileId, inputs, idField, references) {
+  if (!Array.isArray(inputs)) throw new Error('Import mappings must be an array.');
+  if (inputs.length > 500) throw new Error('A maximum of 500 mappings of each type can be saved at once.');
+  const sheet = getTableSheet_(spec);
+  const records = readRecords_(spec, true);
+  const byKey = new Map(records.map(function (item, index) { return [item.importProfileId + '|' + item.normalizedSourceDescription, { item: item, index: index }]; }));
+  const seen = new Set();
+  const timestamp = new Date().toISOString();
+  inputs.forEach(function (input) {
+    const sourceDescription = plainImportText_(input && input.sourceDescription, 500);
+    const normalized = normalizeImportDescription_(input && (input.normalizedSourceDescription || sourceDescription));
+    if (!normalized) throw new Error('A source description is required.');
+    const key = profileId + '|' + normalized;
+    if (seen.has(key)) throw new Error('A source description can only appear once in a mapping batch.');
+    seen.add(key);
+    const referenceId = requireUuid_(input && input[idField], idField === 'vendorId' ? 'Vendor ID' : 'Assignment ID');
+    const reference = references.get(referenceId);
+    if (!reference || reference.active === false) throw new Error('Choose an active ' + (idField === 'vendorId' ? 'vendor.' : 'assignment.'));
+    const existing = byKey.get(key);
+    const record = {
+      id: existing ? existing.item.id : requireUuid_(input.id || Utilities.getUuid(), 'Import mapping ID'),
+      importProfileId: profileId, sourceDescription: sourceDescription,
+      normalizedSourceDescription: normalized, active: true,
+      createdAt: existing ? existing.item.createdAt : timestamp, updatedAt: timestamp,
+    };
+    record[idField] = referenceId;
+    if (existing) records[existing.index] = record;
+    else { byKey.set(key, { item: record, index: records.length }); records.push(record); }
+  });
+  writeInvestmentRecords_(sheet, spec, records, Math.max(0, sheet.getLastRow() - 1));
+  return records.filter(function (item) { return item.importProfileId === profileId && item.active !== false; });
+}
+
+function upsertImportMappings_(profileId, vendorInputs, personInputs) {
+  const lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    profileId = requireUuid_(profileId, 'Import profile ID');
+    const profile = getRecordById_(TABLES.importProfiles, profileId);
+    if (!profile || profile.active === false) throw new Error('That import profile could not be found.');
+    const vendors = new Map(readRecords_(TABLES.vendors, true).map(function (item) { return [item.id, item]; }));
+    const assignments = new Map(readRecords_(TABLES.assignments, true).map(function (item) { return [item.id, item]; }));
+    validateImportMappingInputs_(vendorInputs || [], 'vendorId', vendors);
+    validateImportMappingInputs_(personInputs || [], 'assignmentId', assignments);
+    return {
+      vendorMappings: upsertImportMappingKind_(TABLES.importVendorMappings, profileId, vendorInputs || [], 'vendorId', vendors),
+      personMappings: upsertImportMappingKind_(TABLES.importPersonMappings, profileId, personInputs || [], 'assignmentId', assignments),
+    };
+  } finally { lock.releaseLock(); }
+}
+
 function addEntityCompatibility_(kind, input) {
   const result = addEntities_([{ kind: kind, record: input }]);
   if (result.failed.length) throw new Error(result.failed[0].error);
@@ -733,10 +1047,11 @@ function addEntities_(inputs) {
       definition.sheet = requiredSheet_(spreadsheet, definition.spec);
       definition.records = readRecordsFromSheet_(definition.sheet, definition.spec, true);
       definition.byId = new Map(definition.records.map(function (record) { return [record.id, record]; }));
-      definition.byName = new Map(definition.records.filter(function (record) { return record.active !== false; }).map(function (record) {
+      definition.byName = new Map(definition.records.map(function (record) {
         return [entityNameKey_(kind, record), record];
       }));
       definition.additions = [];
+      definition.reactivations = [];
     });
 
     const saved = [], reconciled = [], failed = [];
@@ -749,13 +1064,29 @@ function addEntities_(inputs) {
         const record = normalizeNewEntity_(kind, input.record);
         const existingId = definition.byId.get(record.id);
         if (existingId) {
+          if (existingId.active === false && entityNameKey_(kind, existingId) === entityNameKey_(kind, record)) {
+            const reactivated = { ...existingId, name: record.name, active: true, updatedAt: new Date().toISOString() };
+            definition.reactivations.push(reactivated);
+            definition.byId.set(reactivated.id, reactivated);
+            definition.byName.set(entityNameKey_(kind, reactivated), reactivated);
+            saved.push({ kind: kind, record: reactivated });
+            return;
+          }
           if (!entitiesMatch_(kind, existingId, record)) throw new Error('That entity ID is already used by different data.');
           saved.push({ kind: kind, record: existingId });
           return;
         }
         const existingName = definition.byName.get(entityNameKey_(kind, record));
         if (existingName) {
-          reconciled.push({ kind: kind, requestedId: record.id, record: existingName });
+          if (existingName.active === false) {
+            const reactivated = { ...existingName, name: record.name, active: true, updatedAt: new Date().toISOString() };
+            definition.reactivations.push(reactivated);
+            definition.byId.set(reactivated.id, reactivated);
+            definition.byName.set(entityNameKey_(kind, reactivated), reactivated);
+            reconciled.push({ kind: kind, requestedId: record.id, record: reactivated });
+          } else {
+            reconciled.push({ kind: kind, requestedId: record.id, record: existingName });
+          }
           return;
         }
         definition.additions.push(record);
@@ -769,6 +1100,12 @@ function addEntities_(inputs) {
 
     involvedKinds.forEach(function (kind) {
       const definition = definitions[kind];
+      definition.reactivations.forEach(function (record) {
+        const row = findRowById_(definition.sheet, record.id);
+        if (!row) throw new Error('That archived entity could not be found.');
+        definition.sheet.getRange(row, 1, 1, definition.spec.headers.length)
+          .setValues([recordToRow_(definition.spec, record)]);
+      });
       appendRows_(definition.sheet, definition.additions.map(function (record) { return recordToRow_(definition.spec, record); }));
     });
     return { saved: saved, reconciled: reconciled, failed: failed };
@@ -863,6 +1200,13 @@ function archiveRecord_(spec, id) {
 }
 
 function listActiveRecords_(spec) { return readRecords_(spec, false); }
+function listArchivedEntities_() {
+  return {
+    categories: readRecords_(TABLES.categories, true).filter(function (item) { return item.active === false && !item.isDefault; }),
+    vendors: readRecords_(TABLES.vendors, true).filter(function (item) { return item.active === false; }),
+    assignments: readRecords_(TABLES.assignments, true).filter(function (item) { return item.active === false && !item.isDefault; }),
+  };
+}
 function readRecords_(spec, includeInactive) {
   return readRecordsFromSheet_(getTableSheet_(spec), spec, includeInactive);
 }

@@ -77,6 +77,7 @@ function loadScript(options = {}) {
   };
   let deploymentUrl = options.deploymentUrl || "";
   let flushCalls = 0;
+  let openCalls = 0;
   let uuidCounter = 1000;
   const context = {
     PropertiesService: { getScriptProperties: () => ({
@@ -87,6 +88,7 @@ function loadScript(options = {}) {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => activeSpreadsheet,
       openById: (id) => {
+        openCalls += 1;
         const book = spreadsheets.get(id);
         if (!book) throw new Error(`Unknown spreadsheet ${id}`);
         return book;
@@ -101,7 +103,11 @@ function loadScript(options = {}) {
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     Utilities: {
       getUuid: () => `10000000-0000-4000-8000-${String(uuidCounter++).padStart(12, "0")}`,
-      formatDate: (date) => date.toISOString(),
+      formatDate: (date, _timezone, format) => {
+        if (format === "yyyy-MM-dd") return date.toISOString().slice(0, 10);
+        if (format === "yyyy-MM") return date.toISOString().slice(0, 7);
+        return date.toISOString().replace(".000Z", "Z");
+      },
     },
     Session: { getScriptTimeZone: () => "UTC" },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: (value) => ({ value, setMimeType() { return this; } }) },
@@ -115,6 +121,8 @@ function loadScript(options = {}) {
     context, call, spreadsheet, properties, menu, ui,
     setDeploymentUrl(value) { deploymentUrl = value; },
     getFlushCalls() { return flushCalls; },
+    getOpenCalls() { return openCalls; },
+    resetOpenCalls() { openCalls = 0; },
   };
 }
 
@@ -151,7 +159,7 @@ test("initializes the active copy, reports deployment status, and remains idempo
   assert.equal(initialized.initialized, true);
   assert.equal(initialized.spreadsheetId, "copy-id");
   assert.equal(runtime.properties.get("SPREADSHEET_ID"), "copy-id");
-  assert.equal(runtime.properties.get("SETUP_VERSION"), "6");
+  assert.equal(runtime.properties.get("SETUP_VERSION"), "7");
   assert.equal(runtime.properties.has("WEB_APP_URL"), false);
   assert.equal(template.sheets.size, 0);
   assert.equal(copy.getSheetByName("Categories").getLastRow(), 11);
@@ -210,11 +218,13 @@ test("setup and setupBudget create equivalent initialized state", () => {
 test("removes sidebar and deployment URL registration dependencies", () => {
   const code = fs.readFileSync("apps-script/Code.gs", "utf8");
   const setup = fs.readFileSync("apps-script/Setup.gs", "utf8");
+  const manifest = JSON.parse(fs.readFileSync("apps-script/appsscript.json", "utf8"));
   const settings = fs.readFileSync("index.html", "utf8");
   assert.equal(fs.existsSync("apps-script/SetupSidebar.html"), false);
   assert.doesNotMatch(code + setup, /HtmlService|showSetupSidebar|saveWebAppUrl|webAppUrlProperty/);
   assert.match(setup, /deleteProperty\('WEB_APP_URL'\)/);
   assert.doesNotMatch(settings, /My Finance → Connection details/);
+  assert.equal(manifest.dependencies.enabledAdvancedServices[0].serviceId, "sheets");
 });
 
 test("validates normalized references, rebuilds Ledger, and batch-renames 1,000 rows", () => {
@@ -257,12 +267,34 @@ test("validates normalized references, rebuilds Ledger, and batch-renames 1,000 
   assert.ok(ledger.getFilter());
   assert.equal(ledger.data.slice(1).filter((row) => row[8]).length, 1000);
 
+  const refund = call({ action: "addTransaction", transaction: {
+    ...base, id: "823e4567-e89b-42d3-a456-426614174000", amount: -7.25,
+  } });
+  assert.equal(refund.ok, true);
+  assert.equal(refund.data.type, "expense");
+  assert.equal(refund.data.amount, -7.25);
+
   assert.equal(call({ action: "archiveVendor", id: vendorId }).ok, true);
   const archivedVendorTransaction = call({ action: "addTransaction", transaction: {
     ...base, id: "723e4567-e89b-42d3-a456-426614174000",
   } });
   assert.equal(archivedVendorTransaction.ok, false);
   assert.match(archivedVendorTransaction.error, /active vendor/);
+  const archivedEntities = call({ action: "listArchivedEntities" }).data;
+  assert.equal(archivedEntities.vendors[0].id, vendorId);
+  const reactivatedVendor = call({
+    action: "addVendor",
+    vendor: {
+      id: "923e4567-e89b-42d3-a456-426614174000",
+      name: "coffee house",
+    },
+  });
+  assert.equal(reactivatedVendor.ok, true);
+  assert.equal(reactivatedVendor.data.id, vendorId);
+  assert.equal(
+    call({ action: "listArchivedEntities" }).data.vendors.length,
+    0,
+  );
   const archiveDefaultCategory = call({ action: "archiveCategory", id: income.id });
   assert.equal(archiveDefaultCategory.ok, false);
   assert.match(archiveDefaultCategory.error, /Default records/);
@@ -276,6 +308,107 @@ test("validates normalized references, rebuilds Ledger, and batch-renames 1,000 
     ...base, id: "623e4567-e89b-42d3-a456-426614174000", type: "income", categoryId: income.id, vendorId: "",
   } });
   assert.equal(validIncome.ok, true);
+
+});
+
+test("bootstraps all top-level data with one spreadsheet open and one read per sheet", () => {
+  const runtime = loadScript();
+  runtime.context.setup();
+  const { call, spreadsheet } = runtime;
+  const userId = "123e4567-e89b-42d3-a456-426614174000";
+  const vendorId = "223e4567-e89b-42d3-a456-426614174000";
+  call({ action: "addUser", user: { id: userId, firstName: "Ada", lastName: "Byron" } });
+  call({ action: "addVendor", vendor: { id: vendorId, name: "Cafe" } });
+  const categoryId = call({ action: "listCategories" }).data.find((item) => item.name === "Dining").id;
+  const assignmentId = call({ action: "listAssignments" }).data.find((item) => item.name === "Shared").id;
+  call({ action: "addTransaction", transaction: {
+    id: "323e4567-e89b-42d3-a456-426614174000", createdBy: userId,
+    type: "expense", amount: 12, date: "2024-01-15",
+    categoryId, vendorId, assignmentId, notes: "Historical",
+  } });
+  call({ action: "archiveVendor", id: vendorId });
+
+  const transactions = spreadsheet.getSheetByName("Transactions");
+  const bulkRows = Array.from({ length: 2000 }, (_, index) => [
+    `bulk-${index}`, "2026-07-23T12:00:00.000Z", userId, "expense", index + 1,
+    `2026-${String((index % 12) + 1).padStart(2, "0")}-01`, categoryId, vendorId, assignmentId, "",
+  ]);
+  transactions.getRange(transactions.getLastRow() + 1, 1, bulkRows.length, bulkRows[0].length).setValues(bulkRows);
+
+  const topLevelSheets = [
+    "Transactions", "Categories", "Vendors", "Assignments", "Users",
+    "InvestmentAccounts", "InvestmentBalances", "InvestmentContributions", "ImportProfiles",
+  ];
+  topLevelSheets.forEach((name) => { spreadsheet.getSheetByName(name).reads = []; });
+  runtime.resetOpenCalls();
+
+  const result = call({ action: "bootstrap" });
+  assert.equal(result.ok, true);
+  assert.equal(runtime.getOpenCalls(), 1);
+  assert.equal(result.data.transactions.length, 2001);
+  assert.equal(result.data.transactions[0].date, "2024-01-15");
+  assert.equal(result.data.transactions[0].vendor, "Cafe");
+  assert.equal(result.data.vendors.some((item) => item.id === vendorId), false);
+  assert.deepEqual(Object.keys(result.data), [
+    "transactions", "categories", "vendors", "assignments", "users", "importProfiles",
+    "investmentAccounts", "investmentBalances", "investmentContributions",
+  ]);
+  topLevelSheets.forEach((name) => {
+    assert.ok(spreadsheet.getSheetByName(name).reads.length <= 1, `${name} was read more than once`);
+  });
+  assert.equal(call({ action: "health" }).data.features.includes("bootstrap"), true);
+});
+
+test("bootstraps through one Sheets API batchGet and normalizes unformatted dates", () => {
+  const runtime = loadScript();
+  runtime.context.setup();
+  const { call, spreadsheet, context } = runtime;
+  const userId = "123e4567-e89b-42d3-a456-426614174000";
+  const vendorId = "223e4567-e89b-42d3-a456-426614174000";
+  call({ action: "addUser", user: { id: userId, firstName: "Ada", lastName: "Byron" } });
+  call({ action: "addVendor", vendor: { id: vendorId, name: "Cafe" } });
+  const categoryId = call({ action: "listCategories" }).data.find((item) => item.name === "Dining").id;
+  const assignmentId = call({ action: "listAssignments" }).data[0].id;
+  call({ action: "addTransaction", transaction: {
+    id: "323e4567-e89b-42d3-a456-426614174000", createdBy: userId,
+    type: "expense", amount: 12.5, date: "2025-12-09",
+    categoryId, vendorId, assignmentId, notes: "",
+  } });
+  const transactions = spreadsheet.getSheetByName("Transactions");
+  transactions.setValue(2, 2, 46000.25);
+  transactions.setValue(2, 6, 46000);
+
+  let batchCalls = 0;
+  context.Sheets = {
+    Spreadsheets: {
+      Values: {
+        batchGet(id, options) {
+          batchCalls += 1;
+          assert.equal(id, spreadsheet.getId());
+          assert.equal(options.ranges.length, 9);
+          assert.equal(options.valueRenderOption, "UNFORMATTED_VALUE");
+          return {
+            valueRanges: options.ranges.map((range) => {
+              const name = range.match(/^'(.+)'!/)[1].replace(/''/g, "'");
+              return { values: spreadsheet.getSheetByName(name).data.map((row) => row.slice()) };
+            }),
+          };
+        },
+      },
+    },
+  };
+  [...spreadsheet.sheets.values()].forEach((sheet) => { sheet.reads = []; });
+  runtime.resetOpenCalls();
+
+  const result = call({ action: "bootstrap" });
+  const expectedDate = new Date(Date.UTC(1899, 11, 30) + 46000 * 86400000).toISOString().slice(0, 10);
+  assert.equal(result.ok, true);
+  assert.equal(batchCalls, 1);
+  assert.equal(runtime.getOpenCalls(), 0);
+  assert.equal([...spreadsheet.sheets.values()].reduce((sum, sheet) => sum + sheet.reads.length, 0), 0);
+  assert.equal(result.data.transactions[0].date, expectedDate);
+  assert.match(result.data.transactions[0].createdAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(result.data.transactions[0].amount, 12.5);
 });
 
 test("batch-adds transactions with idempotency, partial failure, and two grouped writes", () => {
@@ -394,8 +527,61 @@ test("batch-adds mixed entities with grouped writes, retries, and name reconcili
   assert.equal(reconciled.data.saved.length, 0);
   assert.equal(reconciled.data.reconciled.length, 1);
   assert.equal(reconciled.data.reconciled[0].record.id, entities[1].record.id);
-  assert.equal(call({ action: "health" }).data.apiVersion, 8);
+  assert.equal(call({ action: "health" }).data.apiVersion, 10);
   assert.equal(call({ action: "health" }).data.features.includes("batchEntities"), true);
+});
+
+test("creates import tables and persists profile-specific vendor and person mappings", () => {
+  const runtime = loadScript();
+  runtime.context.setup();
+  const { call, spreadsheet } = runtime;
+  const profileId = "623e4567-e89b-42d3-a456-426614174000";
+  const vendorId = "723e4567-e89b-42d3-a456-426614174000";
+  const assignmentId = "823e4567-e89b-42d3-a456-426614174000";
+
+  assert.deepEqual(spreadsheet.getSheetByName("ImportProfiles").data[0], [
+    "ID", "Name", "Target", "Investment Account ID", "Header Signature", "Column Mapping JSON",
+    "Date Format", "Amount Mode", "Amount Multiplier", "Active", "Created At", "Updated At",
+  ]);
+  assert.equal(call({ action: "addVendor", vendor: { id: vendorId, name: "Coffee Shop" } }).ok, true);
+  assert.equal(call({ action: "addAssignment", assignment: { id: assignmentId, name: "Alex" } }).ok, true);
+
+  const created = call({ action: "createImportProfile", profile: {
+    id: profileId, name: "Checking CSV", target: "budget", headerSignature: '["DATE","DESCRIPTION"]',
+    columnMapping: { date: 0, vendorDescription: 1, amount: 2, amountSignConvention: "expensesNegative" }, dateFormat: "MM/DD/YYYY",
+    amountMode: "unified", amountMultiplier: -1,
+  } });
+  assert.equal(created.ok, true);
+  assert.equal(created.data.columnMapping.vendorDescription, 1);
+  assert.equal(created.data.columnMapping.amountSignConvention, "expensesNegative");
+  assert.equal(call({ action: "listImportProfiles" }).data.length, 1);
+
+  const saved = call({ action: "upsertImportMappings", importProfileId: profileId,
+    vendorMappings: [{ sourceDescription: "  coffee   shop ", vendorId }],
+    personMappings: [{ sourceDescription: "Primary Card", assignmentId }],
+  });
+  assert.equal(saved.ok, true);
+  assert.equal(saved.data.vendorMappings[0].normalizedSourceDescription, "COFFEE SHOP");
+  assert.equal(saved.data.personMappings[0].normalizedSourceDescription, "PRIMARY CARD");
+
+  const updated = call({ action: "upsertImportMappings", importProfileId: profileId,
+    vendorMappings: [{ sourceDescription: "COFFEE SHOP", vendorId }], personMappings: [],
+  });
+  assert.equal(updated.data.vendorMappings.length, 1);
+  assert.equal(spreadsheet.getSheetByName("ImportVendorMappings").getLastRow(), 2);
+  const bundle = call({ action: "getImportProfileBundle", id: profileId });
+  assert.equal(bundle.data.vendorMappings.length, 1);
+  assert.equal(bundle.data.personMappings.length, 1);
+
+  const invalid = call({ action: "upsertImportMappings", importProfileId: profileId,
+    vendorMappings: [{ sourceDescription: "Unknown", vendorId: "923e4567-e89b-42d3-a456-426614174000" }], personMappings: [],
+  });
+  assert.equal(invalid.ok, false);
+  assert.match(invalid.error, /active vendor/);
+
+  assert.equal(call({ action: "archiveImportProfile", id: profileId }).data.active, false);
+  assert.equal(call({ action: "listImportProfiles" }).data.length, 0);
+  assert.equal(call({ action: "getImportProfileBundle", id: profileId }).ok, false);
 });
 
 test("batch-updates transactions with immutable metadata, conflict detection, and Ledger synchronization", () => {
@@ -443,9 +629,14 @@ test("batch-updates transactions with immutable metadata, conflict detection, an
   call({ action: "archiveVendor", id: vendorId });
   const unchangedArchivedReference = call({ action: "updateTransactions", updates: [{ transaction: { ...result.data.saved[0], amount: 19 }, base: result.data.saved[0] }] });
   assert.equal(unchangedArchivedReference.data.saved.length, 1);
-  const changedToIncome = call({ action: "updateTransactions", updates: [{
-    transaction: { ...unchangedArchivedReference.data.saved[0], type: "income", categoryId: income.id, vendorId: "", amount: 20 },
+  const updatedRefund = call({ action: "updateTransactions", updates: [{
+    transaction: { ...unchangedArchivedReference.data.saved[0], amount: -19 },
     base: unchangedArchivedReference.data.saved[0],
+  }] });
+  assert.equal(updatedRefund.data.saved[0].amount, -19);
+  const changedToIncome = call({ action: "updateTransactions", updates: [{
+    transaction: { ...updatedRefund.data.saved[0], type: "income", categoryId: income.id, vendorId: "", amount: 20 },
+    base: updatedRefund.data.saved[0],
   }] });
   assert.equal(changedToIncome.data.saved.length, 1);
   assert.equal(changedToIncome.data.saved[0].type, "income");
