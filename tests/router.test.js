@@ -164,12 +164,45 @@ test("main treats drawer parameters as overlays rather than new content", () => 
   assert.match(main, /delete contentParams\.investmentReviewId/);
   assert.match(main, /if \(contentKey === mountedContentKey\) return/);
   assert.match(main, /BudgetAPI\.loadAppData/);
+  assert.match(main, /dashboard: window\.DashboardRoute/);
+  assert.match(main, /await window\.InvestmentAPI\.load\(\)/);
+  assert.doesNotMatch(main, /window\.InvestmentUI/);
   assert.doesNotMatch(main, /BudgetAPI\.(?:loadReferenceData|listTransactions)/);
   assert.match(drawer, /AppRouter\.updateParams/);
   assert.doesNotMatch(drawer, /AppRouter\.navigate\("transactions"/);
   assert.doesNotMatch(drawer, /window\.TransactionEditor/);
   assert.match(entityDrawer, /budget:reference-data-changed/);
   assert.doesNotMatch(entityDrawer, /window\.EntityEditor/);
+});
+
+test("dashboard is registered as a routed module", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  const router = fs.readFileSync("js/router.js", "utf8");
+  const route = fs.readFileSync("js/routes/dashboard.js", "utf8");
+  assert.match(router, /dashboard:\s*\{[\s\S]*template: "route-dashboard"[\s\S]*script: "js\/routes\/dashboard\.js"[\s\S]*window\.DashboardRoute/);
+  assert.match(html, /<template id="route-dashboard">/);
+  assert.doesNotMatch(html, /<script src="js\/investments\.js"/);
+  assert.match(route, /function mount\(root\)/);
+  assert.match(route, /function unmount\(\)/);
+});
+
+test("archived entities use one routed list and the shared edit drawer", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  const router = fs.readFileSync("js/router.js", "utf8");
+  const main = fs.readFileSync("js/main.js", "utf8");
+  const route = fs.readFileSync("js/routes/entity-archive.js", "utf8");
+  const drawer = fs.readFileSync("js/routes/entity-drawer.js", "utf8");
+
+  assert.match(router, /"entity-archive":\s*\{[\s\S]*js\/routes\/entity-archive\.js/);
+  assert.match(main, /"entity-archive": window\.EntityArchiveRoute/);
+  assert.match(html, /<template id="route-entity-archive">/);
+  assert.equal((html.match(/View archived (?:categories|vendors|people)/g) || []).length, 3);
+  assert.match(route, /BudgetAPI\.listArchivedEntities/);
+  assert.match(route, /drawer: "entity-edit"/);
+  assert.match(drawer, /reactivateCategory/);
+  assert.match(drawer, /Reactivate/);
+  assert.match(html, /id="archive-entity"/);
+  assert.match(drawer, /archiveCategory/);
 });
 
 test("settings route delegates state to cached custom-element forms", () => {

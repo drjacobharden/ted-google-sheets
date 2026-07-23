@@ -26,6 +26,7 @@
     "people",
     "import",
     "entity-detail",
+    "entity-archive",
     "sync",
     "settings",
     "investment-overview",
@@ -35,6 +36,12 @@
 
   // The names of the routes and their associated scripts and modules
   const routeConfig = {
+    dashboard: {
+      template: "route-dashboard",
+      script: "js/routes/dashboard.js",
+      module: () => window.DashboardRoute,
+    },
+
     categories: {
       template: "route-categories",
       script: "js/routes/categories.js",
@@ -69,6 +76,12 @@
       template: "route-entity-detail",
       script: "js/routes/entity-detail.js",
       module: () => window.EntityRoute,
+    },
+
+    "entity-archive": {
+      template: "route-entity-archive",
+      script: "js/routes/entity-archive.js",
+      module: () => window.EntityArchiveRoute,
     },
 
     settings: {

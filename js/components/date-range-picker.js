@@ -407,4 +407,8 @@ const dateRangePickerTemplate = () =>
   }
 
   customElements.define("date-range-picker", DateRangePicker);
+  window.DateRangePickerUtils = {
+    getPresetRange,
+    resolveDraftSelection,
+  };
 })();

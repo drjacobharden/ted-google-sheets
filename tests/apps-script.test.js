@@ -280,6 +280,21 @@ test("validates normalized references, rebuilds Ledger, and batch-renames 1,000 
   } });
   assert.equal(archivedVendorTransaction.ok, false);
   assert.match(archivedVendorTransaction.error, /active vendor/);
+  const archivedEntities = call({ action: "listArchivedEntities" }).data;
+  assert.equal(archivedEntities.vendors[0].id, vendorId);
+  const reactivatedVendor = call({
+    action: "addVendor",
+    vendor: {
+      id: "923e4567-e89b-42d3-a456-426614174000",
+      name: "coffee house",
+    },
+  });
+  assert.equal(reactivatedVendor.ok, true);
+  assert.equal(reactivatedVendor.data.id, vendorId);
+  assert.equal(
+    call({ action: "listArchivedEntities" }).data.vendors.length,
+    0,
+  );
   const archiveDefaultCategory = call({ action: "archiveCategory", id: income.id });
   assert.equal(archiveDefaultCategory.ok, false);
   assert.match(archiveDefaultCategory.error, /Default records/);

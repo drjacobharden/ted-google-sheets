@@ -117,7 +117,7 @@ test("all-time investment trend inserts missing calendar months", () => {
   assert.deepEqual(Array.from(result.balances), [100, 200, 300]);
 });
 
-test("bootstrap investment hydration preserves pending accounts and monthly drafts without refetching", () => {
+test("bootstrap investment hydration preserves pending drafts and satisfies the shared loader without refetching", async () => {
   const userId = "123e4567-e89b-42d3-a456-426614174000";
   const pendingAccount = { id: "223e4567-e89b-42d3-a456-426614174000", name: "Pending IRA", source: "manual", active: true };
   const serverAccount = { id: "323e4567-e89b-42d3-a456-426614174000", name: "401k", source: "paycheck", active: true };
@@ -148,7 +148,30 @@ test("bootstrap investment hydration preserves pending accounts and monthly draf
 
   assert.deepEqual(Array.from(runtime.api.accounts(), (item) => item.name).sort(), ["401k", "Pending IRA"]);
   assert.equal(runtime.api.balances()[0].balance, 250);
+  assert.equal(runtime.api.isLoaded(), true);
+  await runtime.api.load();
   assert.equal(runtime.requests.length, 0);
+  assert.equal(runtime.events.some((event) => event.type === "budget:investments-loaded"), true);
+});
+
+test("investment loading is deduplicated and marks disconnected local data as loaded", async () => {
+  const connected = loadInvestments({
+    endpoint: "https://script.google.com/macros/s/test/exec",
+    fetch: async () => ({ ok: true, json: async () => ({ ok: true, data: [] }) }),
+  });
+  const first = connected.api.load();
+  const second = connected.api.load();
+  assert.equal(first, second);
+  await first;
+  assert.equal(connected.requests.length, 3);
+
+  const runtime = loadInvestments();
+  assert.equal(runtime.api.isLoaded(), false);
+  const result = await runtime.api.load();
+  assert.equal(runtime.api.isLoaded(), true);
+  assert.deepEqual(Array.from(result.accounts), []);
+  assert.equal(runtime.requests.length, 0);
+  assert.equal(runtime.events.filter((event) => event.type === "budget:investments-loaded").length, 1);
 });
 
 test("atomically queues imported investment months with multiple signed flows", () => {
@@ -204,6 +227,37 @@ test("investment overview trend renders two series and a currency y axis", () =>
   assert.doesNotMatch(svg, /NaN|Infinity/);
 });
 
+test("investment trend exposes monthly flow details and stretches one point", () => {
+  const view = loadInvestmentView({
+    accounts: [{ id: "account" }],
+    balances: [{ accountId: "account", month: "2026-01", balance: 1000 }],
+    contributions: [
+      { accountId: "account", month: "2026-01", amount: 250 },
+      { accountId: "account", month: "2026-01", amount: -75 },
+    ],
+  });
+  const series = view.buildTrendSeries({
+    accounts: [{ id: "account" }],
+    balances: [{ accountId: "account", month: "2026-01", balance: 1000 }],
+    contributions: [
+      { accountId: "account", month: "2026-01", amount: 250 },
+      { accountId: "account", month: "2026-01", amount: -75 },
+    ],
+    range: { start: "2026-01", end: "2026-01" },
+  });
+  const svg = view.trendSVG({
+    range: { start: "2026-01-05", end: "2026-01-11" },
+    includeContributions: true,
+  });
+
+  assert.deepEqual(Array.from(series.monthlyContributions), [250]);
+  assert.deepEqual(Array.from(series.monthlyWithdrawals), [75]);
+  assert.deepEqual(Array.from(series.monthlyNetFlows), [175]);
+  assert.deepEqual(Array.from(series.contributions), [175]);
+  assert.match(svg, /M76,[\d.]+ L736,[\d.]+/);
+  assert.match(svg, /trend-scrub-hitbox/);
+});
+
 test("investment savings excludes manual transfers from the combined total", () => {
   const runtime = loadInvestments({ values: {
     "myFinance.investmentAccounts.v1": JSON.stringify([
@@ -225,6 +279,31 @@ test("investment savings excludes manual transfers from the combined total", () 
   assert.equal(totals.paycheckContributions, 750);
   assert.equal(totals.totalSavings, 2350);
   assert.equal(totals.manualContributions, 300);
+});
+
+test("dashboard savings uses exact transaction dates and touched investment months", () => {
+  const runtime = loadInvestments({ values: {
+    "myFinance.investmentAccounts.v1": JSON.stringify([
+      { id: "paycheck-account", name: "401(k)", source: "paycheck" },
+    ]),
+    "myFinance.investmentBalances.v1": JSON.stringify([]),
+    "myFinance.investmentContributions.v1": JSON.stringify([
+      { id: "flow", accountId: "paycheck-account", month: "2026-02", amount: 50 },
+    ]),
+  } });
+  const result = runtime.api.calculate([
+    { type: "income", amount: 100, date: "2026-01-31" },
+    { type: "expense", amount: 25, date: "2026-02-01" },
+    { type: "income", amount: 999, date: "2026-02-08" },
+  ], {
+    start: "2026-01-31",
+    end: "2026-02-06",
+  });
+
+  assert.equal(result.income, 100);
+  assert.equal(result.spending, 25);
+  assert.equal(result.paycheckContributions, 50);
+  assert.equal(result.totalSavings, 125);
 });
 
 test("investment growth removes signed net flows", () => {
@@ -390,7 +469,7 @@ test("Sheet timestamps normalize to canonical reporting months", () => {
 test("investment routes and drawers replace the legacy global screens", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const source = [
-    "js/investments.js",
+    "js/routes/dashboard.js",
     "js/investments-api.js",
     "js/utils/investment-view.js",
     "js/routes/investment-overview.js",
@@ -399,7 +478,10 @@ test("investment routes and drawers replace the legacy global screens", () => {
     "js/routes/investment-account-drawer.js",
     "js/routes/investment-month-drawer.js",
   ].map((file) => fs.readFileSync(file, "utf8")).join("\n");
-  assert.match(html, /data-screen="dashboard"/);
+  assert.match(html, /<template id="route-dashboard">[\s\S]*data-screen="dashboard"/);
+  assert.equal((html.match(/data-screen="dashboard"/g) || []).length, 1);
+  assert.doesNotMatch(html, /js\/investments\.js/);
+  assert.match(html, /js\/routes\/dashboard\.js/);
   assert.match(html, /id="route-investment-overview"/);
   assert.match(html, /id="route-investment-accounts"/);
   assert.match(html, /id="route-investment-account-detail"/);
@@ -423,7 +505,13 @@ test("investment routes and drawers replace the legacy global screens", () => {
   assert.match(source, /investmentReviewId/);
   assert.match(source, /createdByName/);
   assert.match(source, /formatMonth\(series\.months\[0\]\)/);
-  assert.match(source, /trendSVG\(\{ range, includeContributions: true \}\)/);
+  assert.match(source, /mountTrend\(trend,[\s\S]*includeContributions: true/);
+  assert.match(source, /monthRangeFromDates/);
+  assert.match(source, /trend-scrub-tooltip/);
+  assert.match(source, /window\.DashboardRoute = \{ mount, unmount \}/);
+  assert.match(source, /budget:transaction-queued/);
+  assert.match(source, /removeEventListener\("budget:investments-changed", render\)/);
+  assert.doesNotMatch(source, /window\.InvestmentUI/);
   assert.match(source, /formatMonth\(balance\.month\)/);
   assert.match(source, /amount:\s*sign \* amount/);
   assert.match(source, /suppressSingleDefault = true/);

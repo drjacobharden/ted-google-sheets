@@ -307,8 +307,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!backdrop.hidden) close(true, { updateRoute: false });
       return;
     }
-    if (!window.InvestmentUI.isLoaded()) {
-      window.InvestmentUI.load().catch(() => {});
+    if (!window.InvestmentAPI.isLoaded()) {
+      window.InvestmentAPI.load().catch(() => {});
       return;
     }
     const accounts = populateAccounts();

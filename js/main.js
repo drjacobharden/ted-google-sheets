@@ -30,6 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const screen = outlet.querySelector("[data-screen]");
 
     const routeModules = {
+      dashboard: window.DashboardRoute,
       categories: window.CategoryRoute,
       vendors: window.VendorRoute,
       people: window.PeopleRoute,
@@ -38,6 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sync: window.SyncRoute,
       settings: window.SettingsRoute,
       "entity-detail": window.EntityRoute,
+      "entity-archive": window.EntityArchiveRoute,
       "investment-overview": window.InvestmentOverviewRoute,
       "investment-accounts": window.InvestmentAccountsRoute,
       "investment-account-detail": window.InvestmentAccountDetailRoute,
@@ -278,7 +280,7 @@ document.addEventListener("DOMContentLoaded", () => {
           state.transactions = data.transactions || [];
           state.loaded = true;
           referenceDataLoaded = true;
-          await window.InvestmentUI?.load?.();
+          await window.InvestmentAPI.load();
           window.dispatchEvent(new CustomEvent("budget:transactions-loaded", {
             detail: { source: "server" },
           }));

@@ -4,15 +4,13 @@ const fs = require("node:fs");
 
 test("transaction entry is optimistic and exposes durable sync controls", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const form = fs.readFileSync("js/form.js", "utf8");
+  const form = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
   const main = fs.readFileSync("js/main.js", "utf8");
   const api = fs.readFileSync("js/api.js", "utf8");
-  assert.match(html, /id="transaction-sync-status"/);
-  assert.match(html, /id="view-sync-from-form"/);
   assert.match(html, /data-screen="sync"/);
-  assert.match(form, /BudgetAPI\.queueTransaction\(transaction\)/);
+  assert.match(form, /BudgetAPI\.queueTransaction\(draft\)/);
   assert.doesNotMatch(form, /await window\.BudgetAPI\.addTransaction/);
-  assert.doesNotMatch(form, /showTab\("transactions"\)/);
+  assert.match(form, /AppRouter\.updateParams/);
   assert.match(main, /budget:transaction-queued/);
   assert.match(main, /budget:transaction-saved/);
   assert.match(api, /myFinance\.transactionOutbox\.v2/);
@@ -23,26 +21,26 @@ test("transaction editing uses a UUID drawer, durable updates, and unified notif
   const html = fs.readFileSync("index.html", "utf8");
   const transactions = fs.readFileSync("js/routes/transactions.js", "utf8");
   const editor = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
-  const sync = fs.readFileSync("js/sync.js", "utf8");
+  const sync = fs.readFileSync("js/routes/sync.js", "utf8");
   const api = fs.readFileSync("js/api.js", "utf8");
   assert.match(html, /id="transaction-drawer"/);
   assert.match(html, /id="transaction-edit-id"/);
   assert.match(html, /id="transaction-created-footnote"/);
   assert.match(html, /id="toast-stack"/);
-  assert.match(transactions, /dataset\.transactionId = transaction\.id/);
-  assert.match(transactions, /TransactionEditor\?\.openEdit/);
-  assert.match(editor, /window\.TransactionEditor = \{[\s\S]*openCreate,[\s\S]*openEdit,[\s\S]*close/);
+  assert.match(transactions, /AppRouter\.updateParams/);
+  assert.match(editor, /function openCreate\(\)/);
+  assert.match(editor, /function openEdit\(id/);
+  assert.match(editor, /\["new", "edit", "review"\]\.includes\(action\)/);
   assert.match(editor, /queueTransactionUpdate/);
   assert.match(api, /operation: "update"/);
   assert.match(api, /revision/);
   assert.match(api, /updateTransactions/);
-  assert.match(sync, /View Sync/);
   assert.match(sync, /discardTransactionChange/);
 });
 
 test("offline retries expose countdowns, manual controls, and a deduplicated outage notice", () => {
-  const sync = fs.readFileSync("js/sync.js", "utf8");
-  const form = fs.readFileSync("js/form.js", "utf8");
+  const sync = fs.readFileSync("js/routes/sync.js", "utf8");
+  const notifications = fs.readFileSync("js/sync-notifications.js", "utf8");
   const api = fs.readFileSync("js/api.js", "utf8");
   assert.match(api, /RETRY_DELAYS = Object\.freeze\(\[2000, 5000, 15000, 30000, 60000\]\)/);
   assert.match(api, /budget:sync-retry-scheduled/);
@@ -54,9 +52,8 @@ test("offline retries expose countdowns, manual controls, and a deduplicated out
   assert.match(sync, /Offline · Sync will attempt again when back online/);
   assert.match(sync, /disabled title="Available when online"/);
   assert.match(sync, /setInterval\(render, 1000\)/);
-  assert.match(sync, /outageToast\?\.isConnected/);
-  assert.match(form, /Waiting to retry/);
-  assert.match(form, /Offline · Sync will attempt again when back online/);
+  assert.match(notifications, /outageToast\?\.isConnected/);
+  assert.match(notifications, /View Sync/);
   assert.match(api, /browserIsOffline\(\)/);
   assert.match(api, /window\.addEventListener\("offline", pauseSyncWhileOffline\)/);
 });

@@ -954,6 +954,36 @@ test("import entities stay provisional until a confirmed batch commit", async ()
   assert.equal(runtime.api.listVendors().some((item) => item.id === draft.id), true);
 });
 
+test("archived entities are listed and matching additions preserve their IDs", async () => {
+  const archivedId = "223e4567-e89b-42d3-a456-426614174000";
+  const { api } = loadAPI({
+    "myFinance.schemaVersion": "2",
+    "myFinance.vendors.v1": [{
+      id: archivedId,
+      name: "Old Market",
+      active: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }],
+  });
+
+  const archived = await api.listArchivedEntities();
+  assert.equal(archived.vendors[0].id, archivedId);
+  const restored = api.addVendor({ name: " old market " });
+  assert.equal(restored.id, archivedId);
+  assert.equal(restored.active, true);
+  assert.equal(api.listVendors().filter((item) => item.id === archivedId).length, 1);
+
+  await api.archiveVendor(archivedId);
+  const renamed = await api.reactivateVendor({
+    id: archivedId,
+    name: "Neighborhood Market",
+  });
+  assert.equal(renamed.id, archivedId);
+  assert.equal(renamed.name, "Neighborhood Market");
+  assert.equal(renamed.active, true);
+});
+
 test("awaiting imported transactions returns only after their outbox records are confirmed", async () => {
   const seed = connectedSeed();
   const runtime = loadAPI(seed.values, async (_url, options) => {

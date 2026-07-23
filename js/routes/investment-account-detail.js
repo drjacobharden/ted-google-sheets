@@ -21,7 +21,7 @@
     function render() {
       const selected = account();
       if (!selected) {
-        if (!window.InvestmentUI.isLoaded()) {
+        if (!window.InvestmentAPI.isLoaded()) {
           title.textContent = "Loading account…";
           editButton.disabled = true;
           return;

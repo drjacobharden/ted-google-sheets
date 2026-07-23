@@ -117,6 +117,7 @@ function handleRequest_(request) {
       case 'addUser': return success_(withScriptLock_(function () { return addUser_(request.user); }));
       case 'updateUser': return successResult_(withScriptLock_(function () { return updateUser_(request.user); }));
       case 'listCategories': return success_(listActiveRecords_(TABLES.categories));
+      case 'listArchivedEntities': return success_(listArchivedEntities_());
       case 'addCategory': return success_(addEntityCompatibility_('category', request.category));
       case 'updateCategory': return successResult_(withScriptLock_(function () { return updateCategory_(request.category); }));
       case 'archiveCategory': return success_(withScriptLock_(function () { return archiveRecord_(TABLES.categories, request.id); }));
@@ -1046,10 +1047,11 @@ function addEntities_(inputs) {
       definition.sheet = requiredSheet_(spreadsheet, definition.spec);
       definition.records = readRecordsFromSheet_(definition.sheet, definition.spec, true);
       definition.byId = new Map(definition.records.map(function (record) { return [record.id, record]; }));
-      definition.byName = new Map(definition.records.filter(function (record) { return record.active !== false; }).map(function (record) {
+      definition.byName = new Map(definition.records.map(function (record) {
         return [entityNameKey_(kind, record), record];
       }));
       definition.additions = [];
+      definition.reactivations = [];
     });
 
     const saved = [], reconciled = [], failed = [];
@@ -1062,13 +1064,29 @@ function addEntities_(inputs) {
         const record = normalizeNewEntity_(kind, input.record);
         const existingId = definition.byId.get(record.id);
         if (existingId) {
+          if (existingId.active === false && entityNameKey_(kind, existingId) === entityNameKey_(kind, record)) {
+            const reactivated = { ...existingId, name: record.name, active: true, updatedAt: new Date().toISOString() };
+            definition.reactivations.push(reactivated);
+            definition.byId.set(reactivated.id, reactivated);
+            definition.byName.set(entityNameKey_(kind, reactivated), reactivated);
+            saved.push({ kind: kind, record: reactivated });
+            return;
+          }
           if (!entitiesMatch_(kind, existingId, record)) throw new Error('That entity ID is already used by different data.');
           saved.push({ kind: kind, record: existingId });
           return;
         }
         const existingName = definition.byName.get(entityNameKey_(kind, record));
         if (existingName) {
-          reconciled.push({ kind: kind, requestedId: record.id, record: existingName });
+          if (existingName.active === false) {
+            const reactivated = { ...existingName, name: record.name, active: true, updatedAt: new Date().toISOString() };
+            definition.reactivations.push(reactivated);
+            definition.byId.set(reactivated.id, reactivated);
+            definition.byName.set(entityNameKey_(kind, reactivated), reactivated);
+            reconciled.push({ kind: kind, requestedId: record.id, record: reactivated });
+          } else {
+            reconciled.push({ kind: kind, requestedId: record.id, record: existingName });
+          }
           return;
         }
         definition.additions.push(record);
@@ -1082,6 +1100,12 @@ function addEntities_(inputs) {
 
     involvedKinds.forEach(function (kind) {
       const definition = definitions[kind];
+      definition.reactivations.forEach(function (record) {
+        const row = findRowById_(definition.sheet, record.id);
+        if (!row) throw new Error('That archived entity could not be found.');
+        definition.sheet.getRange(row, 1, 1, definition.spec.headers.length)
+          .setValues([recordToRow_(definition.spec, record)]);
+      });
       appendRows_(definition.sheet, definition.additions.map(function (record) { return recordToRow_(definition.spec, record); }));
     });
     return { saved: saved, reconciled: reconciled, failed: failed };
@@ -1176,6 +1200,13 @@ function archiveRecord_(spec, id) {
 }
 
 function listActiveRecords_(spec) { return readRecords_(spec, false); }
+function listArchivedEntities_() {
+  return {
+    categories: readRecords_(TABLES.categories, true).filter(function (item) { return item.active === false && !item.isDefault; }),
+    vendors: readRecords_(TABLES.vendors, true).filter(function (item) { return item.active === false; }),
+    assignments: readRecords_(TABLES.assignments, true).filter(function (item) { return item.active === false && !item.isDefault; }),
+  };
+}
 function readRecords_(spec, includeInactive) {
   return readRecordsFromSheet_(getTableSheet_(spec), spec, includeInactive);
 }

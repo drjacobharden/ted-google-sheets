@@ -114,7 +114,14 @@
       )
       .sort((a, b) => a.month.localeCompare(b.month));
     if (!validBalances.length) {
-      return { months: [], balances: [], contributions: [] };
+      return {
+        months: [],
+        balances: [],
+        contributions: [],
+        monthlyContributions: [],
+        monthlyWithdrawals: [],
+        monthlyNetFlows: [],
+      };
     }
 
     const start = monthIndex(range.start) !== null
@@ -163,11 +170,27 @@
         .filter((item) => item.month <= month)
         .reduce((total, item) => total + Number(item.amount || 0), 0),
     );
+    const monthlyContributions = months.map((month) =>
+      validContributions
+        .filter((item) => item.month === month && Number(item.amount || 0) > 0)
+        .reduce((total, item) => total + Number(item.amount || 0), 0),
+    );
+    const monthlyWithdrawals = months.map((month) =>
+      validContributions
+        .filter((item) => item.month === month && Number(item.amount || 0) < 0)
+        .reduce((total, item) => total + Math.abs(Number(item.amount || 0)), 0),
+    );
+    const monthlyNetFlows = monthlyContributions.map(
+      (amount, index) => amount - monthlyWithdrawals[index],
+    );
 
     return {
       months,
       balances: aggregateBalances,
       contributions: cumulativeContributions,
+      monthlyContributions,
+      monthlyWithdrawals,
+      monthlyNetFlows,
     };
   }
 
@@ -189,6 +212,17 @@
         }, 0),
       ),
       contributions: [],
+      monthlyContributions: months.map(() => 0),
+      monthlyWithdrawals: months.map(() => 0),
+      monthlyNetFlows: months.map(() => 0),
+    };
+  }
+
+  function monthRangeFromDates(range = {}) {
+    return {
+      ...range,
+      start: String(range.start || "").slice(0, 7),
+      end: String(range.end || "").slice(0, 7),
     };
   }
 
@@ -225,16 +259,18 @@
     return `${value < 0 ? "−" : ""}$${amount}`;
   }
 
-  function trendSVG(options) {
-    const includeContributions = options?.includeContributions === true;
-    const series = options
+  function trendSeries(options) {
+    return options
       ? buildTrendSeries({
           balances: window.InvestmentAPI.balances(),
           contributions: window.InvestmentAPI.contributions(),
           accounts: window.InvestmentAPI.accounts(),
-          range: options.range,
+          range: monthRangeFromDates(options.range),
         })
       : legacyTrendSeries();
+  }
+
+  function renderTrendSVG(series, includeContributions) {
     if (!series.months.length) {
       return '<div class="investment-empty">Add monthly balances to build your trend.</div>';
     }
@@ -276,12 +312,14 @@
         ),
     );
     const line = (points) =>
-      `M${points.map((point) => `${point.x},${point.y}`).join(" L")}`;
+      points.length === 1
+        ? `M${plot.left},${points[0].y} L${width - plot.right},${points[0].y}`
+        : `M${points.map((point) => `${point.x},${point.y}`).join(" L")}`;
     const circles = (points, className, label) =>
       points
         .map(
-          (point) =>
-            `<circle class="${className}" cx="${point.x}" cy="${point.y}" r="3.5"><title>${formatMonth(point.month)} — ${label}: ${money(point.value)}</title></circle>`,
+          (point, index) =>
+            `<circle class="${className}" data-trend-series="${label.toLowerCase().replaceAll(" ", "-")}" data-trend-index="${index}" cx="${point.x}" cy="${point.y}" r="3.5"><title>${formatMonth(point.month)} — ${label}: ${money(point.value)}</title></circle>`,
         )
         .join("");
     const ariaLabel = includeContributions
@@ -299,7 +337,163 @@
       ${circles(balancePoints, "trend-balance-point", "Balance")}
       ${includeContributions ? circles(contributionPoints, "trend-contribution-point", "Net contributions") : ""}
       <g class="trend-x-labels" aria-hidden="true">${[...xLabelIndexes].map((index) => `<text x="${x(index)}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === series.months.length - 1 ? "end" : "middle"}">${formatMonth(series.months[index])}</text>`).join("")}</g>
+      <g class="trend-scrub-layer" aria-hidden="true" hidden>
+        <line class="trend-scrub-guide" x1="${plot.left}" y1="${plot.top}" x2="${plot.left}" y2="${height - plot.bottom}"/>
+        <circle class="trend-scrub-balance-marker" r="6"/>
+        ${includeContributions ? '<circle class="trend-scrub-contribution-marker" r="6"/>' : ""}
+      </g>
+      <rect class="trend-scrub-hitbox" x="${plot.left}" y="${plot.top}" width="${plotWidth}" height="${plotHeight}" fill="transparent" tabindex="0" role="slider" aria-label="Explore investment trend by month" aria-valuemin="1" aria-valuemax="${series.months.length}" aria-valuenow="1"/>
     </svg>`;
+  }
+
+  function trendSVG(options) {
+    return renderTrendSVG(
+      trendSeries(options),
+      options?.includeContributions === true,
+    );
+  }
+
+  function mountTrend(container, options = {}) {
+    const includeContributions = options.includeContributions === true;
+    const series = trendSeries(options);
+    container.innerHTML = renderTrendSVG(series, includeContributions);
+    const svg = container.querySelector("svg");
+    if (!svg || !series.months.length) return () => {};
+
+    const hitbox = svg.querySelector(".trend-scrub-hitbox");
+    const layer = svg.querySelector(".trend-scrub-layer");
+    const guide = svg.querySelector(".trend-scrub-guide");
+    const balanceMarker = svg.querySelector(".trend-scrub-balance-marker");
+    const contributionMarker = svg.querySelector(
+      ".trend-scrub-contribution-marker",
+    );
+    const tooltip = document.createElement("div");
+    tooltip.className = "trend-scrub-tooltip";
+    tooltip.setAttribute("role", "status");
+    tooltip.hidden = true;
+    container.append(tooltip);
+
+    const width = 760;
+    const plotLeft = 76;
+    const plotRight = 24;
+    const plotWidth = width - plotLeft - plotRight;
+    let activeIndex = 0;
+    let dragging = false;
+
+    function point(seriesName, index) {
+      return svg.querySelector(
+        `[data-trend-series="${seriesName}"][data-trend-index="${index}"]`,
+      );
+    }
+
+    function show(index, clientX = null) {
+      activeIndex = Math.max(0, Math.min(series.months.length - 1, index));
+      const balancePoint = point("balance", activeIndex);
+      const contributionPoint = point("net-contributions", activeIndex);
+      if (!balancePoint) return;
+      const x = Number(balancePoint.getAttribute("cx"));
+      const balanceY = Number(balancePoint.getAttribute("cy"));
+
+      guide.setAttribute("x1", x);
+      guide.setAttribute("x2", x);
+      balanceMarker.setAttribute("cx", x);
+      balanceMarker.setAttribute("cy", balanceY);
+      if (contributionMarker && contributionPoint) {
+        contributionMarker.setAttribute(
+          "cx",
+          contributionPoint.getAttribute("cx"),
+        );
+        contributionMarker.setAttribute(
+          "cy",
+          contributionPoint.getAttribute("cy"),
+        );
+      }
+      layer.removeAttribute("hidden");
+      hitbox.setAttribute("aria-valuenow", String(activeIndex + 1));
+      hitbox.setAttribute(
+        "aria-valuetext",
+        `${formatMonth(series.months[activeIndex])}, balance ${money(series.balances[activeIndex])}`,
+      );
+      tooltip.innerHTML = `
+        <strong>${escapeHTML(formatMonth(series.months[activeIndex]))}</strong>
+        <span><em>Balance</em>${escapeHTML(money(series.balances[activeIndex]))}</span>
+        <span><em>Contributions</em>${escapeHTML(money(series.monthlyContributions[activeIndex] || 0))}</span>
+        <span><em>Withdrawals</em>${escapeHTML(money(series.monthlyWithdrawals[activeIndex] || 0))}</span>
+        <span><em>Monthly net</em>${escapeHTML(money(series.monthlyNetFlows[activeIndex] || 0))}</span>
+        <span><em>Cumulative net</em>${escapeHTML(money(series.contributions[activeIndex] || 0))}</span>`;
+      tooltip.hidden = false;
+
+      const bounds = container.getBoundingClientRect();
+      const desired = clientX === null
+        ? ((x / width) * bounds.width)
+        : clientX - bounds.left;
+      const half = tooltip.offsetWidth / 2;
+      tooltip.style.left = `${Math.max(half + 8, Math.min(bounds.width - half - 8, desired))}px`;
+    }
+
+    function indexFromPointer(event) {
+      const bounds = svg.getBoundingClientRect();
+      const svgX = ((event.clientX - bounds.left) / bounds.width) * width;
+      if (series.months.length === 1) return 0;
+      return Math.round(
+        ((Math.max(plotLeft, Math.min(width - plotRight, svgX)) - plotLeft) /
+          plotWidth) *
+          (series.months.length - 1),
+      );
+    }
+
+    function handlePointerDown(event) {
+      dragging = true;
+      hitbox.setPointerCapture?.(event.pointerId);
+      show(indexFromPointer(event), event.clientX);
+    }
+    function handlePointerMove(event) {
+      if (event.pointerType === "touch" && !dragging) return;
+      show(indexFromPointer(event), event.clientX);
+    }
+    function handlePointerUp(event) {
+      dragging = false;
+      hitbox.releasePointerCapture?.(event.pointerId);
+    }
+    function handlePointerLeave() {
+      if (dragging) return;
+      tooltip.hidden = true;
+      layer.setAttribute("hidden", "");
+    }
+    function handleKeydown(event) {
+      const next = {
+        ArrowLeft: activeIndex - 1,
+        ArrowDown: activeIndex - 1,
+        ArrowRight: activeIndex + 1,
+        ArrowUp: activeIndex + 1,
+        Home: 0,
+        End: series.months.length - 1,
+      }[event.key];
+      if (next === undefined) return;
+      event.preventDefault();
+      show(next);
+    }
+    function handleFocus() {
+      show(activeIndex);
+    }
+
+    hitbox.addEventListener("pointerdown", handlePointerDown);
+    hitbox.addEventListener("pointermove", handlePointerMove);
+    hitbox.addEventListener("pointerup", handlePointerUp);
+    hitbox.addEventListener("pointercancel", handlePointerUp);
+    hitbox.addEventListener("pointerleave", handlePointerLeave);
+    hitbox.addEventListener("keydown", handleKeydown);
+    hitbox.addEventListener("focus", handleFocus);
+
+    return () => {
+      hitbox.removeEventListener("pointerdown", handlePointerDown);
+      hitbox.removeEventListener("pointermove", handlePointerMove);
+      hitbox.removeEventListener("pointerup", handlePointerUp);
+      hitbox.removeEventListener("pointercancel", handlePointerUp);
+      hitbox.removeEventListener("pointerleave", handlePointerLeave);
+      hitbox.removeEventListener("keydown", handleKeydown);
+      hitbox.removeEventListener("focus", handleFocus);
+    };
   }
 
   window.InvestmentView = {
@@ -309,6 +503,8 @@
     formatMonth,
     latestByAccount,
     metrics,
+    monthRangeFromDates,
+    mountTrend,
     sourceLabel,
     trendSVG,
   };

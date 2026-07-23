@@ -5,23 +5,30 @@ document.addEventListener("DOMContentLoaded", () => {
   const header = document.getElementById("entity-drawer-header");
   const message = form.querySelector(".form-message");
   const submit = form.querySelector('[type="submit"]');
+  const archiveButton = document.getElementById("archive-entity");
   const appShell = document.querySelector(".app-shell");
 
   const config = {
     category: {
       label: "category",
-      records: () => window.BudgetAPI.listCategories({ type: "expense" }),
+      record: (id) => window.BudgetAPI.getEntity("category", id),
       update: (input) => window.BudgetAPI.updateCategory(input),
+      reactivate: (input) => window.BudgetAPI.reactivateCategory(input),
+      archive: (id) => window.BudgetAPI.archiveCategory(id),
     },
     vendor: {
       label: "vendor",
-      records: () => window.BudgetAPI.listVendors(),
+      record: (id) => window.BudgetAPI.getEntity("vendor", id),
       update: (input) => window.BudgetAPI.updateVendor(input),
+      reactivate: (input) => window.BudgetAPI.reactivateVendor(input),
+      archive: (id) => window.BudgetAPI.archiveVendor(id),
     },
     assignment: {
       label: "person",
-      records: () => window.BudgetAPI.listPeople(),
+      record: (id) => window.BudgetAPI.getEntity("assignment", id),
       update: (input) => window.BudgetAPI.updatePerson(input),
+      reactivate: (input) => window.BudgetAPI.reactivatePerson(input),
+      archive: (id) => window.BudgetAPI.archivePerson(id),
     },
   };
 
@@ -101,7 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function open(kind, id) {
     const settings = config[kind];
-    const entity = settings?.records().find((item) => item.id === id);
+    const entity = settings?.record(id);
     if (!entity) throw new Error("That item could not be found.");
     if (window.BudgetAPI.getEntitySyncStatus(kind, id)) {
       window.ToastUI?.show(
@@ -111,16 +118,24 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     }
 
-    opened = { kind, id };
+    opened = {
+      kind,
+      id,
+      archived: entity.active === false,
+      isDefault: entity.isDefault === true,
+    };
     openedName = entity.name;
     returnFocus = document.activeElement;
-    header.title = `Edit ${settings.label}`;
+    header.title = entity.active === false
+      ? `Reactivate ${settings.label}`
+      : `Edit ${settings.label}`;
     form.elements.name.maxLength = kind === "category" ? 50 : 80;
     form.elements.name.value = entity.name;
     message.textContent = "";
     message.className = "form-message";
     submit.disabled = false;
-    submit.textContent = "Save changes";
+    submit.textContent = entity.active === false ? "Reactivate" : "Save changes";
+    archiveButton.hidden = entity.active === false || entity.isDefault === true;
 
     if (closeTimer) window.clearTimeout(closeTimer);
     if (closeAnimationHandler) {
@@ -164,7 +179,11 @@ document.addEventListener("DOMContentLoaded", () => {
     message.textContent = "";
 
     try {
-      const saved = await config[opened.kind].update({
+      const wasArchived = opened.archived;
+      const action = wasArchived
+        ? config[opened.kind].reactivate
+        : config[opened.kind].update;
+      const saved = await action({
         id: opened.id,
         name,
       });
@@ -176,13 +195,42 @@ document.addEventListener("DOMContentLoaded", () => {
       const label = config[opened.kind].label;
       close(true);
       window.ToastUI?.show(
-        `${label.charAt(0).toUpperCase() + label.slice(1)} updated.`,
+        wasArchived
+          ? `${label.charAt(0).toUpperCase() + label.slice(1)} reactivated.`
+          : `${label.charAt(0).toUpperCase() + label.slice(1)} updated.`,
       );
     } catch (error) {
       message.className = "form-message error";
       message.textContent = error.message;
       submit.disabled = false;
-      submit.textContent = "Save changes";
+      submit.textContent = opened?.archived ? "Reactivate" : "Save changes";
+    }
+  });
+
+  archiveButton.addEventListener("click", async () => {
+    if (
+      !opened ||
+      opened.archived ||
+      opened.isDefault ||
+      !window.confirm(`Archive this ${config[opened.kind].label}?`)
+    ) {
+      return;
+    }
+    const current = { ...opened };
+    archiveButton.disabled = true;
+    message.textContent = "";
+    try {
+      await config[current.kind].archive(current.id);
+      const label = config[current.kind].label;
+      close(true);
+      window.ToastUI?.show(
+        `${label.charAt(0).toUpperCase() + label.slice(1)} archived.`,
+      );
+    } catch (error) {
+      message.className = "form-message error";
+      message.textContent = error.message;
+    } finally {
+      archiveButton.disabled = false;
     }
   });
 
@@ -246,9 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const entityIsAvailable = config[kind]
-      .records()
-      .some((item) => item.id === id);
+    const entityIsAvailable = Boolean(config[kind].record(id));
     if (!entityIsAvailable && !window.BudgetUI.isReferenceDataLoaded()) return;
 
     try {

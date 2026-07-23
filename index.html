@@ -251,43 +251,45 @@
           <div id="route-outlet"></div>
 
           <!-- Dashboard tab -->
-          <section class="screen" data-screen="dashboard">
-            <div class="page-heading">
-              <p class="eyebrow">Household overview</p>
-              <h1>Dashboard</h1>
-              <p class="heading-copy">
-                Budget surplus and paycheck investing without double-counting
-                manual transfers.
-              </p>
-            </div>
+          <template id="route-dashboard">
+            <section class="screen" data-screen="dashboard">
+              <div class="page-heading">
+                <p class="eyebrow">Household overview</p>
+                <h1>Dashboard</h1>
+                <p class="heading-copy">
+                  Budget surplus and paycheck investing without double-counting
+                  manual transfers.
+                </p>
+              </div>
 
-            <div class="month-range-filter" data-month-range></div>
-            <div
-              class="summary-grid dashboard-summary"
-              id="dashboard-summary"
-              aria-label="Savings summary"
-            ></div>
-            <div class="investment-layout">
-              <section class="ledger-card chart-card">
-                <div class="table-header">
-                  <div>
-                    <h2>Investment balance</h2>
-                    <p>Latest reported balances over time</p>
+              <date-range-picker preset="month"></date-range-picker>
+              <div
+                class="summary-grid dashboard-summary"
+                id="dashboard-summary"
+                aria-label="Savings summary"
+              ></div>
+              <div class="investment-layout">
+                <section class="ledger-card chart-card">
+                  <div class="table-header">
+                    <div>
+                      <h2>Investment balance</h2>
+                      <p>Latest reported balances over time</p>
+                    </div>
                   </div>
-                </div>
-                <div id="dashboard-trend" class="investment-chart"></div>
-              </section>
-              <section class="ledger-card investment-history-card">
-                <div class="table-header">
-                  <div>
-                    <h2>Savings breakdown</h2>
-                    <p>Manual transfers are shown but not added twice.</p>
+                  <div id="dashboard-trend" class="investment-chart"></div>
+                </section>
+                <section class="ledger-card investment-history-card">
+                  <div class="table-header">
+                    <div>
+                      <h2>Savings breakdown</h2>
+                      <p>Manual transfers are shown but not added twice.</p>
+                    </div>
                   </div>
-                </div>
-                <div id="dashboard-breakdown" class="breakdown-list"></div>
-              </section>
-            </div>
-          </section>
+                  <div id="dashboard-breakdown" class="breakdown-list"></div>
+                </section>
+              </div>
+            </section>
+          </template>
           <template id="route-import">
             <section
               class="screen import-screen"
@@ -492,6 +494,12 @@
                   <button class="primary-button" type="submit">
                     Add category
                   </button>
+                  <a
+                    class="secondary-button archived-entity-link"
+                    href="#/entity-archive?kind=category"
+                  >
+                    View archived categories
+                  </a>
                 </form>
               </div>
             </section>
@@ -550,6 +558,12 @@
                   <button class="primary-button" type="submit">
                     Add vendor
                   </button>
+                  <a
+                    class="secondary-button archived-entity-link"
+                    href="#/entity-archive?kind=vendor"
+                  >
+                    View archived vendors
+                  </a>
                 </form>
               </div>
             </section>
@@ -598,8 +612,51 @@
                   <button class="primary-button" type="submit">
                     Add person
                   </button>
+                  <a
+                    class="secondary-button archived-entity-link"
+                    href="#/entity-archive?kind=assignment"
+                  >
+                    View archived people
+                  </a>
                 </form>
               </div>
+            </section>
+          </template>
+          <template id="route-entity-archive">
+            <section class="screen" data-screen="entity-archive">
+              <button class="back-button" type="button" data-archive-back>
+                ← Back
+              </button>
+              <page-title
+                eyebrow="Archived"
+                title="Archived entities"
+                subtitle="Reactivate an archived item to make it available again."
+              ></page-title>
+              <section class="category-panel archived-entity-panel">
+                <div class="table-header">
+                  <div>
+                    <h2 data-archive-title>Archived items</h2>
+                    <p data-archive-count>0 items</p>
+                  </div>
+                  <label class="search-field entity-search-field">
+                    <span class="sr-only">Search archived items</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="11" cy="11" r="6.5" />
+                      <path d="m16 16 4 4" />
+                    </svg>
+                    <input
+                      data-archive-search
+                      type="search"
+                      placeholder="Search archived items"
+                    />
+                  </label>
+                </div>
+                <div
+                  class="category-list archived-entity-list"
+                  data-archive-list
+                  aria-live="polite"
+                ></div>
+              </section>
             </section>
           </template>
           <!-- Entity drill down tab -->
@@ -758,7 +815,7 @@
                 title="Investment overview"
                 subtitle="Balances, contributions, and contribution-adjusted growth for retirement planning."
               ></page-title>
-              <div class="month-range-filter" data-month-range></div>
+              <date-range-picker preset="month"></date-range-picker>
               <div class="summary-grid" id="investment-summary"></div>
               <section class="ledger-card chart-card">
                 <div class="table-header">
@@ -1013,6 +1070,13 @@
           </div>
           <p class="form-message" aria-live="polite"></p>
           <footer class="transaction-drawer-actions">
+            <button
+              class="secondary-button entity-archive-action"
+              id="archive-entity"
+              type="button"
+            >
+              Archive
+            </button>
             <button
               class="secondary-button"
               id="cancel-entity-edit"
@@ -1314,32 +1378,33 @@
     <script src="js/utils/app-utils.js"></script>
     <script src="js/utils/date-utils.js"></script>
     <script src="js/utils/transaction-row.js"></script>
-    <script src="js/utils/investment-view.js"></script>
+    <script src="js/utils/investment-view.js?v=2"></script>
     <script src="js/utils/import-utils.js"></script>
 
-    <script src="js/api.js"></script>
-    <script src="js/investments-api.js"></script>
+    <script src="js/api.js?v=2"></script>
+    <script src="js/investments-api.js?v=2"></script>
     <script src="js/import-api.js"></script>
     <script src="js/toast.js"></script>
     <script src="js/sync-notifications.js"></script>
     <script src="js/onboarding.js"></script>
-    <script src="js/investments.js"></script>
     <script src="js/router.js"></script>
     <script src="js/routes/transaction-drawer.js"></script>
-    <script src="js/routes/entity-drawer.js"></script>
+    <script src="js/routes/entity-drawer.js?v=2"></script>
     <script src="js/routes/investment-account-drawer.js"></script>
     <script src="js/routes/investment-month-drawer.js"></script>
     <script src="js/main.js"></script>
 
+    <script src="js/routes/dashboard.js?v=2"></script>
     <script src="js/routes/transactions.js"></script>
     <script src="js/routes/categories.js"></script>
     <script src="js/routes/vendors.js"></script>
     <script src="js/routes/people.js"></script>
     <script src="js/routes/import.js"></script>
     <script src="js/routes/sync.js"></script>
+    <script src="js/routes/entity-archive.js"></script>
     <script src="js/routes/entity-detail.js"></script>
     <script src="js/routes/settings.js"></script>
-    <script src="js/routes/investment-overview.js"></script>
+    <script src="js/routes/investment-overview.js?v=2"></script>
     <script src="js/routes/investment-accounts.js"></script>
     <script src="js/routes/investment-account-detail.js"></script>
   </body>

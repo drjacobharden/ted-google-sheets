@@ -141,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const exists = window.InvestmentAPI.accounts().some(
       (item) => item.id === params.investmentAccountId,
     );
-    if (!exists && !window.InvestmentUI.isLoaded()) return;
+    if (!exists && !window.InvestmentAPI.isLoaded()) return;
     if (open(params.investmentAccountId)) openedRouteKey = routeKey;
     else clearRoute();
   }

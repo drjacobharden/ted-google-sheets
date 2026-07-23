@@ -4,40 +4,49 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 function loadDateRange() {
+  const toISODate = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   const context = {
     window: { dispatchEvent: () => {} },
     document: { addEventListener: () => {}, querySelectorAll: () => [] },
+    HTMLElement: class {},
+    customElements: { define: () => {} },
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+    toISODate,
+    fromISODate: (value) => value ? new Date(`${value}T00:00:00`) : null,
+    shortDateFormatter: new Intl.DateTimeFormat("en-US"),
+    monthFormatter: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }),
     Intl, Date, Set,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("js/date-range.js", "utf8"), context);
-  return context.window.DateRangeUI;
+  vm.runInContext(fs.readFileSync("js/components/date-range-picker.js", "utf8"), context);
+  return context.window.DateRangePickerUtils;
 }
 
 test("date presets use inclusive local calendar boundaries", () => {
   const ranges = loadDateRange();
   const today = new Date(2026, 6, 14);
-  const week = ranges.presetRange("week", today);
+  const week = ranges.getPresetRange("week", today);
   assert.equal(week.start, "2026-07-12");
   assert.equal(week.end, "2026-07-18");
-  const month = ranges.presetRange("month", today);
+  const month = ranges.getPresetRange("month", today);
   assert.equal(month.start, "2026-07-01");
   assert.equal(month.end, "2026-07-31");
-  const quarter = ranges.presetRange("three-months", today);
+  const quarter = ranges.getPresetRange("three-months", today);
   assert.equal(quarter.start, "2026-05-01");
   assert.equal(quarter.end, "2026-07-31");
-  const year = ranges.presetRange("year", today);
+  const year = ranges.getPresetRange("year", today);
   assert.equal(year.start, "2026-01-01");
   assert.equal(year.end, "2026-12-31");
-  assert.equal(ranges.matches("2026-01-01", year), true);
-  assert.equal(ranges.matches("2026-12-31", year), true);
-  assert.equal(ranges.matches("2027-01-01", year), false);
-  assert.equal(ranges.matches("1900-01-01", ranges.presetRange("all", today)), true);
+  assert.equal(year.start <= "2026-01-01" && year.end >= "2026-12-31", true);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(ranges.getPresetRange("all", today))),
+    { preset: "all", start: "", end: "", label: "All time" },
+  );
 });
 
 test("custom date selection keeps draft ranges ordered and supports a single day", () => {
-  const { resolveDraftSelection } = loadDateRange().__testing;
+  const { resolveDraftSelection } = loadDateRange();
   const select = (...args) => JSON.parse(JSON.stringify(resolveDraftSelection(...args)));
   assert.deepEqual(select("", "", "2026-07-14"), { start: "2026-07-14", end: "" });
   assert.deepEqual(select("2026-07-14", "", "2026-07-20"), { start: "2026-07-14", end: "2026-07-20" });
@@ -46,13 +55,11 @@ test("custom date selection keeps draft ranges ordered and supports a single day
   assert.deepEqual(select("2026-07-14", "2026-07-20", "2026-08-01"), { start: "2026-08-01", end: "" });
 });
 
-test("calendar clicks remain internal after the clicked day is replaced", () => {
-  const { eventOccurredWithin } = loadDateRange().__testing;
-  const root = { contains: () => false };
-  const replacedDay = {};
-  assert.equal(eventOccurredWithin(root, { target: replacedDay, composedPath: () => [replacedDay, root] }), true);
-  assert.equal(eventOccurredWithin(root, { target: replacedDay, composedPath: () => [replacedDay] }), false);
-  assert.equal(eventOccurredWithin({ contains: (target) => target === replacedDay }, { target: replacedDay }), true);
+test("calendar day buttons remain attached across range updates", () => {
+  const component = fs.readFileSync("js/components/date-range-picker.js", "utf8");
+  assert.match(component, /this\.\#grid\.replaceChildren\(\.\.\.buttons\)/);
+  assert.match(component, /const buttons = this\.\#grid\.children/);
+  assert.doesNotMatch(component, /#renderCalendar\(\)[\s\S]*replaceChildren/);
 });
 
 test("custom date Apply uses a disabled cursor rather than a loading cursor", () => {

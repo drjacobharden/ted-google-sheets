@@ -14,6 +14,8 @@
   let syncPromise = null;
   let retryTimer = null;
   let bootstrapped = false;
+  let loaded = false;
+  let loadPromise = null;
 
   const read = (key) => { try { const value = JSON.parse(localStorage.getItem(key)); return Array.isArray(value) ? value : []; } catch { return []; } };
   const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -171,17 +173,32 @@
 
   function applyBootstrapData(data) {
     applyServerData(data?.investmentAccounts, data?.investmentBalances, data?.investmentContributions);
+    loaded = true;
     emit("budget:investments-changed");
+    emit("budget:investments-loaded");
     return { accounts: accounts().map(hydrateAccount), balances: balances().map(hydrateBalance), contributions: contributions().map(hydrateContribution) };
   }
 
-  async function load(options = {}) {
-    if (endpoint() && (!bootstrapped || options.refresh)) {
-      const [serverAccounts, serverBalances, serverContributions] = await Promise.all([request("listInvestmentAccounts", {}), request("listInvestmentBalances", {}), request("listInvestmentContributions", {})]);
-      applyServerData(serverAccounts, serverBalances, serverContributions);
-    }
-    emit("budget:investments-changed");
+  function loadedData() {
     return { accounts: accounts().map(hydrateAccount), balances: balances().map(hydrateBalance), contributions: contributions().map(hydrateContribution) };
+  }
+
+  function isLoaded() { return loaded; }
+
+  function load(options = {}) {
+    if (loaded && !options.refresh) return Promise.resolve(loadedData());
+    if (loadPromise) return loadPromise;
+    loadPromise = (async () => {
+      if (endpoint() && (!bootstrapped || options.refresh)) {
+        const [serverAccounts, serverBalances, serverContributions] = await Promise.all([request("listInvestmentAccounts", {}), request("listInvestmentBalances", {}), request("listInvestmentContributions", {})]);
+        applyServerData(serverAccounts, serverBalances, serverContributions);
+      }
+      loaded = true;
+      emit("budget:investments-changed");
+      emit("budget:investments-loaded");
+      return loadedData();
+    })().finally(() => { loadPromise = null; });
+    return loadPromise;
   }
 
   function validateAccount(input) {
@@ -314,11 +331,55 @@
   function retry(source, id) { const key = source === "investmentAccount" ? KEYS.accountOutbox : KEYS.monthOutbox; const items = source === "investmentAccount" ? accountOutbox() : monthOutbox(); write(key, items.map((item) => (item.id || item.record.id) === id && item.status !== "syncing" && item.failureCode !== "conflict" ? { ...item, status: "pending", nextRetryAt: 0, error: "", failureCode: "" } : item)); emit("budget:sync-changed"); scheduleNext(); }
   function discard(source, id) { if (source === "investmentAccount") { if (monthOutbox().some((item) => item.accountId === id)) throw new Error("Discard dependent monthly updates first."); write(KEYS.accountOutbox, accountOutbox().filter((item) => item.record.id !== id)); write(KEYS.accounts, accounts().filter((item) => item.id !== id)); } else { const item = monthOutbox().find((entry) => entry.id === id); write(KEYS.monthOutbox, monthOutbox().filter((entry) => entry.id !== id)); const restore = item?.current || item?.base; if (restore) applyLocalMonth(restore); } emit("budget:sync-changed"); emit("budget:investments-changed"); scheduleNext(); }
 
-  function calculate(transactions, range) { const within = (month) => (!range?.start || month >= range.start) && (!range?.end || month <= range.end); const startDate = range?.start ? `${range.start}-01` : ""; const endDate = range?.end ? `${range.end}-31` : ""; const tx = transactions.filter((item) => (!startDate || item.date >= startDate) && (!endDate || item.date <= endDate)); const income = tx.filter((item) => item.type === "income").reduce((sum, item) => sum + Number(item.amount || 0), 0); const spending = tx.filter((item) => item.type !== "income").reduce((sum, item) => sum + Number(item.amount || 0), 0); const accountSources = new Map(accounts().map((account) => [account.id, account.source])); const period = contributions().filter((item) => within(item.month)); const paycheckContributions = period.filter((item) => accountSources.get(item.accountId) === "paycheck").reduce((sum, item) => sum + item.amount, 0); const manualContributions = period.filter((item) => accountSources.get(item.accountId) !== "paycheck").reduce((sum, item) => sum + item.amount, 0); const budgetSurplus = income - spending; return { income, spending, budgetSurplus, paycheckContributions, manualContributions, totalSavings: budgetSurplus + paycheckContributions }; }
+  function calculate(transactions, range) {
+    const start = String(range?.start || "");
+    const end = String(range?.end || "");
+    const startMonth = start.slice(0, 7);
+    const endMonth = end.slice(0, 7);
+    const within = (month) =>
+      (!startMonth || month >= startMonth) &&
+      (!endMonth || month <= endMonth);
+    const startDate = start
+      ? (start.length === 7 ? `${start}-01` : start)
+      : "";
+    const endDate = end
+      ? (end.length === 7 ? `${end}-31` : end)
+      : "";
+    const tx = transactions.filter(
+      (item) =>
+        (!startDate || item.date >= startDate) &&
+        (!endDate || item.date <= endDate),
+    );
+    const income = tx
+      .filter((item) => item.type === "income")
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const spending = tx
+      .filter((item) => item.type !== "income")
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const accountSources = new Map(
+      accounts().map((account) => [account.id, account.source]),
+    );
+    const period = contributions().filter((item) => within(item.month));
+    const paycheckContributions = period
+      .filter((item) => accountSources.get(item.accountId) === "paycheck")
+      .reduce((sum, item) => sum + item.amount, 0);
+    const manualContributions = period
+      .filter((item) => accountSources.get(item.accountId) !== "paycheck")
+      .reduce((sum, item) => sum + item.amount, 0);
+    const budgetSurplus = income - spending;
+    return {
+      income,
+      spending,
+      budgetSurplus,
+      paycheckContributions,
+      manualContributions,
+      totalSavings: budgetSurplus + paycheckContributions,
+    };
+  }
   function calculateGrowth(openingBalance, endingBalance, periodFlows) { if (openingBalance === null || openingBalance === undefined || endingBalance === null || endingBalance === undefined) return null; return Number(endingBalance) - Number(openingBalance) - periodFlows.reduce((sum, item) => sum + Number(item.amount ?? item.contribution ?? 0), 0); }
 
   const originalSyncItems = window.BudgetAPI.getSyncItems.bind(window.BudgetAPI); window.BudgetAPI.getSyncItems = () => [...originalSyncItems(), ...syncItems()];
-  window.InvestmentAPI = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, applyBootstrapData, addAccount, updateAccount, archiveAccount, queueMonth, queueImportedMonths, awaitImportedMonths, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard };
+  window.InvestmentAPI = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, isLoaded, applyBootstrapData, addAccount, updateAccount, archiveAccount, queueMonth, queueImportedMonths, awaitImportedMonths, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard };
   window.addEventListener("online", () => { write(KEYS.accountOutbox, accountOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); write(KEYS.monthOutbox, monthOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); sync(); });
   window.addEventListener("offline", () => { if (retryTimer) clearTimeout(retryTimer); retryTimer = null; emit("budget:sync-changed"); }); scheduleNext();
 })();

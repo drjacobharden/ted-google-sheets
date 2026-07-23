@@ -189,6 +189,7 @@ body.onboarding-open {
   margin-top: 20px;
 }
 .investment-chart {
+  position: relative;
   min-height: 240px;
   padding: 12px 20px 20px;
 }
@@ -209,6 +210,61 @@ body.onboarding-open {
 }
 .investment-chart .trend-contribution-line {
   stroke: #a56824;
+}
+.trend-scrub-hitbox {
+  cursor: crosshair;
+  outline: none;
+  touch-action: none;
+}
+.trend-scrub-hitbox:focus-visible {
+  stroke: rgba(111, 157, 102, 0.55);
+  stroke-width: 2;
+}
+.trend-scrub-guide {
+  stroke: #9ca49a;
+  stroke-dasharray: 4 4;
+  stroke-width: 1.5;
+}
+.trend-scrub-balance-marker,
+.trend-scrub-contribution-marker {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.trend-scrub-contribution-marker {
+  stroke: #737873;
+}
+.trend-scrub-tooltip {
+  position: absolute;
+  z-index: 3;
+  top: 42px;
+  width: min(230px, calc(100% - 16px));
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 12px 30px rgba(25, 34, 25, 0.14);
+  pointer-events: none;
+}
+.trend-scrub-tooltip strong,
+.trend-scrub-tooltip span {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.trend-scrub-tooltip strong {
+  margin-bottom: 7px;
+  font-size: 13px;
+}
+.trend-scrub-tooltip span {
+  padding-top: 4px;
+  color: var(--text);
+  font-size: 11px;
+}
+.trend-scrub-tooltip em {
+  color: var(--muted);
+  font-style: normal;
 }
 .investment-chart .trend-grid line {
   stroke: var(--border);
@@ -1613,6 +1669,21 @@ tbody tr:hover {
   color: var(--muted);
   text-align: center;
 }
+.category-panel:has(.entity-empty) {
+  display: flex;
+  min-height: clamp(420px, calc(100vh - 270px), 680px);
+  flex-direction: column;
+}
+.category-list:has(.entity-empty) {
+  display: flex;
+  max-height: none;
+  flex: 1;
+}
+.category-list:has(.entity-empty) .entity-empty {
+  width: 100%;
+  min-height: 100%;
+  flex: 1;
+}
 .entity-empty strong {
   color: var(--text);
   font-size: 15px;
@@ -1622,6 +1693,29 @@ tbody tr:hover {
 }
 .add-category-card .primary-button {
   width: 100%;
+}
+.archived-entity-link {
+  width: 100%;
+  margin-top: 10px;
+  text-decoration: none;
+}
+.archived-entity-panel {
+  margin-top: 18px;
+}
+.archived-avatar {
+  background: #f1f1ef;
+  color: var(--muted);
+}
+
+.ledger-card:has(> .transaction-state:not([hidden])),
+.ledger-card:has(> .investment-empty:not([hidden])) {
+  display: flex;
+  min-height: clamp(430px, calc(100vh - 330px), 720px);
+  flex-direction: column;
+}
+.ledger-card:has(> .transaction-state:not([hidden])) > .transaction-state,
+.ledger-card:has(> .investment-empty:not([hidden])) > .investment-empty {
+  flex: 1;
 }
 
 .settings-grid {
@@ -1950,6 +2044,7 @@ tbody tr:hover {
   color: var(--muted);
 }
 .sync-empty {
+  min-height: clamp(340px, calc(100vh - 280px), 650px);
   padding: 54px 24px;
   text-align: center;
 }
@@ -2147,6 +2242,11 @@ body.drawer-open {
   justify-content: flex-end;
   gap: 10px;
 }
+.entity-archive-action {
+  margin-right: auto;
+  border-color: #e4c4c1;
+  color: var(--danger);
+}
 .transaction-drawer-controls {
   margin-top: auto;
   padding-top: 22px;
@@ -2286,10 +2386,11 @@ tr[data-transaction-id]:focus-visible {
     justify-content: stretch;
   }
   .date-range-presets {
-    width: 100%;
+    width: fit-content;
+    max-width: 100%;
   }
   .date-range-presets button {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
   }
   .range-calendar-popover {
     right: auto;
@@ -2305,6 +2406,12 @@ tr[data-transaction-id]:focus-visible {
   }
   .entity-summary-grid {
     grid-template-columns: 1fr;
+  }
+  .category-panel:has(.entity-empty),
+  .ledger-card:has(> .transaction-state:not([hidden])),
+  .ledger-card:has(> .investment-empty:not([hidden])),
+  .sync-empty {
+    min-height: 360px;
   }
   .transaction-drawer {
     width: 100%;

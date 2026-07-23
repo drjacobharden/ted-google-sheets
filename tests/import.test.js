@@ -5,7 +5,7 @@ const vm = require("node:vm");
 
 function loadUtils() {
   const window = {};
-  vm.runInNewContext(fs.readFileSync("js/import-utils.js", "utf8"), {
+  vm.runInNewContext(fs.readFileSync("js/utils/import-utils.js", "utf8"), {
     window, String, Number, Date, Math, JSON, Map, Set, Error,
   });
   return window.ImportUtils;
@@ -238,7 +238,7 @@ test("import route and scripts are wired for direct index loading", () => {
   const api = fs.readFileSync("js/import-api.js", "utf8");
   assert.match(html, /data-tab="import"/);
   assert.match(html, /id="route-import"/);
-  assert.match(html, /js\/import-utils\.js[\s\S]*js\/api\.js[\s\S]*js\/import-api\.js/);
+  assert.match(html, /js\/utils\/import-utils\.js[\s\S]*js\/api\.js[\s\S]*js\/import-api\.js/);
   assert.match(router, /"import"/);
   const route = fs.readFileSync("js/routes/import.js", "utf8");
   assert.match(route, /Step 1 of 6 · Date/);

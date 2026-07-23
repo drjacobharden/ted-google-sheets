@@ -46,6 +46,7 @@
   let entityRetryTimer = null;
   let batchEntitiesSupported = null;
   let appDataPromise = null;
+  let archivedEntitiesPromise = null;
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -99,6 +100,7 @@
     batchTransactionUpdatesSupported = null;
     batchEntitiesSupported = null;
     appDataPromise = null;
+    archivedEntitiesPromise = null;
   }
 
   function migrateLocalData() {
@@ -253,6 +255,51 @@
   function listVendors() { ensureLocalData(); return active(readArray(KEYS.vendors)).sort((a, b) => a.name.localeCompare(b.name)); }
   function listPeople() { ensureLocalData(); return active(readArray(KEYS.assignments)).sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)); }
 
+  function archivedEntityCollections() {
+    ensureLocalData();
+    const archived = (key) =>
+      readArray(key)
+        .filter((item) => item.active === false && !item.isDefault)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      categories: archived(KEYS.categories),
+      vendors: archived(KEYS.vendors),
+      assignments: archived(KEYS.assignments),
+    };
+  }
+
+  function mergeArchivedEntityCollections(collections) {
+    [
+      ["categories", KEYS.categories],
+      ["vendors", KEYS.vendors],
+      ["assignments", KEYS.assignments],
+    ].forEach(([name, key]) => {
+      const incoming = Array.isArray(collections?.[name])
+        ? collections[name]
+        : [];
+      const activeRecords = readArray(key).filter((item) => item.active !== false);
+      writeArray(key, [...activeRecords, ...incoming]);
+    });
+  }
+
+  async function listArchivedEntities(options = {}) {
+    ensureLocalData();
+    if (!getConfig().endpoint) return archivedEntityCollections();
+    if (options.refresh) archivedEntitiesPromise = null;
+    if (!archivedEntitiesPromise) {
+      archivedEntitiesPromise = request("listArchivedEntities")
+        .then((collections) => {
+          mergeArchivedEntityCollections(collections);
+          return archivedEntityCollections();
+        })
+        .catch((error) => {
+          archivedEntitiesPromise = null;
+          throw error;
+        });
+    }
+    return archivedEntitiesPromise;
+  }
+
   function entityStorageKey(kind) {
     return { category: KEYS.categories, vendor: KEYS.vendors, assignment: KEYS.assignments }[kind];
   }
@@ -270,11 +317,23 @@
   function addEntity(kind, input) {
     const name = String(input.name || "").trim();
     if (!name) throw new Error(`Enter a ${kind === "assignment" ? "person’s" : kind} name.`);
-    const records = kind === "category" ? listCategories({ type: input.type || "expense" }) : kind === "vendor" ? listVendors() : listPeople();
-    if (records.some((item) => item.name.toLowerCase() === name.toLowerCase())) throw new Error(`That ${kind} already exists.`);
-    const record = canonicalRecord({ id: uuid(), name, active: true, isDefault: false, ...(kind === "category" ? { type: input.type || "expense" } : {}) });
     const key = entityStorageKey(kind);
-    const all = readArray(key); all.push(record); writeArray(key, all);
+    const type = kind === "category" ? input.type || "expense" : "";
+    const all = readArray(key);
+    const matching = all.find(
+      (item) =>
+        entityNameKey(kind, item) === entityNameKey(kind, { name, type }),
+    );
+    if (matching && matching.active !== false) throw new Error(`That ${kind} already exists.`);
+    const record = matching
+      ? { ...matching, name, active: true, updatedAt: now() }
+      : canonicalRecord({ id: uuid(), name, active: true, isDefault: false, ...(kind === "category" ? { type } : {}) });
+    if (matching) {
+      all[all.findIndex((item) => item.id === matching.id)] = record;
+    } else {
+      all.push(record);
+    }
+    writeArray(key, all);
     if (getConfig().endpoint) {
       const outbox = getEntityOutbox();
       outbox.push({ kind, record, status: "pending", attempts: 0, nextRetryAt: 0, error: "" });
@@ -290,9 +349,19 @@
     const name = String(input?.name || "").trim().replace(/\s+/g, " ");
     if (!name) throw new Error(`Enter a ${kind === "assignment" ? "person’s" : kind} name.`);
     const type = kind === "category" && input?.type === "income" ? "income" : "expense";
-    const existing = kind === "category" ? listCategories({ type }) : kind === "vendor" ? listVendors() : listPeople();
+    const existing = readArray(entityStorageKey(kind));
     const match = existing.find((item) => entityNameKey(kind, item) === entityNameKey(kind, { name, type }));
-    if (match) return { ...match, provisional: false };
+    if (match && match.active !== false) return { ...match, provisional: false };
+    if (match) {
+      return {
+        ...match,
+        name,
+        active: true,
+        updatedAt: now(),
+        provisional: false,
+        _reactivate: true,
+      };
+    }
     return canonicalRecord({
       id: input?.id || uuid(), name, active: true, isDefault: false,
       ...(kind === "category" ? { type } : {}),
@@ -307,12 +376,21 @@
     const records = readArray(key); const index = records.findIndex((item) => item.id === input.id);
     if (index < 0) throw new Error(`That ${kind} could not be found.`);
     const record = { ...records[index], ...input, name: String(input.name || records[index].name).trim(), updatedAt: now() };
+    if (records.some((item) => item.id !== record.id && item.active !== false && entityNameKey(kind, item) === entityNameKey(kind, record))) {
+      throw new Error(`That ${kind} already exists.`);
+    }
     const action = { category: "updateCategory", vendor: "updateVendor", assignment: "updateAssignment" }[kind];
     const saved = getConfig().endpoint ? await request(action, { body: { [kind]: record } }) : record;
     records[index] = saved; writeArray(key, records);
     window.dispatchEvent(new CustomEvent(entityEvent(kind), { detail: saved }));
     return saved;
   }
+  function getEntity(kind, id) {
+    const key = entityStorageKey(kind);
+    return key ? readArray(key).find((item) => item.id === id) || null : null;
+  }
+  const reactivateEntity = (kind, input) =>
+    updateEntity(kind, { ...input, active: true });
   async function archiveEntity(kind, id) {
     const key = { category: KEYS.categories, vendor: KEYS.vendors, assignment: KEYS.assignments }[kind];
     const records = readArray(key); const index = records.findIndex((item) => item.id === id);
@@ -426,7 +504,15 @@
       try {
         const bodyKey = entityBodyKey(item.kind);
         const record = await request(entityAction(item.kind), { body: { [bodyKey]: item.record } });
-        saved.push({ kind: item.kind, record });
+        if (record.id !== item.record.id) {
+          reconciled.push({
+            kind: item.kind,
+            requestedId: item.record.id,
+            record,
+          });
+        } else {
+          saved.push({ kind: item.kind, record });
+        }
       } catch (error) {
         if (!error.isApiError) throw error;
         if (/already exists/i.test(error.message)) {
@@ -454,9 +540,9 @@
         record: createImportedEntityDraft(item.kind, requested),
       };
     });
-    const resolved = prepared.filter((item) => item.record.id !== item.requestedId)
+    const resolved = prepared.filter((item) => item.record.id !== item.requestedId && !item.record._reactivate)
       .map((item) => ({ kind: item.kind, requestedId: item.requestedId, record: item.record }));
-    const items = prepared.filter((item) => item.record.id === item.requestedId);
+    const items = prepared.filter((item) => item.record.id === item.requestedId || item.record._reactivate);
     for (let offset = 0; offset < items.length; offset += OUTBOX_BATCH_SIZE) {
       const batch = items.slice(offset, offset + OUTBOX_BATCH_SIZE);
       const result = await sendEntityBatch(batch);
@@ -1197,9 +1283,10 @@
     retryFailedTransactions, retryTransaction, discardTransactionChange, removeFailedTransactions,
     getEntitySyncStatus, getEntityOutboxStatus, syncEntityOutbox, retryEntity, discardEntityChange, removeFailedEntity,
     createImportedEntityDraft, commitImportedEntities, awaitImportedTransactions,
-    listCategories, addCategory, updateCategory: (input) => updateEntity("category", input), archiveCategory: (id) => archiveEntity("category", id),
-    listVendors, addVendor, updateVendor: (input) => updateEntity("vendor", input), archiveVendor: (id) => archiveEntity("vendor", id),
-    listPeople, addPerson, updatePerson: (input) => updateEntity("assignment", input), archivePerson: (id) => archiveEntity("assignment", id),
+    listArchivedEntities, getEntity,
+    listCategories, addCategory, updateCategory: (input) => updateEntity("category", input), reactivateCategory: (input) => reactivateEntity("category", input), archiveCategory: (id) => archiveEntity("category", id),
+    listVendors, addVendor, updateVendor: (input) => updateEntity("vendor", input), reactivateVendor: (input) => reactivateEntity("vendor", input), archiveVendor: (id) => archiveEntity("vendor", id),
+    listPeople, addPerson, updatePerson: (input) => updateEntity("assignment", input), reactivatePerson: (input) => reactivateEntity("assignment", input), archivePerson: (id) => archiveEntity("assignment", id),
     listUsers, addUser, updateUser, getActiveUser, setActiveUser,
     testConnection,
   };
