@@ -139,10 +139,6 @@ const userFormTemplate = () => `
 
     #renderProfile(user = window.BudgetAPI.getActiveUser()) {
       this.#monogram.textContent = monogram(user);
-      document.getElementById("profile-monogram").textContent = monogram(user);
-      document.getElementById("profile-name").textContent = user
-        ? fullName(user)
-        : "Choose user";
     }
 
     #populateForm(user) {

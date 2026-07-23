@@ -1,49 +1,13 @@
 /* This file contains styles that serve as a base for raw components and for wrapping the screen */
 
-/* 
-The app shell is the container that wraps around the app as a whole, separating it from the background.
-This creates the card-like effect where the content sits on top of the background behind it.
-    - Uses a grid layout with both columns and rows
-    - There are two columns
-        - Column 1 is 280 pixels wide and serves as the sidebar
-        - Column 2 is the main content area and it takes up the rest of the available space
-    - There is one row using all the available vertical space
-    - The width can take up the whole screen but will not be larger than 1480 pixels
-    - The height is 48 pixels less than the height of the screen (viewport height or vh)
-    - The margin centers the content horizontally
-    - Any content that tries to flow out will get clipped
-    - The background is set as the surface token
-    - There is a 1 pixel wide border around the whole card
-    - The corners are rounded with the large radius token
-    - There is a shadow around the card providing some elevation off the background
-*/
+/* Full-viewport base layer shared by the sidebar and elevated workspace. */
 .app-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  width: min(1480px, 100%);
-  height: calc(100vh - 48px);
-  margin: 0 auto;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-large);
-  box-shadow: var(--shadow);
-}
-
-/* 
-The top section of the content area containing the profile button
-    - Flex display with a horizontal row layout
-    - Height is fixed at 92 pixels
-    - Items are aligned horizontally on their midline and shifted to the right (end) side
-    - There is 30 pixels of horizontal padding
-    - There is a 1 pixel border on the bottom edge between this and the rest of the content area
-*/
-.topbar {
-  display: flex;
-  height: 92px;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 30px;
-  border-bottom: 1px solid var(--border);
+  background: var(--sidebar-background);
 }

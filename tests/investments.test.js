@@ -117,6 +117,41 @@ test("all-time investment trend inserts missing calendar months", () => {
   assert.deepEqual(Array.from(result.balances), [100, 200, 300]);
 });
 
+test("atomically queues imported investment months with multiple signed flows", () => {
+  const runtime = loadInvestments();
+  const account = runtime.api.addAccount({ name: "Retirement", source: "paycheck" });
+  const saved = runtime.api.queueImportedMonths([
+    { accountId: account.id, month: "2026-06", balance: 1000, notes: "June", contributions: [{ amount: 50 }, { amount: -10 }] },
+    { accountId: account.id, month: "2026-07", balance: 1100, notes: "July", contributions: [{ amount: 60 }] },
+  ]);
+  assert.equal(saved.length, 2);
+  const contributions = JSON.parse(runtime.values.get("myFinance.investmentContributions.v1"));
+  assert.deepEqual(contributions.map((item) => item.amount), [50, -10, 60]);
+
+  const beforeBalances = runtime.values.get("myFinance.investmentBalances.v1");
+  assert.throws(() => runtime.api.queueImportedMonths([
+    { accountId: account.id, month: "2026-08", balance: 1200, contributions: [] },
+    { accountId: account.id, month: "bad", balance: 1300, contributions: [] },
+  ]), /reporting month/);
+  assert.equal(runtime.values.get("myFinance.investmentBalances.v1"), beforeBalances);
+});
+
+test("awaiting imported investment months resolves after Sheet confirmation", async () => {
+  const accountId = "00000000-0000-4000-8000-000000000777";
+  const runtime = loadInvestments({
+    endpoint: "https://script.google.com/macros/s/test/exec",
+    values: {
+      "myFinance.investmentAccounts.v1": JSON.stringify([{ id: accountId, name: "Brokerage", source: "manual", active: true }]),
+    },
+  });
+  const [queued] = runtime.api.queueImportedMonths([
+    { accountId, month: "2026-07", balance: 1500, contributions: [{ amount: 100 }] },
+  ]);
+  assert.ok(queued.syncOperationId);
+  await runtime.api.awaitImportedMonths([queued.syncOperationId]);
+  assert.equal(runtime.api.hasUnsynced(), false);
+});
+
 test("investment overview trend renders two series and a currency y axis", () => {
   const view = loadInvestmentView({
     accounts: [{ id: "account" }],

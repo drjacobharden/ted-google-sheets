@@ -60,6 +60,29 @@ test("custom date Apply uses a disabled cursor rather than a loading cursor", ()
   assert.match(css, /\.range-calendar-actions \.primary-button:disabled\s*\{\s*cursor: not-allowed;/);
 });
 
+test("shell fills the viewport and elevates only the desktop workspace", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const shell = fs.readFileSync("css/shell.css", "utf8");
+  const navigation = fs.readFileSync("css/navigation-bar.css", "utf8");
+  const responsive = fs.readFileSync("css/responsiveness.css", "utf8");
+  const userForm = fs.readFileSync("js/components/user-form.js", "utf8");
+
+  assert.doesNotMatch(html, /class="topbar"/);
+  assert.doesNotMatch(html, /id="profile-(?:name|monogram)"/);
+  assert.doesNotMatch(userForm, /getElementById\("profile-(?:name|monogram)"\)/);
+  assert.match(shell, /\.app-shell\s*\{[\s\S]*width: 100vw;[\s\S]*height: 100dvh;/);
+  assert.match(shell, /\.app-shell\s*\{[\s\S]*background: var\(--sidebar-background\);/);
+  assert.match(styles, /\.workspace\s*\{[\s\S]*margin: 12px 12px 12px 0;[\s\S]*box-shadow: var\(--shadow\);/);
+  assert.match(styles, /\.content\s*\{[\s\S]*padding: 30px 36px 34px;/);
+  assert.match(styles, /\.screen\s*\{[\s\S]*width: 100%;[\s\S]*max-width: none;/);
+  assert.match(styles, /\.category-layout\s*\{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(280px, 360px\);/);
+  assert.match(styles, /@media \(max-width: 860px\)[\s\S]*\.workspace\s*\{[\s\S]*margin: 0;[\s\S]*box-shadow: none;/);
+  assert.match(responsive, /@media \(max-width: 860px\)[\s\S]*\.app-shell\s*\{[\s\S]*grid-template-columns: 1fr;[\s\S]*height: 100dvh;/);
+  assert.match(navigation, /\.sidebar-nav\s*\{[\s\S]*padding: 26px 16px 20px;/);
+  assert.doesNotMatch(navigation, /\.sidebar\s*\{[\s\S]*?border-right:/);
+});
+
 test("transaction entry exposes an accessible vendor combobox", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const vendor = fs.readFileSync("js/components/vendor-input.js", "utf8");

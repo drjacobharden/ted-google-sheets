@@ -276,6 +276,19 @@
     window.dispatchEvent(new CustomEvent(entityEvent(kind), { detail: record }));
     return record;
   }
+  function createImportedEntityDraft(kind, input) {
+    if (!entityStorageKey(kind)) throw new Error("Choose a supported import entity type.");
+    const name = String(input?.name || "").trim().replace(/\s+/g, " ");
+    if (!name) throw new Error(`Enter a ${kind === "assignment" ? "person’s" : kind} name.`);
+    const type = kind === "category" && input?.type === "income" ? "income" : "expense";
+    const existing = kind === "category" ? listCategories({ type }) : kind === "vendor" ? listVendors() : listPeople();
+    const match = existing.find((item) => entityNameKey(kind, item) === entityNameKey(kind, { name, type }));
+    if (match) return { ...match, provisional: false };
+    return canonicalRecord({
+      id: input?.id || uuid(), name, active: true, isDefault: false,
+      ...(kind === "category" ? { type } : {}),
+    });
+  }
   const addCategory = (input) => addEntity("category", { ...input, type: input.type || "expense" });
   const addVendor = (input) => addEntity("vendor", input);
   const addPerson = (input) => addEntity("assignment", input);
@@ -419,6 +432,43 @@
       }
     }
     return { saved, reconciled, failed };
+  }
+
+  async function commitImportedEntities(entities, onProgress) {
+    if (!getConfig().endpoint) throw new Error("Connect a Google Sheet before committing this import.");
+    if (browserIsOffline()) throw new Error("Reconnect to the internet before committing this import.");
+    const prepared = (entities || []).map((item) => {
+      const requested = item.record || item;
+      return {
+        kind: item.kind,
+        requestedId: requested.id,
+        record: createImportedEntityDraft(item.kind, requested),
+      };
+    });
+    const resolved = prepared.filter((item) => item.record.id !== item.requestedId)
+      .map((item) => ({ kind: item.kind, requestedId: item.requestedId, record: item.record }));
+    const items = prepared.filter((item) => item.record.id === item.requestedId);
+    for (let offset = 0; offset < items.length; offset += OUTBOX_BATCH_SIZE) {
+      const batch = items.slice(offset, offset + OUTBOX_BATCH_SIZE);
+      const result = await sendEntityBatch(batch);
+      result.saved.forEach((item) => {
+        replaceCachedEntity(item.kind, item.record.id, item.record);
+        window.dispatchEvent(new CustomEvent(entityEvent(item.kind), { detail: item.record }));
+        resolved.push({ kind: item.kind, requestedId: batch.find((entry) => entry.record.id === item.record.id)?.requestedId || item.record.id, record: item.record });
+      });
+      result.reconciled.forEach((item) => {
+        reconcileEntity(item.kind, item.requestedId, item.record);
+        resolved.push(item);
+      });
+      onProgress?.({ completed: Math.min(offset + batch.length, items.length), total: items.length });
+      if (result.failed.length) {
+        const error = new Error(result.failed.map((failure) => failure.error).join(" ") || "One or more imported items could not be created.");
+        error.partialResults = resolved.slice();
+        error.failures = result.failed;
+        throw error;
+      }
+    }
+    return resolved;
   }
 
   function scheduleEntitySync(delay = 0) {
@@ -685,6 +735,36 @@
     return queued;
   }
 
+  function queueImportedTransactions(transactions) {
+    if (!Array.isArray(transactions) || !transactions.length) throw new Error("Choose at least one ready transaction.");
+    const records = transactions.map(createTransactionRecord);
+    const ids = new Set();
+    records.forEach((record) => {
+      if (ids.has(record.id)) throw new Error("An imported transaction can only be queued once.");
+      ids.add(record.id);
+    });
+    const existingItems = getOutbox();
+    if (existingItems.some((item) => ids.has(item.record.id))) throw new Error("An imported transaction is already queued.");
+    if (!getConfig().endpoint) {
+      const all = readArray(KEYS.transactions);
+      all.push(...records);
+      writeArray(KEYS.transactions, all);
+      const saved = records.map(hydrateTransaction);
+      window.dispatchEvent(new CustomEvent("budget:transaction-saved", { detail: { saved, operation: "create" } }));
+      return saved;
+    }
+    const additions = records.map((record) => ({
+      operation: "create", record, baseRecord: null, revision: 1,
+      status: "pending", attempts: 0, nextRetryAt: 0, error: "",
+    }));
+    writeOutbox(existingItems.concat(additions));
+    const queued = additions.map(outboxTransaction);
+    window.dispatchEvent(new CustomEvent("budget:transactions-queued", { detail: { transactions: queued } }));
+    emitSyncStatus();
+    scheduleSync(0);
+    return queued;
+  }
+
   function createUpdatedTransactionRecord(transaction, base) {
     if (!base?.id || transaction.id !== base.id) throw new Error("That transaction could not be edited.");
     const type = transaction.type === "income" ? "income" : "expense";
@@ -881,6 +961,27 @@
     return syncPromise;
   }
 
+  async function awaitImportedTransactions(ids, onProgress) {
+    const targets = new Set((ids || []).map(String));
+    if (!targets.size) return [];
+    while (targets.size) {
+      if (browserIsOffline()) throw new Error("The import paused because the browser went offline.");
+      const items = [...targets].map((id) => getTransactionOutboxItem(id)).filter(Boolean);
+      const failed = items.find((item) => item.status === "failed");
+      if (failed) throw new Error(failed.error || "A transaction could not be saved.");
+      [...targets].forEach((id) => {
+        if (!getTransactionOutboxItem(id)) targets.delete(id);
+      });
+      onProgress?.({ completed: ids.length - targets.size, total: ids.length });
+      if (!targets.size) break;
+      const retrying = items.find((item) => item.status === "pending" && item.attempts > 0 && item.nextRetryAt > Date.now());
+      if (retrying) throw new Error(retrying.error || "The transaction sync paused and is ready to retry.");
+      await syncOutbox();
+      await Promise.resolve();
+    }
+    return ids;
+  }
+
   function retryFailedTransactions() {
     if (browserIsOffline()) throw new Error("Retry is available when you are back online.");
     writeOutbox(getOutbox().map((item) => item.status === "failed" ? { ...item, status: "pending", attempts: 0, nextRetryAt: 0, error: "" } : item));
@@ -977,10 +1078,11 @@
   window.BudgetAPI = {
     INCOME_CATEGORY_ID, SHARED_ASSIGNMENT_ID,
     getConfig, saveConfig, loadReferenceData,
-    listTransactions, addTransaction, queueTransaction, queueTransactionUpdate, syncOutbox,
+    listTransactions, addTransaction, queueTransaction, queueImportedTransactions, queueTransactionUpdate, syncOutbox,
     getOutboxTransactions, getOutboxStatus, getTransactionOutboxItem, getSyncItems,
     retryFailedTransactions, retryTransaction, discardTransactionChange, removeFailedTransactions,
     getEntitySyncStatus, getEntityOutboxStatus, syncEntityOutbox, retryEntity, discardEntityChange, removeFailedEntity,
+    createImportedEntityDraft, commitImportedEntities, awaitImportedTransactions,
     listCategories, addCategory, updateCategory: (input) => updateEntity("category", input), archiveCategory: (id) => archiveEntity("category", id),
     listVendors, addVendor, updateVendor: (input) => updateEntity("vendor", input), archiveVendor: (id) => archiveEntity("vendor", id),
     listPeople, addPerson, updatePerson: (input) => updateEntity("assignment", input), archivePerson: (id) => archiveEntity("assignment", id),

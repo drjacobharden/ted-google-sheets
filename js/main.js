@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
       categories: window.CategoryRoute,
       vendors: window.VendorRoute,
       people: window.PeopleRoute,
+      import: window.ImportRoute,
       transactions: window.TransactionsRoute,
       sync: window.SyncRoute,
       settings: window.SettingsRoute,
@@ -118,6 +119,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (["transactions", "entity-detail"].includes(name) && !state.loaded) {
       await loadTransactions();
       await ensureReferenceData();
+    }
+
+    if (name === "import") {
+      await ensureReferenceData();
+      await window.InvestmentUI?.load?.();
     }
 
     if (name.startsWith("investment-")) await window.InvestmentUI?.load?.();
@@ -277,6 +283,9 @@ document.addEventListener("DOMContentLoaded", () => {
   //  Add or update the transactions tate when a transaction starts syncing
   window.addEventListener("budget:transaction-queued", (event) =>
     upsertTransactions([event.detail.transaction]),
+  );
+  window.addEventListener("budget:transactions-queued", (event) =>
+    upsertTransactions(event.detail.transactions || []),
   );
 
   //  Add or update the tranasaction state when a transaction is saved

@@ -5,8 +5,9 @@
 body {
   min-width: 320px;
   height: 100vh;
+  height: 100dvh;
   margin: 0;
-  padding: 24px;
+  padding: 0;
   overflow: hidden;
   background:
     radial-gradient(
@@ -63,13 +64,18 @@ body.onboarding-open {
   display: flex;
   min-width: 0;
   min-height: 0;
+  margin: 12px 12px 12px 0;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-large);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 .app-notice {
   position: absolute;
   z-index: 50;
-  top: 104px;
+  top: 20px;
   right: 30px;
   display: flex;
   max-width: min(440px, calc(100% - 40px));
@@ -95,23 +101,6 @@ body.onboarding-open {
   font-size: 20px;
   line-height: 1;
 }
-.topbar {
-  display: flex;
-  height: 92px;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 30px;
-  border-bottom: 1px solid var(--border);
-}
-.profile-button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--accent-dark);
-}
 .profile-monogram {
   display: grid;
   width: 42px;
@@ -123,43 +112,17 @@ body.onboarding-open {
   font-size: 17px;
   font-weight: 600;
 }
-.profile-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  color: var(--text);
-  line-height: 1.2;
-}
-.profile-copy strong {
-  font-size: 14px;
-  font-weight: 650;
-}
-.profile-copy small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.profile-button svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: var(--text);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .content {
   min-height: 0;
   flex: 1;
-  padding: 30px 34px 34px;
+  padding: 30px 36px 34px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 .screen {
-  max-width: 1140px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
 }
 
 .heading-row {
@@ -1399,7 +1362,7 @@ tbody tr:hover {
 
 .category-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.75fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   gap: 18px;
   margin-top: 24px;
   align-items: start;
@@ -1759,13 +1722,6 @@ tbody tr:hover {
   body {
     padding: 0;
   }
-  .app-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-    height: 100vh;
-    border: 0;
-    border-radius: 0;
-  }
   .sidebar {
     min-height: auto;
     max-height: min(54vh, 520px);
@@ -1791,8 +1747,11 @@ tbody tr:hover {
   .sidebar-footer .nav-item {
     min-height: 44px;
   }
-  .topbar {
-    display: none;
+  .workspace {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
   .content {
     padding: 24px 20px;

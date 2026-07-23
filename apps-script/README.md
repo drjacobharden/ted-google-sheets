@@ -12,6 +12,9 @@ plain values rather than formulas.
 - `Assignments`: household assignments, including the seeded `Shared` record.
 - `Users`: app users referenced by each transaction's `createdBy` UUID.
 - `InvestmentAccounts`: UUID-backed accounts with a `paycheck` or `manual` contribution source.
+- `ImportProfiles`: reusable budget or investment CSV header and column mappings.
+- `ImportVendorMappings`: exact, profile-specific source-description to Vendor UUID mappings.
+- `ImportPersonMappings`: exact, profile-specific source-description to Assignment UUID mappings.
 - `InvestmentBalances`: one ending balance per account and reporting month.
 - `InvestmentContributions`: itemized signed investment flows; contributions are positive and withdrawals are negative.
 - `Ledger`: resolved names, native filters, and hidden ID columns.
@@ -106,6 +109,7 @@ repair.
 - Vendors: `listVendors`, `addVendor`, `updateVendor`, `archiveVendor`
 - Assignments: `listAssignments`, `addAssignment`, `updateAssignment`, `archiveAssignment`
 - Investments: `listInvestmentAccounts`, `addInvestmentAccounts`, `updateInvestmentAccount`, `archiveInvestmentAccount`, `listInvestmentBalances`, `listInvestmentContributions`, `saveInvestmentMonths`
+- Imports: `listImportProfiles`, `getImportProfileBundle`, `createImportProfile`, `updateImportProfile`, `archiveImportProfile`, `upsertImportMappings`
 - Maintenance: `health`, `rebuildLedger`
 
 POST bodies use `{ "action": "...", ... }`. Transaction responses contain

@@ -44,12 +44,13 @@ const categorySelectTemplate = () => `
 
   class CategorySelect extends HTMLElement {
     static get observedAttributes() {
-      return ["value", "type"];
+      return ["value", "type", "create-type"];
     }
 
     #controller = null;
     #form = null;
     #type = "expense";
+    #createType = "expense";
 
     get value() {
       return (
@@ -92,12 +93,16 @@ const categorySelectTemplate = () => `
       this.#controller?.close(options);
     }
 
+    configureOptions(options) {
+      this.#controller?.configure(options);
+    }
+
     get type() {
       return this.#type;
     }
 
     set type(value) {
-      const type = value === "income" ? "income" : "expense";
+      const type = value === "income" || value === "all" ? value : "expense";
 
       if (this.getAttribute("type") !== type) {
         this.setAttribute("type", type);
@@ -144,9 +149,10 @@ const categorySelectTemplate = () => `
       search.setAttribute("aria-controls", listId);
 
       this.#type =
-        initialType === "income" || initialType === "expense"
+        initialType === "income" || initialType === "expense" || initialType === "all"
           ? initialType
           : this.#getFormType();
+      this.#createType = this.getAttribute("create-type") === "income" ? "income" : "expense";
       this.#controller = new window.SelectCreateController({
         host: this,
         idInput: this.querySelector(".category-id-input"),
@@ -157,10 +163,11 @@ const categorySelectTemplate = () => `
         addButton: this.querySelector(".select-create-add"),
         list,
         message: this.querySelector(".select-create-message"),
-        getOptions: () =>
-          window.BudgetAPI.listCategories({ type: this.#type }),
+        getOptions: () => this.#type === "all"
+          ? window.BudgetAPI.listCategories()
+          : window.BudgetAPI.listCategories({ type: this.#type }),
         createOption: (name) =>
-          window.BudgetAPI.addCategory({ name, type: this.#type }),
+          window.BudgetAPI.addCategory({ name, type: this.#type === "all" ? this.#createType : this.#type }),
         onSelect: (category, state) => this.#handleSelection(category, state),
         onCreate: (category) => {
           this.dispatchEvent(
@@ -178,6 +185,7 @@ const categorySelectTemplate = () => `
         placeholder: "Select a category",
         entityLabel: "category",
         emptyLabel: "No matching categories",
+        allowCreate: true,
       });
 
       this.#controller.refresh(initialValue);
@@ -200,9 +208,11 @@ const categorySelectTemplate = () => `
       if (name === "value") this.#controller.setValue(newValue || "");
 
       if (name === "type") {
-        this.#type = newValue === "income" ? "income" : "expense";
+        this.#type = newValue === "income" || newValue === "all" ? newValue : "expense";
         this.#controller.refresh(this.value, { resetSearch: true });
       }
+
+      if (name === "create-type") this.#createType = newValue === "income" ? "income" : "expense";
     }
 
     handleEvent(event) {
@@ -228,7 +238,7 @@ const categorySelectTemplate = () => `
         '[name="type"]:checked',
       )?.value;
       const requestedType = this.getAttribute("type") || selectedType;
-      return requestedType === "income" ? "income" : "expense";
+      return requestedType === "income" || requestedType === "all" ? requestedType : "expense";
     }
 
     #handleSelection(category, { announce }) {

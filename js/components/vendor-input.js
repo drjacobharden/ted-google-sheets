@@ -88,6 +88,10 @@ const vendorSelectTemplate = () => `
       this.#controller?.close(options);
     }
 
+    configureOptions(options) {
+      this.#controller?.configure(options);
+    }
+
     connectedCallback() {
       const initialValue = Object.prototype.hasOwnProperty.call(this, "value")
         ? String(this.value || "")

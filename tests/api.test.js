@@ -768,3 +768,59 @@ test("merges server history with queued updates by UUID without dropping the opt
   assert.equal(transactions[0].syncOperation, "update");
   assert.equal(runtime.api.getOutboxStatus().total, 1);
 });
+
+test("atomically queues a large validated budget import", async () => {
+  const runtime = loadAPI();
+  await runtime.api.addUser({ firstName: "Import", lastName: "Tester" });
+  const vendor = runtime.api.addVendor({ name: "CSV Vendor" });
+  const category = runtime.api.listCategories({ type: "expense" })[0];
+  const rows = Array.from({ length: 55 }, (_, index) => ({
+    type: "expense", amount: index + 1, date: "2026-07-22", categoryId: category.id,
+    vendorId: vendor.id, assignmentId: runtime.api.SHARED_ASSIGNMENT_ID, notes: `Row ${index + 1}`,
+  }));
+  const saved = runtime.api.queueImportedTransactions(rows);
+  assert.equal(saved.length, 55);
+  assert.equal(JSON.parse(runtime.values.get("myFinance.transactions.v1")).length, 55);
+
+  const before = runtime.values.get("myFinance.transactions.v1");
+  assert.throws(() => runtime.api.queueImportedTransactions([
+    rows[0], { ...rows[1], amount: 0 },
+  ]), /non-zero/);
+  assert.equal(runtime.values.get("myFinance.transactions.v1"), before);
+});
+
+test("import entities stay provisional until a confirmed batch commit", async () => {
+  const seed = connectedSeed();
+  const requests = [];
+  const runtime = loadAPI(seed.values, async (_url, options) => {
+    const body = JSON.parse(options.body); requests.push(body);
+    return { ok: true, json: async () => ({ ok: true, data: {
+      saved: body.entities.map((item) => ({ kind: item.kind, record: item.record })),
+      reconciled: [], failed: [],
+    } }) };
+  });
+  const draft = runtime.api.createImportedEntityDraft("vendor", { name: "Imported Store" });
+  assert.equal(runtime.api.listVendors().some((item) => item.id === draft.id), false);
+  const resolved = await runtime.api.commitImportedEntities([{ kind: "vendor", record: draft }]);
+  assert.equal(requests[0].action, "addEntities");
+  assert.equal(resolved[0].requestedId, draft.id);
+  assert.equal(runtime.api.listVendors().some((item) => item.id === draft.id), true);
+});
+
+test("awaiting imported transactions returns only after their outbox records are confirmed", async () => {
+  const seed = connectedSeed();
+  const runtime = loadAPI(seed.values, async (_url, options) => {
+    const body = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ ok: true, data: {
+      saved: body.transactions.map((record) => ({ ...record, category: "Dining", vendor: "Cafe", assignment: "Shared", createdByName: "Ada Byron" })),
+      failed: [],
+    } }) };
+  });
+  const [queued] = runtime.api.queueImportedTransactions([{
+    type: "expense", amount: 10, date: "2026-07-23",
+    categoryId: "00000000-0000-4000-8000-000000000003",
+    vendorId: seed.vendorId, assignmentId: runtime.api.SHARED_ASSIGNMENT_ID, notes: "",
+  }]);
+  await runtime.api.awaitImportedTransactions([queued.id]);
+  assert.equal(runtime.api.getTransactionOutboxItem(queued.id), null);
+});

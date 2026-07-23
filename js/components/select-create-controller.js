@@ -35,6 +35,7 @@
 
   class SelectCreateController {
     #addButton;
+    #allowCreate;
     #createOption;
     #emptyLabel;
     #entityLabel;
@@ -72,6 +73,7 @@
       placeholder,
       entityLabel,
       emptyLabel,
+      allowCreate = true,
     }) {
       this.#host = host;
       this.#idInput = idInput;
@@ -89,6 +91,7 @@
       this.#placeholder = placeholder;
       this.#entityLabel = entityLabel;
       this.#emptyLabel = emptyLabel;
+      this.#allowCreate = allowCreate;
     }
 
     get value() {
@@ -150,6 +153,13 @@
       this.#list.removeEventListener("keydown", this);
       this.#host.removeEventListener("focusout", this);
       document.removeEventListener("click", this);
+    }
+
+    configure({ getOptions, createOption, onCreate } = {}) {
+      if (typeof getOptions === "function") this.#getOptions = getOptions;
+      if (typeof createOption === "function") this.#createOption = createOption;
+      if (typeof onCreate === "function") this.#onCreate = onCreate;
+      this.refresh(this.value);
     }
 
     handleEvent(event) {
@@ -310,7 +320,7 @@
     }
 
     async #addTypedOption() {
-      if (this.#isAdding) return;
+      if (this.#isAdding || !this.#allowCreate) return;
 
       const name = cleanName(this.#search.value);
       if (!name) return;
@@ -382,7 +392,7 @@
       const query = cleanName(this.#search.value);
       const canAdd = Boolean(query) && !this.#exactMatch(query);
 
-      this.#addButton.hidden = !canAdd && !this.#isAdding;
+      this.#addButton.hidden = !this.#allowCreate || (!canAdd && !this.#isAdding);
       this.#addButton.disabled = this.#isAdding;
       this.#addButton.textContent = this.#isAdding ? "Adding…" : "Add";
       this.#addButton.setAttribute(

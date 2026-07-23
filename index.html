@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="css/navigation-bar.css" />
     <link rel="stylesheet" href="css/toast.css" />
     <link rel="stylesheet" href="css/responsiveness.css" />
+    <link rel="stylesheet" href="css/import.css" />
 
     <!-- Component imports -->
     <script src="js/components/close-button.js" defer></script>
@@ -44,26 +45,6 @@
     <main class="app-shell">
       <!-- NAVIGATION BAR -->
       <aside class="sidebar">
-        <!-- Logo at the top left -->
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true">
-            <svg
-              width="100%"
-              height="100%"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M6 11V15M18 9V13M17 4C19.4487 4 20.7731 4.37476 21.4321 4.66544C21.5199 4.70415 21.5638 4.72351 21.6904 4.84437C21.7663 4.91682 21.9049 5.12939 21.9405 5.22809C22 5.39274 22 5.48274 22 5.66274V16.4111C22 17.3199 22 17.7743 21.8637 18.0079C21.7251 18.2454 21.5914 18.3559 21.3319 18.4472C21.0769 18.5369 20.562 18.438 19.5322 18.2401C18.8114 18.1017 17.9565 18 17 18C14 18 11 20 7 20C4.55129 20 3.22687 19.6252 2.56788 19.3346C2.48012 19.2958 2.43624 19.2765 2.3096 19.1556C2.23369 19.0832 2.09512 18.8706 2.05947 18.7719C2 18.6073 2 18.5173 2 18.3373L2 7.58885C2 6.68009 2 6.2257 2.13628 5.99214C2.2749 5.75456 2.40859 5.64412 2.66806 5.55281C2.92314 5.46305 3.43803 5.56198 4.46783 5.75985C5.18862 5.89834 6.04348 6 7 6C10 6 13 4 17 4ZM14.5 12C14.5 13.3807 13.3807 14.5 12 14.5C10.6193 14.5 9.5 13.3807 9.5 12C9.5 10.6193 10.6193 9.5 12 9.5C13.3807 9.5 14.5 10.6193 14.5 12Z"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </div>
-          <span>My Finance</span>
-        </div>
         <!-- Top portion of the nav bar -->
         <nav class="sidebar-nav" aria-label="Primary navigation">
           <button
@@ -137,6 +118,12 @@
                   />
                 </svg>
                 <span>People</span>
+              </button>
+              <button class="nav-item nav-subitem" type="button" data-tab="import">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3v12M7 10l5 5 5-5M4 19h16" />
+                </svg>
+                <span>Import</span>
               </button>
               <button
                 class="nav-item nav-subitem nav-action-item"
@@ -248,30 +235,6 @@
             ×
           </button>
         </div>
-        <!-- Profile button on top right -->
-        <header class="topbar">
-          <button
-            class="profile-button"
-            type="button"
-            data-tab="settings"
-            aria-label="Open settings"
-          >
-            <span
-              class="profile-monogram"
-              id="profile-monogram"
-              aria-hidden="true"
-              >?
-            </span>
-            <span class="profile-copy">
-              <strong id="profile-name">Choose user</strong>
-              <small>Settings</small>
-            </span>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m8 10 4 4 4-4" />
-            </svg>
-          </button>
-        </header>
-
         <!-- Main content area -->
         <div class="content">
           <div id="route-outlet"></div>
@@ -314,6 +277,10 @@
               </section>
             </div>
           </section>
+          <template id="route-import">
+            <section class="screen import-screen" data-screen="import"></section>
+          </template>
+
           <!-- Transaction list tab -->
           <template id="route-transactions">
             <section class="screen" data-screen="transactions">
@@ -1298,9 +1265,11 @@
     <script src="js/utils/date-utils.js"></script>
     <script src="js/utils/transaction-row.js"></script>
     <script src="js/utils/investment-view.js"></script>
+    <script src="js/import-utils.js"></script>
 
     <script src="js/api.js"></script>
     <script src="js/investments-api.js"></script>
+    <script src="js/import-api.js"></script>
     <script src="js/toast.js"></script>
     <script src="js/sync-notifications.js"></script>
     <script src="js/onboarding.js"></script>
@@ -1316,6 +1285,7 @@
     <script src="js/routes/categories.js"></script>
     <script src="js/routes/vendors.js"></script>
     <script src="js/routes/people.js"></script>
+    <script src="js/routes/import.js"></script>
     <script src="js/routes/sync.js"></script>
     <script src="js/routes/entity-detail.js"></script>
     <script src="js/routes/settings.js"></script>

@@ -61,13 +61,18 @@ test("category adapter keeps creation explicit and form-readable", () => {
   assert.match(source, /Search or add category/);
   assert.match(
     source,
-    /BudgetAPI\.addCategory\(\{ name, type: this\.#type \}\)/,
+    /BudgetAPI\.addCategory\(\{ name, type: this\.#type === "all" \? this\.#createType : this\.#type \}\)/,
   );
   assert.match(source, /new CustomEvent\("category-created"/);
   assert.match(source, /was added\. Syncing…/);
   assert.doesNotMatch(source, /category-add-requested/);
   assert.match(controller, /#addButton\.addEventListener\("pointerdown", this\)/);
   assert.match(controller, /event\.currentTarget === this\.#addButton/);
+  assert.match(source, /this\.#type === "all"[\s\S]*BudgetAPI\.listCategories\(\)/);
+  assert.match(source, /create-type/);
+  assert.match(source, /this\.#type === "all" \? this\.#createType : this\.#type/);
+  assert.match(source, /allowCreate: true/);
+  assert.match(controller, /#allowCreate/);
 });
 
 test("vendor and people adapters use searchable select-create fields", () => {
@@ -85,8 +90,17 @@ test("vendor and people adapters use searchable select-create fields", () => {
   assert.match(people, /BudgetAPI\.addPerson\(\{ name \}\)/);
   assert.match(people, /new CustomEvent\("person-created"/);
   assert.match(people, /Object\.prototype\.hasOwnProperty\.call\(this, "value"\)/);
+  assert.match(people, /hasAttribute\("allow-empty"\)/);
   assert.match(html, /<people-select><\/people-select>/);
   assert.doesNotMatch(html, /<select name="assignmentId"/);
+});
+
+test("searchable selectors expose import-only deferred option providers", () => {
+  const controller = fs.readFileSync("js/components/select-create-controller.js", "utf8");
+  assert.match(controller, /configure\(\{ getOptions, createOption, onCreate \}/);
+  ["vendor-input.js", "category-select.js", "people-select.js"].forEach((file) => {
+    assert.match(fs.readFileSync(`js/components/${file}`, "utf8"), /configureOptions\(options\)/);
+  });
 });
 
 test("transaction drawer reads custom component values directly", () => {

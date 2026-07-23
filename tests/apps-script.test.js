@@ -151,7 +151,7 @@ test("initializes the active copy, reports deployment status, and remains idempo
   assert.equal(initialized.initialized, true);
   assert.equal(initialized.spreadsheetId, "copy-id");
   assert.equal(runtime.properties.get("SPREADSHEET_ID"), "copy-id");
-  assert.equal(runtime.properties.get("SETUP_VERSION"), "6");
+  assert.equal(runtime.properties.get("SETUP_VERSION"), "7");
   assert.equal(runtime.properties.has("WEB_APP_URL"), false);
   assert.equal(template.sheets.size, 0);
   assert.equal(copy.getSheetByName("Categories").getLastRow(), 11);
@@ -402,8 +402,61 @@ test("batch-adds mixed entities with grouped writes, retries, and name reconcili
   assert.equal(reconciled.data.saved.length, 0);
   assert.equal(reconciled.data.reconciled.length, 1);
   assert.equal(reconciled.data.reconciled[0].record.id, entities[1].record.id);
-  assert.equal(call({ action: "health" }).data.apiVersion, 8);
+  assert.equal(call({ action: "health" }).data.apiVersion, 9);
   assert.equal(call({ action: "health" }).data.features.includes("batchEntities"), true);
+});
+
+test("creates import tables and persists profile-specific vendor and person mappings", () => {
+  const runtime = loadScript();
+  runtime.context.setup();
+  const { call, spreadsheet } = runtime;
+  const profileId = "623e4567-e89b-42d3-a456-426614174000";
+  const vendorId = "723e4567-e89b-42d3-a456-426614174000";
+  const assignmentId = "823e4567-e89b-42d3-a456-426614174000";
+
+  assert.deepEqual(spreadsheet.getSheetByName("ImportProfiles").data[0], [
+    "ID", "Name", "Target", "Investment Account ID", "Header Signature", "Column Mapping JSON",
+    "Date Format", "Amount Mode", "Amount Multiplier", "Active", "Created At", "Updated At",
+  ]);
+  assert.equal(call({ action: "addVendor", vendor: { id: vendorId, name: "Coffee Shop" } }).ok, true);
+  assert.equal(call({ action: "addAssignment", assignment: { id: assignmentId, name: "Alex" } }).ok, true);
+
+  const created = call({ action: "createImportProfile", profile: {
+    id: profileId, name: "Checking CSV", target: "budget", headerSignature: '["DATE","DESCRIPTION"]',
+    columnMapping: { date: 0, vendorDescription: 1, amount: 2, amountSignConvention: "expensesNegative" }, dateFormat: "MM/DD/YYYY",
+    amountMode: "unified", amountMultiplier: -1,
+  } });
+  assert.equal(created.ok, true);
+  assert.equal(created.data.columnMapping.vendorDescription, 1);
+  assert.equal(created.data.columnMapping.amountSignConvention, "expensesNegative");
+  assert.equal(call({ action: "listImportProfiles" }).data.length, 1);
+
+  const saved = call({ action: "upsertImportMappings", importProfileId: profileId,
+    vendorMappings: [{ sourceDescription: "  coffee   shop ", vendorId }],
+    personMappings: [{ sourceDescription: "Primary Card", assignmentId }],
+  });
+  assert.equal(saved.ok, true);
+  assert.equal(saved.data.vendorMappings[0].normalizedSourceDescription, "COFFEE SHOP");
+  assert.equal(saved.data.personMappings[0].normalizedSourceDescription, "PRIMARY CARD");
+
+  const updated = call({ action: "upsertImportMappings", importProfileId: profileId,
+    vendorMappings: [{ sourceDescription: "COFFEE SHOP", vendorId }], personMappings: [],
+  });
+  assert.equal(updated.data.vendorMappings.length, 1);
+  assert.equal(spreadsheet.getSheetByName("ImportVendorMappings").getLastRow(), 2);
+  const bundle = call({ action: "getImportProfileBundle", id: profileId });
+  assert.equal(bundle.data.vendorMappings.length, 1);
+  assert.equal(bundle.data.personMappings.length, 1);
+
+  const invalid = call({ action: "upsertImportMappings", importProfileId: profileId,
+    vendorMappings: [{ sourceDescription: "Unknown", vendorId: "923e4567-e89b-42d3-a456-426614174000" }], personMappings: [],
+  });
+  assert.equal(invalid.ok, false);
+  assert.match(invalid.error, /active vendor/);
+
+  assert.equal(call({ action: "archiveImportProfile", id: profileId }).data.active, false);
+  assert.equal(call({ action: "listImportProfiles" }).data.length, 0);
+  assert.equal(call({ action: "getImportProfileBundle", id: profileId }).ok, false);
 });
 
 test("batch-updates transactions with immutable metadata, conflict detection, and Ledger synchronization", () => {

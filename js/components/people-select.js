@@ -88,8 +88,14 @@ const peopleSelectTemplate = () => `
       this.#controller?.close(options);
     }
 
+    configureOptions(options) {
+      this.#controller?.configure(options);
+    }
+
     connectedCallback() {
-      const initialValue = Object.prototype.hasOwnProperty.call(this, "value")
+      const initialValue = this.hasAttribute("allow-empty")
+        ? String(this.getAttribute("value") || "")
+        : Object.prototype.hasOwnProperty.call(this, "value")
         ? String(this.value || "")
         : this.getAttribute("value") || window.BudgetAPI.SHARED_ASSIGNMENT_ID;
       if (Object.prototype.hasOwnProperty.call(this, "value")) {

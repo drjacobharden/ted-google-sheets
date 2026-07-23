@@ -24,6 +24,7 @@
     "categories",
     "vendors",
     "people",
+    "import",
     "entity-detail",
     "sync",
     "settings",
@@ -50,6 +51,12 @@
       template: "route-people",
       script: "js/routes/people.js",
       module: () => window.PeopleRoute,
+    },
+
+    import: {
+      template: "route-import",
+      script: "js/routes/import.js",
+      module: () => window.ImportRoute,
     },
 
     transactions: {
@@ -121,6 +128,8 @@
   }
 
   // Return only the route name for callers that do not need parameters.
+  let navigationGuard = null;
+
   function currentRoute() {
     return parseRoute().name;
   }
@@ -145,13 +154,19 @@
   //   validates the route and dispatches an event saying the route has changed
   function navigate(name, params = {}) {
     const nextHash = routeHash(name, params);
+    if (navigationGuard && navigationGuard({ name, params, hash: nextHash }) === false) return false;
 
     if (location.hash === nextHash) {
       announceRoute();
-      return;
+      return true;
     }
 
     location.hash = nextHash.slice(1);
+    return true;
+  }
+
+  function setNavigationGuard(guard) {
+    navigationGuard = typeof guard === "function" ? guard : null;
   }
 
   function updateParams(changes = {}) {
@@ -195,6 +210,7 @@
     currentRoute,
     currentParams,
     parseRoute,
+    setNavigationGuard,
     start,
   };
 })();
