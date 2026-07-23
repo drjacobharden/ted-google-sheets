@@ -26,7 +26,7 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/onboarding-1.png" alt="Onboarding welcome"></td>
+        <td width="50%"><img src="images/onboarding-1.png" alt="Onboarding welcome" width="50%"></td>
     </tr>
 </table>
 
