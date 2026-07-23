@@ -51,8 +51,8 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/google-menu.png" alt="TED menu" width="50%"></td>
-         <td width="50%"><img src="images/google-auth-alert.png" alt="TED menu" width="50%"></td>
+        <td width="50%"><img src="images/google-menu.png" alt="TED menu"></td>
+         <td width="50%"><img src="images/google-auth-alert.png" alt="TED menu"></td>
         ![alt text](image.png)
     </tr>
 </table>
@@ -63,8 +63,8 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/google-verify-1.png" alt="TED menu" width="50%"></td>
-         <td width="50%"><img src="images/google-verify-2.png" alt="TED menu" width="50%"></td>
+        <td width="50%"><img src="images/google-verify-1.png" alt="TED menu"></td>
+         <td width="50%"><img src="images/google-verify-2.png" alt="TED menu"></td>
         ![alt text](image.png)
     </tr>
 </table>
