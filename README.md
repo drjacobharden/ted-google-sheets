@@ -18,7 +18,11 @@ Every investment account you have can be added. You will track your total contri
 
 Future releases will let you set investment targets and calculate how much time is left until you can retire based on your current balance.
 
-## Getting Started
+## Starting a new spreadsheet
+
+If you are starting a new spreadsheet from scratch, you will need to go through the following steps.
+
+1.
 
 ## CSV imports
 
