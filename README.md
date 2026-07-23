@@ -60,11 +60,7 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
    Click "Advanced" and then select "Go to Personal Finance Tracker (unsafe)".
 
-   You will then get a confirmation screen asking to allow the script access to your Google account. This is necessary for the app to insert and edit entries to the spreadsheet as you add data. And despite it saying it can See, Edit, and Delete all of your Google Sheets, there is no code that allows that to happen. It only gets access to the TED sheet.
-
-   Click "Continue".
-
-   This should bring you back to the spreadsheet and show you a confirmation that the budget has been intialized.
+   You will then get a confirmation screen asking to allow the script access to your Google account. This is necessary for the app to insert and edit entries to the spreadsheet as you add data. And despite it saying it can See, Edit, and Delete all of your Google Sheets, there is no code that allows that to happen. It only gets access to the TED sheet. Click "Continue".
 
 <table>
     <tr>
@@ -115,6 +111,40 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 </table>
 
 9. If connection was successful, you will be asked to create your profile. Enter your first and last name. This is used to keep track of which transactions you log into the system.
+
+   Once you create your profile, you will be asked to look in the spreadsheet under the Accounts tab and confirm that your name was entered correctly. If it was, check the box and click "Finish setup".
+
+<table>
+    <tr>
+         <td width="50%"><img src="images/onboarding-4.png" alt="App script page"></td>
+        <td width="50%"><img src="images/onboarding-5.png" alt="App script menu"></td>
+    </tr>
+</table>
+
+## Sharing your sheet with others
+
+TED fully supports collaboration and multiple household members entering and editing data. All they need is a copy of the TED app on their computer and the link to your spreadsheet.
+
+1. Once you have TED downloaded and open, click "Join existing budget" in the first onboarding step.
+
+<table>
+    <tr>
+         <td width="50%"><img src="images/onboarding-6.png" alt="App script page" width="50%"></td>
+    </tr>
+</table>
+
+2. You will be asked to enter the URL for web app connected to your spreadsheet. If you have access to the spreadsheet, this can be found under at
+   Extensions -> App Scripts -> Deploy -> Manage Deployments
+
+   If you don't have access to the spreadsheet, have the sheet owner send you the URL so you can copy it in.
+
+<table>
+    <tr>
+         <td width="50%"><img src="images/onboarding-7.png" alt="App script page" width="50%"></td>
+    </tr>
+</table>
+
+3. If connection was successful, you will be asked to create your profile. Enter your first and last name. This is used to keep track of which transactions you log into the system.
 
    Once you create your profile, you will be asked to look in the spreadsheet under the Accounts tab and confirm that your name was entered correctly. If it was, check the box and click "Finish setup".
 
