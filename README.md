@@ -20,7 +20,7 @@ Future releases will let you set investment targets and calculate how much time 
 
 ## Starting a new spreadsheet
 
-If you are starting a new spreadsheet from scratch, you will need to go through the following steps.
+If you are starting a new spreadsheet from scratch, you will need to set up the TED spreadsheet and connect it to Google's App Script so that your app can read and write data. The onboarding screens will walk you through the process, but you can also use the steps below.
 
 1. When you first open the app, you will be presented with an onboarding screen. Select the option to "Start a new budget".
 
