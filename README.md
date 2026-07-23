@@ -31,8 +31,8 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
    Hit the button to "Open the spreadsheet template". This will take you to a screen
 
 <p float="left">
-<td width="50%"><img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen" width="400"></td>
-<td width="50%"><img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen" width="400"></td>
+<td width="50%"><img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen"></td>
+<td width="50%"><img src="images/google-copy.png" alt="Onboarding copy spreadsheet screen"></td>
 </p>
 
 <img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen" width="400">
