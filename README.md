@@ -24,11 +24,15 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
 1. When you first open the app, you will be presented with an onboarding screen. Select the option to "Start a new budget".
 
-<img src="image.png" alt="Onboarding welcome" width="400">
+<img src="images/onboarding-1.png" alt="Onboarding welcome" width="400">
 
-2. This will bring you into the onboarding process for a new spreadsheet. The first step here is to make a copy of the spreadsheet template. The spreadsheet will be where all your data is stored. And because it is on Google Sheets, you can inspect it at any time.
+2. This will bring you into the onboarding process for a new spreadsheet. The first step here is to make a copy of the spreadsheet template. The spreadsheet will be where all your data is stored. And because it is on Google Sheets, you can inspect it at any time.\
 
-![alt text](image-1.png)
+   Hit the button to "Open the spreadsheet template". This will take you to a screen
+
+<img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen" width="400"> | <img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen" width="400">
+
+<img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen" width="400">
 
 ## CSV imports
 
