@@ -819,6 +819,12 @@ body.onboarding-open {
 .table-wrap {
   overflow-x: auto;
 }
+.transaction-pagination {
+  display: flex;
+  justify-content: center;
+  padding: 18px 20px 22px;
+  border-top: 1px solid var(--border);
+}
 table {
   width: 100%;
   min-width: 850px;

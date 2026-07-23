@@ -176,9 +176,19 @@
       .filter((format) => values.every((value) => Boolean(parseDate(value, format))));
   }
 
+  function validMonthFormats(parsed, mapping) {
+    const values = columnValues(parsed, mapping);
+    if (!values.length) return [];
+    return ["YYYY-MM", "YYYY-MM-DD", "MM/DD/YYYY", "MM/DD/YY", "DD/MM/YYYY", "DD/MM/YY"]
+      .filter((format) => values.every((value) => Boolean(parseDate(value, format))));
+  }
+
   const HEADER_TERMS = Object.freeze({
     date: ["TRANSACTION DATE", "POSTED DATE", "POST DATE", "DATE"],
+    month: ["REPORTING MONTH", "BALANCE MONTH", "STATEMENT MONTH", "MONTH", "BALANCE DATE", "STATEMENT DATE", "DATE"],
     amount: ["TRANSACTION AMOUNT", "AMOUNT", "TOTAL"],
+    balance: ["ENDING BALANCE", "END BALANCE", "CLOSING BALANCE", "ACCOUNT VALUE", "MARKET VALUE", "BALANCE", "VALUE"],
+    contribution: ["CONTRIBUTION", "CONTRIBUTIONS", "EMPLOYEE", "EMPLOYER", "WITHDRAWAL", "WITHDRAWALS", "DEPOSIT", "DEPOSITS", "TRANSFER", "TRANSFERS"],
     debit: ["DEBIT", "WITHDRAWAL", "CHARGE"],
     credit: ["CREDIT", "DEPOSIT", "PAYMENT"],
     vendor: ["MERCHANT", "VENDOR", "PAYEE", "DESCRIPTION", "NAME"],
@@ -232,6 +242,20 @@
       categoryDescription: suggestColumn(parsed, "category", null, false),
       personDescription: suggestColumn(parsed, "person", null, false), notes: suggestColumn(parsed, "notes", null, false),
     };
+  }
+
+  function suggestInvestmentMapping(parsed) {
+    const numeric = (index) => isNumericColumn(parsed, index);
+    const month = suggestColumn(parsed, "month", (index) => validMonthFormats(parsed, index).length > 0);
+    const balance = suggestColumn(parsed, "balance", (index) => index !== month && numeric(index), false);
+    const contributions = parsed.headers
+      .filter((header) => header.index !== month && header.index !== balance && numeric(header.index) && headerScore(header, "contribution") > 0)
+      .map((header) => header.index);
+    const formats = validMonthFormats(parsed, month);
+    const dateFormat = formats.includes("YYYY-MM") ? "YYYY-MM"
+      : formats.includes("MM/DD/YYYY") ? "MM/DD/YYYY"
+        : formats.includes("MM/DD/YY") ? "MM/DD/YY" : formats[0] || "YYYY-MM";
+    return { month, balance, contributions, dateFormat };
   }
 
   function deriveBudgetAmount(row, type) {
@@ -356,46 +380,95 @@
     return { errors, warnings, type, amount };
   }
 
-  function createInvestmentRows(parsed, profile, existingMonths) {
+  function createInvestmentMonths(parsed, profile, existingMonths) {
     const mapping = profile.columnMapping || {};
     const contributionColumns = Array.isArray(mapping.contributions) ? mapping.contributions : [];
-    const seen = new Map();
-    const rows = parsed.rows.map((source) => {
+    const balanceColumn = columnIndex(mapping.balance);
+    const months = new Map();
+    parsed.rows.forEach((source, sourceIndex) => {
       const parsedDate = parseDate(valueAt(source, mapping.month), profile.dateFormat);
       const month = parsedDate && parsedDate.length === 10 ? parsedDate.slice(0, 7) : parsedDate;
-      const contributions = contributionColumns.map((column) => parseNumber(valueAt(source, column)));
-      const existing = existingMonths.find((item) => item.accountId === profile.investmentAccountId && item.month === month) || null;
-      const row = {
-        stagingId: stagingId("investment", source.sourceRowNumber), sourceRowNumber: source.sourceRowNumber,
-        include: true, queued: false, originalValues: source.values.slice(), accountId: profile.investmentAccountId,
-        month, balance: parseNumber(valueAt(source, mapping.balance)), contributions,
-        notes: String(valueAt(source, mapping.notes)), existing, warnings: existing ? ["This month already exists and will be replaced."] : [], errors: [],
-      };
-      if (month) seen.set(month, [...(seen.get(month) || []), row]);
-      return row;
+      if (!months.has(month)) {
+        const existing = existingMonths.find((item) => item.accountId === profile.investmentAccountId && item.month === month) || null;
+        months.set(month, {
+          stagingId: stagingId("investment", source.sourceRowNumber),
+          sourceRowNumber: source.sourceRowNumber,
+          sourceRowCount: 0,
+          include: true,
+          queued: false,
+          accountId: profile.investmentAccountId,
+          month,
+          balance: null,
+          balanceOrigin: "",
+          balanceSourceDate: "",
+          flows: [],
+          existing,
+          warnings: [],
+          errors: [],
+          _balanceSortDate: "",
+          _balanceSourceIndex: -1,
+        });
+      }
+      const record = months.get(month);
+      record.sourceRowCount += 1;
+      contributionColumns.forEach((column, columnIndexInMapping) => {
+        const raw = valueAt(source, column);
+        const amount = parseNumber(raw);
+        if (amount === null || amount === 0) return;
+        const sourceColumnIndex = columnIndex(column);
+        record.flows.push({
+          id: `${record.stagingId}-flow-${source.sourceRowNumber}-${columnIndexInMapping}`,
+          sourceDate: parsedDate || String(valueAt(source, mapping.month)).trim(),
+          sourceColumn: parsed.headers[sourceColumnIndex]?.label || `Column ${sourceColumnIndex + 1}`,
+          sourceColumnIndex,
+          sourceRowNumber: source.sourceRowNumber,
+          amount,
+        });
+      });
+      if (balanceColumn !== null && String(valueAt(source, balanceColumn)).trim() !== "") {
+        const sortDate = parsedDate?.length === 10 ? parsedDate : `${month || ""}-00`;
+        if (sortDate > record._balanceSortDate
+          || (sortDate === record._balanceSortDate && sourceIndex >= record._balanceSourceIndex)) {
+          record.balance = parseNumber(valueAt(source, balanceColumn));
+          record.balanceOrigin = "csv";
+          record.balanceSourceDate = parsedDate || String(valueAt(source, mapping.month)).trim();
+          record._balanceSortDate = sortDate;
+          record._balanceSourceIndex = sourceIndex;
+        }
+      }
     });
-    seen.forEach((matches) => {
-      if (matches.length > 1) matches.forEach((row) => row.errors.push("This account-month appears more than once in the CSV."));
+    return [...months.values()].map((record) => {
+      if (record.balanceOrigin !== "csv" && record.existing?.balance) {
+        record.balance = parseNumber(record.existing.balance.balance);
+        record.balanceOrigin = "existing";
+      }
+      record.warnings = record.existing ? ["This month already exists and will be replaced."] : [];
+      delete record._balanceSortDate;
+      delete record._balanceSourceIndex;
+      return record;
     });
-    return rows;
   }
 
-  function validateInvestmentRow(row, references, profile) {
+  function validateInvestmentMonth(row, references, profile) {
     const errors = row.errors.filter((error) => error.includes("more than once"));
     const warnings = row.existing ? ["This month already exists and will be replaced."] : [];
     if (!profile?.id) errors.push("Choose and save an import profile.");
     if (!references.accounts.some((item) => item.id === row.accountId && item.active !== false)) errors.push("Choose an active investment account.");
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(row.month || "")) errors.push("Enter a valid reporting month.");
-    if (!Number.isFinite(Number(row.balance)) || Number(row.balance) < 0) errors.push("Enter a nonnegative ending balance.");
-    if (row.contributions.some((amount) => amount !== null && !Number.isFinite(Number(amount)))) errors.push("Contribution values must be numeric.");
+    if (row.balance === null || row.balance === "" || !Number.isFinite(Number(row.balance)) || Number(row.balance) < 0) errors.push("Enter a nonnegative ending balance.");
+    if (row.flows.some((flow) => !Number.isFinite(Number(flow.amount)) || Number(flow.amount) === 0)) errors.push("Cash-flow values must be non-zero numbers.");
     return { errors, warnings };
   }
+
+  const createInvestmentRows = createInvestmentMonths;
+  const validateInvestmentRow = validateInvestmentMonth;
 
   window.ImportUtils = {
     DATE_FORMATS: ["YYYY-MM-DD", "MM/DD/YYYY", "MM/DD/YY", "DD/MM/YYYY", "DD/MM/YY", "YYYY-MM"],
     normalizeDescription, normalizeHeader, headerSignature, parseCSV, parseNumber, parseDate,
-    columnIndex, valueAt, columnValues, isNumericColumn, validDateFormats, headerScore, suggestColumn,
-    inferAmountSignConvention, suggestBudgetMapping, deriveBudgetAmount, suggestBudgetType,
-    entityNameMatch, fillBlankMatches, createBudgetRows, validateBudgetRow, createInvestmentRows, validateInvestmentRow,
+    columnIndex, valueAt, columnValues, isNumericColumn, validDateFormats, validMonthFormats, headerScore, suggestColumn,
+    inferAmountSignConvention, suggestBudgetMapping, suggestInvestmentMapping, deriveBudgetAmount, suggestBudgetType,
+    entityNameMatch, fillBlankMatches, createBudgetRows, validateBudgetRow,
+    createInvestmentMonths, validateInvestmentMonth, createInvestmentRows, validateInvestmentRow,
   };
 })();

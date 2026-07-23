@@ -117,6 +117,40 @@ test("all-time investment trend inserts missing calendar months", () => {
   assert.deepEqual(Array.from(result.balances), [100, 200, 300]);
 });
 
+test("bootstrap investment hydration preserves pending accounts and monthly drafts without refetching", () => {
+  const userId = "123e4567-e89b-42d3-a456-426614174000";
+  const pendingAccount = { id: "223e4567-e89b-42d3-a456-426614174000", name: "Pending IRA", source: "manual", active: true };
+  const serverAccount = { id: "323e4567-e89b-42d3-a456-426614174000", name: "401k", source: "paycheck", active: true };
+  const draftBalance = {
+    id: "423e4567-e89b-42d3-a456-426614174000", accountId: serverAccount.id,
+    month: "2026-06", balance: 250, notes: "", createdAt: "2026-06-30T12:00:00.000Z",
+    createdBy: userId, updatedAt: "2026-06-30T12:00:00.000Z", updatedBy: userId,
+  };
+  const runtime = loadInvestments({
+    endpoint: "https://script.google.com/macros/s/id/exec",
+    values: {
+      "myFinance.investmentAccountOutbox.v1": JSON.stringify([{
+        record: pendingAccount, status: "pending", attempts: 0, nextRetryAt: 0,
+      }]),
+      "myFinance.investmentMonthOutbox.v1": JSON.stringify([{
+        id: "523e4567-e89b-42d3-a456-426614174000", accountId: serverAccount.id, month: "2026-06",
+        draft: { accountId: serverAccount.id, month: "2026-06", balance: draftBalance, contributions: [] },
+        base: null, current: null, revision: 1, status: "pending", attempts: 0, nextRetryAt: 0,
+      }]),
+    },
+  });
+
+  runtime.api.applyBootstrapData({
+    investmentAccounts: [serverAccount],
+    investmentBalances: [{ ...draftBalance, balance: 100 }],
+    investmentContributions: [],
+  });
+
+  assert.deepEqual(Array.from(runtime.api.accounts(), (item) => item.name).sort(), ["401k", "Pending IRA"]);
+  assert.equal(runtime.api.balances()[0].balance, 250);
+  assert.equal(runtime.requests.length, 0);
+});
+
 test("atomically queues imported investment months with multiple signed flows", () => {
   const runtime = loadInvestments();
   const account = runtime.api.addAccount({ name: "Retirement", source: "paycheck" });

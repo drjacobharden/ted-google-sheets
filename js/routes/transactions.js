@@ -2,6 +2,7 @@
   const { create: createTransactionRow } = window.TransactionRow;
   const { escapeHTML, money } = window.AppUtils;
   const { shortDateFormatter } = window.DateUtils;
+  const PAGE_SIZE = 250;
 
   let cleanup = null;
 
@@ -17,10 +18,14 @@
     const message = root.querySelector("#transaction-state");
     const transactionCount = root.querySelector("#transaction-count");
     const list = root.querySelector("#transaction-list");
+    const rangePicker = root.querySelector("date-range-picker");
+    const pagination = root.querySelector("#transaction-pagination");
+    const loadMore = root.querySelector("#load-more-transactions");
 
     let query = "";
     let type = "all";
-    let activeRange = { start: "", end: "", preset: "all" };
+    let activeRange = rangePicker?.value || { start: "", end: "", preset: "month" };
+    let visibleLimit = PAGE_SIZE;
 
     function amountFor(transaction) {
       const amount = Number(transaction.amount) || 0;
@@ -85,12 +90,16 @@
     //  Render the vendor list from the spreadsheet data
     function render() {
       const items = filteredTransactions();
-
       const total = items.length;
-      transactionCount.textContent = `${total} ${total === 1 ? "transaction" : "transactions"}`;
+      visibleLimit = Math.min(Math.max(visibleLimit, PAGE_SIZE), Math.max(total, PAGE_SIZE));
+      const visible = items.slice(0, visibleLimit);
+      transactionCount.textContent = visible.length < total
+        ? `Showing ${visible.length} of ${total} transactions`
+        : `${total} ${total === 1 ? "transaction" : "transactions"}`;
 
       if (!items.length) {
         tableWrap.hidden = true;
+        pagination.hidden = true;
         message.hidden = false;
         const filtered = Boolean(
           query || type !== "all" || activeRange.preset !== "all",
@@ -99,9 +108,10 @@
         return;
       }
 
-      list.replaceChildren(...items.map(createTransactionRow));
+      list.replaceChildren(...visible.map(createTransactionRow));
       message.hidden = true;
       tableWrap.hidden = false;
+      pagination.hidden = visible.length >= total;
     }
 
     //  Handle clicks inside the list
@@ -128,17 +138,25 @@
 
     function handleSearch() {
       query = search.value.trim().toLowerCase();
+      visibleLimit = PAGE_SIZE;
       render();
     }
 
     function handleTypeChange(event) {
       type = event.target.value;
+      visibleLimit = PAGE_SIZE;
       render();
     }
 
     function handleDateRangeChange(event) {
       activeRange = event.detail;
+      visibleLimit = PAGE_SIZE;
       load();
+    }
+
+    function handleLoadMore() {
+      visibleLimit += PAGE_SIZE;
+      render();
     }
 
     function handleLoadError(event) {
@@ -166,6 +184,7 @@
     transactionList.addEventListener("keydown", handleKeydown);
     search.addEventListener("input", handleSearch);
     typeFilter.addEventListener("change", handleTypeChange);
+    loadMore.addEventListener("click", handleLoadMore);
     window.addEventListener("date-range-changed", handleDateRangeChange);
     window.addEventListener("budget:transaction-sync-changed", load);
     window.addEventListener("budget:transaction-saved", load);
@@ -193,6 +212,7 @@
       transactionList.removeEventListener("keydown", handleKeydown);
       search.removeEventListener("input", handleSearch);
       typeFilter.removeEventListener("change", handleTypeChange);
+      loadMore.removeEventListener("click", handleLoadMore);
       window.removeEventListener("date-range-changed", handleDateRangeChange);
       window.removeEventListener("budget:transaction-sync-changed", load);
       window.removeEventListener("budget:transaction-saved", load);

@@ -54,6 +54,13 @@
     return normalizeProfile(input, existing);
   }
 
+  function applyBootstrapData(data) {
+    if (!Array.isArray(data?.importProfiles)) throw new Error("The sheet response did not include an import profile list.");
+    write(KEYS.profiles, data.importProfiles);
+    window.dispatchEvent(new CustomEvent("budget:import-profiles-changed"));
+    return data.importProfiles;
+  }
+
   async function listProfiles(options = {}) {
     if (options.refresh && endpoint()) {
       const profiles = await request("listImportProfiles");
@@ -154,5 +161,5 @@
     write(key, read(key).filter((item) => item.importProfileId !== profileId).concat(items));
   }
 
-  window.ImportAPI = { listProfiles, createProfileDraft, saveProfile, archiveProfile, loadProfileBundle, saveMappings };
+  window.ImportAPI = { listProfiles, applyBootstrapData, createProfileDraft, saveProfile, archiveProfile, loadProfileBundle, saveMappings };
 })();

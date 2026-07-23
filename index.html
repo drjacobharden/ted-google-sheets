@@ -119,12 +119,6 @@
                 </svg>
                 <span>People</span>
               </button>
-              <button class="nav-item nav-subitem" type="button" data-tab="import">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 3v12M7 10l5 5 5-5M4 19h16" />
-                </svg>
-                <span>Import</span>
-              </button>
               <button
                 class="nav-item nav-subitem nav-action-item"
                 type="button"
@@ -190,6 +184,12 @@
         </nav>
         <!-- Bottom portion  -->
         <div class="nav-footer">
+          <button class="nav-item" type="button" data-tab="import">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12M7 10l5 5 5-5M4 19h16" />
+            </svg>
+            <span>Import</span>
+          </button>
           <button class="nav-item" type="button" data-tab="sync">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -224,6 +224,17 @@
 
       <!-- CONTENT AREA -->
       <section class="workspace">
+        <div
+          class="app-refresh-indicator"
+          id="app-refresh-indicator"
+          role="status"
+          aria-live="polite"
+          hidden
+        >
+          <span class="spinner compact-spinner" aria-hidden="true"></span>
+          <span id="app-refresh-text">Refreshing data…</span>
+          <button id="app-refresh-retry" type="button" hidden>Retry</button>
+        </div>
         <!-- Toast -->
         <div class="app-notice" id="app-notice" role="status" hidden>
           <span id="app-notice-text"></span>
@@ -294,7 +305,7 @@
                 </button>
               </page-title>
 
-              <date-range-picker preset="week"></date-range-picker>
+              <date-range-picker preset="month"></date-range-picker>
               <div class="summary-grid" aria-label="Budget summary">
                 <article class="summary-card balance-card">
                   <div class="summary-icon" aria-hidden="true">
@@ -417,6 +428,15 @@
                     </thead>
                     <tbody id="transaction-list"></tbody>
                   </table>
+                </div>
+                <div class="transaction-pagination" id="transaction-pagination" hidden>
+                  <button
+                    class="secondary-button"
+                    id="load-more-transactions"
+                    type="button"
+                  >
+                    Load 250 more
+                  </button>
                 </div>
               </div>
             </section>
@@ -849,6 +869,29 @@
         </div>
       </section>
     </main>
+
+    <div
+      class="app-loading-splash"
+      id="app-loading-splash"
+      role="status"
+      aria-live="polite"
+      hidden
+    >
+      <div class="app-loading-card">
+        <div class="app-loading-mark" aria-hidden="true">$</div>
+        <h1>My Finance</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p id="app-loading-message">Loading your budget…</p>
+        <button
+          class="primary-button compact"
+          id="app-loading-retry"
+          type="button"
+          hidden
+        >
+          Retry
+        </button>
+      </div>
+    </div>
 
     <!-- Transaction editor sidebar -->
     <div class="drawer-overlay" id="transaction-drawer-backdrop" hidden>

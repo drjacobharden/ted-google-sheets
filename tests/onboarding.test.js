@@ -18,8 +18,8 @@ function loadOnboarding(options = {}) {
       if (options.healthError) throw new Error(options.healthError);
       return { status: "ok" };
     },
-    loadReferenceData: async () => {
-      calls.push(["loadReferenceData"]);
+    loadAppData: async () => {
+      calls.push(["loadAppData"]);
       if (options.referenceError) throw new Error(options.referenceError);
       if (options.userError) throw new Error(options.userError);
       return {};
@@ -75,7 +75,7 @@ test("connects and retains an endpoint only after all startup data loads", async
   const success = loadOnboarding({ users: [user] });
   assert.deepEqual(await success.onboarding.connectEndpoint(endpoint), [user]);
   assert.equal(success.getConfig().endpoint, endpoint);
-  assert.deepEqual(success.calls.map((call) => call[0]), ["testConnection", "saveConfig", "loadReferenceData", "listUsers"]);
+  assert.deepEqual(success.calls.map((call) => call[0]), ["testConnection", "saveConfig", "loadAppData", "listUsers"]);
 
   const failed = loadOnboarding({ endpoint: "", userError: "Users unavailable" });
   await assert.rejects(() => failed.onboarding.connectEndpoint(endpoint), /budget data could not be loaded/);

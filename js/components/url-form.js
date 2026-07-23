@@ -109,8 +109,7 @@ const urlFormTemplate = () =>
         window.BudgetAPI.saveConfig({ endpoint });
         settingsSaved = true;
         this.#updateConnectionUI();
-        await window.BudgetAPI.loadReferenceData();
-        await window.BudgetUI.loadTransactions();
+        await window.BudgetUI.initializeData({ refresh: true });
         window.dispatchEvent(
           new CustomEvent("budget:connection-changed", {
             detail: { endpoint },

@@ -1,7 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
   let unmountCurrentRoute = null;
-  let referenceDataPromise;
-  let transactionLoadPromise;
+  let appDataPromise;
   let referenceDataLoaded = false;
   let mountedContentKey = "";
 
@@ -65,6 +64,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const navSections = document.querySelectorAll("[data-nav-section]");
   const screens = document.querySelectorAll(".screen[data-screen]");
   const appNotice = document.getElementById("app-notice");
+  const appShell = document.querySelector(".app-shell");
+  const loadingSplash = document.getElementById("app-loading-splash");
+  const loadingSplashMessage = document.getElementById("app-loading-message");
+  const loadingSplashRetry = document.getElementById("app-loading-retry");
+  const refreshIndicator = document.getElementById("app-refresh-indicator");
+  const refreshIndicatorText = document.getElementById("app-refresh-text");
+  const refreshIndicatorRetry = document.getElementById("app-refresh-retry");
   let appNoticeTimer;
 
   // TODO: Remove later. Currently for compatibility while we migrate to routing.
@@ -99,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
         : item.removeAttribute("aria-current");
     });
 
-    enterRoute(name);
+    enterRoute(name).catch(() => {});
     updateNavigationSection(name);
     mountTemplate(name, contentParams);
 
@@ -108,25 +114,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function enterRoute(name) {
     if (name === "dashboard") {
-      await ensureReferenceData();
-
-      await Promise.all([
-        state.loaded ? undefined : loadTransactions(),
-        window.InvestmentUI?.load?.(),
-      ]);
+      await initializeData();
     }
 
     if (["transactions", "entity-detail"].includes(name) && !state.loaded) {
-      await loadTransactions();
-      await ensureReferenceData();
+      await initializeData();
     }
 
     if (name === "import") {
-      await ensureReferenceData();
-      await window.InvestmentUI?.load?.();
+      await initializeData();
     }
 
-    if (name.startsWith("investment-")) await window.InvestmentUI?.load?.();
+    if (name.startsWith("investment-")) await initializeData();
   }
 
   function updateNavigationSection(name) {
@@ -201,54 +200,116 @@ document.addEventListener("DOMContentLoaded", () => {
     showAppNotice(event.detail),
   );
 
-  function loadTransactions() {
-    if (transactionLoadPromise) return transactionLoadPromise;
-
-    transactionLoadPromise = (async () => {
-      try {
-        // Get all of the transactions from the spreadsheet
-        state.transactions = await window.BudgetAPI.listTransactions();
-        // Flag that the data loaded
-        state.loaded = true;
-        //  Alert listeners that the data has loaded
-        window.dispatchEvent(new CustomEvent("budget:transactions-loaded"));
-      } catch (error) {
-        //  Alert listenters that the data failed to load
-        window.dispatchEvent(
-          new CustomEvent("budget:transactions-load-error", {
-            detail: { error },
-          }),
-        );
-      } finally {
-        transactionLoadPromise = null;
-      }
-    })();
-
-    return transactionLoadPromise;
+  function retryAppData() {
+    loadingSplashMessage.textContent = "Loading your budget…";
+    loadingSplashRetry.hidden = true;
+    refreshIndicatorRetry.hidden = true;
+    initializeData({ refresh: true, startup: !loadingSplash.hidden }).catch(() => {});
   }
 
-  function ensureReferenceData() {
-    if (!referenceDataPromise) {
-      referenceDataPromise = window.BudgetAPI.loadReferenceData().catch(
-        (error) => {
-          referenceDataPromise = null;
+  loadingSplashRetry.addEventListener("click", retryAppData);
+  refreshIndicatorRetry.addEventListener("click", retryAppData);
 
+  window.addEventListener("budget:data-refresh-started", (event) => {
+    if (!event.detail.connected) return;
+    loadingSplashRetry.hidden = true;
+    refreshIndicatorRetry.hidden = true;
+    if (event.detail.coldStart) {
+      loadingSplash.hidden = false;
+      loadingSplashMessage.textContent = "Loading your budget…";
+      appShell.inert = true;
+      return;
+    }
+    refreshIndicator.hidden = false;
+    refreshIndicatorText.textContent = "Refreshing data…";
+  });
+
+  window.addEventListener("budget:data-refresh-complete", () => {
+    loadingSplash.hidden = true;
+    refreshIndicator.hidden = true;
+    loadingSplashRetry.hidden = true;
+    refreshIndicatorRetry.hidden = true;
+    if (!window.OnboardingUI?.isBlocking()) appShell.inert = false;
+  });
+
+  window.addEventListener("budget:data-refresh-failed", (event) => {
+    if (!event.detail.connected) return;
+    if (!loadingSplash.hidden && !event.detail.showingCachedData) {
+      loadingSplashMessage.textContent = `We couldn’t load your budget. ${event.detail.error.message}`;
+      loadingSplashRetry.hidden = false;
+      return;
+    }
+    refreshIndicator.hidden = false;
+    refreshIndicatorText.textContent = "Showing saved data · refresh failed";
+    refreshIndicatorRetry.hidden = false;
+  });
+
+  function loadTransactions() {
+    return state.loaded ? Promise.resolve(state.transactions.slice()) : initializeData();
+  }
+
+  function initializeData(options = {}) {
+    if (options.refresh) {
+      appDataPromise = null;
+      state.loaded = false;
+      referenceDataLoaded = false;
+    }
+    if (!appDataPromise) {
+      const cachedTransactions = window.BudgetAPI.getCachedTransactions?.();
+      const usingCache = !state.loaded && cachedTransactions !== null && cachedTransactions !== undefined;
+      if (usingCache) {
+        state.transactions = cachedTransactions;
+        state.loaded = true;
+        window.dispatchEvent(new CustomEvent("budget:transactions-loaded", {
+          detail: { source: "cache" },
+        }));
+      }
+      const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
+      const coldStart = Boolean(
+        options.startup &&
+        connected &&
+        !state.loaded,
+      );
+      window.dispatchEvent(new CustomEvent("budget:data-refresh-started", {
+        detail: { source: usingCache ? "cache" : "network", coldStart, connected },
+      }));
+      appDataPromise = window.BudgetAPI.loadAppData({ refresh: options.refresh })
+        .then(async (data) => {
+          state.transactions = data.transactions || [];
+          state.loaded = true;
+          referenceDataLoaded = true;
+          await window.InvestmentUI?.load?.();
+          window.dispatchEvent(new CustomEvent("budget:transactions-loaded", {
+            detail: { source: "server" },
+          }));
+          window.dispatchEvent(new CustomEvent("budget:data-refresh-complete", {
+            detail: { source: "server" },
+          }));
+          return data;
+        })
+        .catch((error) => {
+          appDataPromise = null;
+          if (!state.loaded) {
+            window.dispatchEvent(
+              new CustomEvent("budget:transactions-load-error", {
+                detail: { error },
+              }),
+            );
+          }
+          window.dispatchEvent(new CustomEvent("budget:data-refresh-failed", {
+            detail: { error, showingCachedData: state.loaded, connected },
+          }));
           window.dispatchEvent(
             new CustomEvent("budget:api-warning", {
-              detail: `Couldn’t refresh lists: ${error.message}`,
+              detail: state.loaded
+                ? `Showing saved data. Couldn’t refresh Google Sheets: ${error.message}`
+                : `Couldn’t load app data: ${error.message}`,
             }),
           );
-
           throw error;
-        },
-      );
+        });
     }
-
-    return referenceDataPromise;
-  }
-
-  async function initializeData() {
-    await ensureReferenceData();
+    return appDataPromise;
   }
 
   //  Inserts or updates a transaction when something is added or edited so we don't have to refetch everything
@@ -318,7 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("budget:onboarding-complete", () => {
     const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
     document.body.dataset.connected = String(connected);
-    initializeData();
+    initializeData().catch(() => {});
   });
 
   window.BudgetUI = {
@@ -334,7 +395,7 @@ document.addEventListener("DOMContentLoaded", () => {
     isReferenceDataLoaded: () => referenceDataLoaded,
   };
 
-  if (!window.OnboardingUI?.isBlocking()) initializeData();
+  if (!window.OnboardingUI?.isBlocking()) initializeData({ startup: true }).catch(() => {});
 
   window.AppRouter.start();
 });

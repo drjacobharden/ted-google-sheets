@@ -8,6 +8,7 @@
       rows: [], pendingVendors: new Map(), pendingPeople: new Map(), filter: "all", target: "budget", mappingWizard: null,
       draftEntities: { vendor: new Map(), category: new Map(), assignment: new Map() },
       resolvedCategoryMatches: new Set(),
+      expandedInvestmentMonths: new Set(),
       commit: null,
     };
     root.innerHTML = `
@@ -23,7 +24,7 @@
         <p class="import-message" id="import-profile-message" role="status"></p>
       </section>
       <section class="import-card import-step" id="import-mapping-step" hidden><h2>3. Map CSV columns</h2><p>Choose source columns and parsing rules, then verify the preview.</p><form id="import-mapping-form"></form><p class="import-message" id="import-mapping-message" role="status"></p></section>
-      <section class="import-card import-step" id="import-review-step" hidden><h2>4. Review staged rows</h2><p>Nothing is saved until you commit the import. Source descriptions are read-only; internal references and imported values remain editable.</p><div id="import-summary"></div><div class="import-filter-row" id="import-filters"></div><div class="import-review-wrap"><table class="import-table"><thead id="import-review-head"></thead><tbody id="import-review-body"></tbody></table></div><div class="import-actions"><button class="secondary-button" type="button" data-import-action="back-to-mapping">Edit mapping</button><button class="primary-button" type="button" data-import-action="commit">Commit import</button></div><p class="import-message" id="import-review-message" role="status"></p></section>
+      <section class="import-card import-step" id="import-review-step" hidden><h2>4. Review staged rows</h2><p>Nothing is saved until you commit the import. Source descriptions are read-only; internal references and imported values remain editable.</p><div id="import-summary"></div><div class="import-filter-row" id="import-filters"></div><div class="import-review-wrap" id="import-budget-review"><table class="import-table"><thead id="import-review-head"></thead><tbody id="import-review-body"></tbody></table></div><div class="investment-import-review" id="import-investment-review" hidden></div><div class="import-actions"><button class="secondary-button" type="button" data-import-action="back-to-mapping">Edit mapping</button><button class="primary-button" type="button" data-import-action="commit">Commit import</button></div><p class="import-message" id="import-review-message" role="status"></p></section>
       <section class="import-card import-step import-progress-view" id="import-progress-step" hidden><h2>Committing import</h2><p id="import-progress-summary">Keep this page open while each step is confirmed in Google Sheets.</p><ol class="import-commit-progress" id="import-commit-progress"></ol><div class="import-actions"><button class="primary-button" type="button" data-import-action="retry-commit" hidden>Retry failed step</button><button class="secondary-button" type="button" data-import-action="return-review" hidden>Return to review</button><button class="secondary-button" type="button" data-import-action="finish-import" hidden>Start another import</button><button class="secondary-button" type="button" data-import-action="open-sync" hidden>Open Sync</button></div><p class="import-message" id="import-progress-message" role="status"></p></section>`;
 
     const fileInput = root.querySelector("#import-file");
@@ -82,14 +83,10 @@
       preview.innerHTML = `<table><thead><tr>${state.parsed.headers.map((header) => `<th>${escapeHTML(header.label)}</th>`).join("")}</tr></thead><tbody>${state.parsed.rows.slice(0, 3).map((row) => `<tr>${row.values.map((value) => `<td>${escapeHTML(value)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
     }
 
-    function headerOptions(selected, empty = "Not mapped") {
-      const selectedIndex = window.ImportUtils.columnIndex(selected);
-      return `<option value="">${empty}</option>` + state.parsed.headers.map((header) => `<option value="${header.index}"${header.index === selectedIndex ? " selected" : ""}>${escapeHTML(header.label)}${state.parsed.headers.filter((item) => item.normalized === header.normalized).length > 1 ? ` (column ${header.index + 1})` : ""}</option>`).join("");
-    }
+    const BUDGET_WIZARD_STEPS = ["Date", "Amount", "Vendor", "Category", "Person", "Notes"];
+    const INVESTMENT_WIZARD_STEPS = ["Activity date", "Balance", "Cash flows"];
 
-    const WIZARD_STEPS = ["Date", "Amount", "Vendor", "Category", "Person", "Notes"];
-
-    function createWizardState() {
+    function createBudgetWizardState() {
       const profile = state.profile;
       const existing = profile.columnMapping || {};
       const suggested = window.ImportUtils.suggestBudgetMapping(state.parsed);
@@ -117,6 +114,31 @@
         autoPopulateCategory: existing.autoPopulateCategory === true,
         autoPopulatePerson: existing.autoPopulatePerson === true,
       };
+    }
+
+    function createInvestmentWizardState() {
+      const profile = state.profile;
+      const existing = profile.columnMapping || {};
+      const suggested = window.ImportUtils.suggestInvestmentMapping(state.parsed);
+      const pick = (field) => window.ImportUtils.columnIndex(existing[field]) ?? suggested[field] ?? null;
+      const hasSavedContributions = Object.prototype.hasOwnProperty.call(existing, "contributions");
+      const contributions = (hasSavedContributions ? existing.contributions : suggested.contributions)
+        .map(window.ImportUtils.columnIndex)
+        .filter((value) => value !== null);
+      const month = pick("month");
+      const formats = window.ImportUtils.validMonthFormats(state.parsed, month);
+      return {
+        profileId: profile.id, step: 0, maxVisited: 0,
+        mapping: { month, balance: pick("balance"), contributions },
+        dateFormat: formats.includes(profile.dateFormat) ? profile.dateFormat : suggested.dateFormat,
+        hasBalance: Object.prototype.hasOwnProperty.call(existing, "balance")
+          ? window.ImportUtils.columnIndex(existing.balance) !== null
+          : suggested.balance !== null,
+      };
+    }
+
+    function wizardSteps() {
+      return state.profile?.target === "investment" ? INVESTMENT_WIZARD_STEPS : BUDGET_WIZARD_STEPS;
     }
 
     function wizardFields() {
@@ -149,7 +171,8 @@
 
     function wizardNavigation() {
       const wizard = state.mappingWizard;
-      return `<ol class="import-wizard-progress" aria-label="Column mapping progress">${WIZARD_STEPS.map((label, index) => `<li><button type="button" data-wizard-step="${index}"${index > wizard.maxVisited ? " disabled" : ""}${index === wizard.step ? ' aria-current="step" class="active"' : ""}><span>${index + 1}</span>${label}</button></li>`).join("")}</ol>`;
+      const steps = wizardSteps();
+      return `<ol class="import-wizard-progress" style="--wizard-step-count: ${steps.length}" aria-label="Column mapping progress">${steps.map((label, index) => `<li><button type="button" data-wizard-step="${index}"${index > wizard.maxVisited ? " disabled" : ""}${index === wizard.step ? ' aria-current="step" class="active"' : ""}><span>${index + 1}</span>${label}</button></li>`).join("")}</ol>`;
     }
 
     function wizardActions(final = false) {
@@ -157,7 +180,7 @@
     }
 
     function renderBudgetWizard() {
-      if (!state.mappingWizard || state.mappingWizard.profileId !== state.profile.id) state.mappingWizard = createWizardState();
+      if (!state.mappingWizard || state.mappingWizard.profileId !== state.profile.id) state.mappingWizard = createBudgetWizardState();
       const wizard = state.mappingWizard;
       const map = wizard.mapping;
       let content = "";
@@ -186,34 +209,81 @@
       mappingForm.innerHTML = `${wizardNavigation()}<div class="import-wizard-panel">${content}</div>`;
     }
 
-    function renderMapper() {
-      const profile = state.profile;
-      const map = profile.columnMapping || {};
-      const dateOptions = window.ImportUtils.DATE_FORMATS.map((format) => `<option value="${format}"${format === profile.dateFormat ? " selected" : ""}>${format}</option>`).join("");
-      if (profile.target === "budget") {
-        renderBudgetWizard();
-      } else {
-        const contributions = new Set((map.contributions || []).map(window.ImportUtils.columnIndex));
-        mappingForm.innerHTML = `<div class="import-grid">
-          <label class="import-field"><span>Reporting month/date *</span><select name="month">${headerOptions(map.month, "Choose a column")}</select></label>
-          <label class="import-field"><span>Date format</span><select name="dateFormat">${dateOptions}</select></label>
-          <label class="import-field"><span>Ending balance *</span><select name="balance">${headerOptions(map.balance, "Choose a column")}</select></label>
-          <label class="import-field"><span>Notes</span><select name="notes">${headerOptions(map.notes)}</select></label>
-          <div class="import-field wide"><span>Contribution / withdrawal columns</span><div class="import-contribution-options">${state.parsed.headers.map((header) => `<label><input type="checkbox" name="contributions" value="${header.index}"${contributions.has(header.index) ? " checked" : ""} />${escapeHTML(header.label)}</label>`).join("")}</div></div>
-        </div><div class="import-actions"><button class="primary-button" type="submit">Review staged rows</button></div>`;
+    function investmentHeaderOptions(field, predicate, empty = "Choose a column") {
+      const wizard = state.mappingWizard;
+      const selected = window.ImportUtils.columnIndex(wizard.mapping[field]);
+      const used = new Set([
+        wizard.mapping.month,
+        wizard.mapping.balance,
+        ...wizard.mapping.contributions,
+      ].map(window.ImportUtils.columnIndex).filter((value) => value !== null && value !== selected));
+      const scoreKind = field === "month" ? "month" : field;
+      return `<option value="">${empty}</option>` + state.parsed.headers
+        .filter((header) => header.index === selected || (!used.has(header.index) && (!predicate || predicate(header.index))))
+        .sort((left, right) => window.ImportUtils.headerScore(right, scoreKind) - window.ImportUtils.headerScore(left, scoreKind) || left.index - right.index)
+        .map((header) => `<option value="${header.index}"${header.index === selected ? " selected" : ""}>${escapeHTML(header.label)}${state.parsed.headers.filter((item) => item.normalized === header.normalized).length > 1 ? ` (column ${header.index + 1})` : ""}</option>`).join("");
+    }
+
+    function investmentContributionOptions() {
+      const wizard = state.mappingWizard;
+      const selected = new Set(wizard.mapping.contributions);
+      const used = new Set([wizard.mapping.month, wizard.mapping.balance]
+        .map(window.ImportUtils.columnIndex).filter((value) => value !== null));
+      const headers = state.parsed.headers
+        .filter((header) => selected.has(header.index) || (!used.has(header.index) && window.ImportUtils.isNumericColumn(state.parsed, header.index)))
+        .sort((left, right) => window.ImportUtils.headerScore(right, "contribution") - window.ImportUtils.headerScore(left, "contribution") || left.index - right.index);
+      return headers.length
+        ? `<div class="import-contribution-options">${headers.map((header) => `<label><input type="checkbox" name="contributions" value="${header.index}"${selected.has(header.index) ? " checked" : ""} />${escapeHTML(header.label)}</label>`).join("")}</div>`
+        : '<div class="import-inference error"><strong>No numeric columns are available</strong><p>Choose different activity-date or balance columns.</p></div>';
+    }
+
+    function investmentContributionSamples() {
+      const selected = state.mappingWizard.mapping.contributions;
+      if (!selected.length) return '<div class="import-wizard-samples"><strong>Sample values</strong><p>Select one or more columns to see examples.</p></div>';
+      return `<div class="import-wizard-samples"><strong>Sample values</strong><ul>${selected.flatMap((mapping) => {
+        const header = state.parsed.headers[window.ImportUtils.columnIndex(mapping)];
+        return window.ImportUtils.columnValues(state.parsed, mapping).slice(0, 3)
+          .map((value) => `<li>${escapeHTML(`${header?.label || "Column"}: ${value}`)}</li>`);
+      }).join("")}</ul></div>`;
+    }
+
+    function renderInvestmentWizard() {
+      if (!state.mappingWizard || state.mappingWizard.profileId !== state.profile.id) state.mappingWizard = createInvestmentWizardState();
+      const wizard = state.mappingWizard;
+      const map = wizard.mapping;
+      let content = "";
+      if (wizard.step === 0) {
+        const formats = window.ImportUtils.validMonthFormats(state.parsed, map.month);
+        if (!formats.includes(wizard.dateFormat)) wizard.dateFormat = formats.includes("YYYY-MM") ? "YYYY-MM"
+          : formats.includes("MM/DD/YYYY") ? "MM/DD/YYYY" : formats.includes("MM/DD/YY") ? "MM/DD/YY" : formats[0] || "";
+        const ambiguity = formats.length > 1;
+        content = `<div class="import-wizard-question"><p class="eyebrow">Step 1 of 3 · Activity date</p><h3>Which column dates each investment activity row?</h3><p>Every row must contain a supported full date or YYYY-MM value. We will group all activity into calendar months.</p>
+          <label class="import-field"><span>Activity date column</span><select name="month">${investmentHeaderOptions("month")}</select></label>
+          ${wizardSamples(map.month, (value) => {
+            const parsed = window.ImportUtils.parseDate(value, wizard.dateFormat);
+            return parsed?.slice(0, 7);
+          })}
+          ${map.month === null ? "" : formats.length ? `<div class="import-inference ${ambiguity ? "ambiguous" : ""}"><strong>${ambiguity ? "Confirm the date format" : "Date format detected"}</strong><p>${ambiguity ? "More than one supported date interpretation fits these values. Confirm the format used by this file." : "This format fits every nonblank value in the selected column."}</p><label class="import-field"><span>Date format</span><select name="dateFormat">${formats.map((format) => `<option value="${format}"${format === wizard.dateFormat ? " selected" : ""}>${format}</option>`).join("")}</select></label><small>Two-digit years use 00–69 as 2000–2069 and 70–99 as 1970–1999.</small></div>` : '<div class="import-inference error"><strong>We could not read this column as reporting months</strong><p>Choose another column. Every nonblank value must use one supported month or date format.</p></div>'}
+        </div>${wizardActions()}`;
       }
+      if (wizard.step === 1) {
+        const numeric = (index) => window.ImportUtils.isNumericColumn(state.parsed, index);
+        content = `<div class="import-wizard-question"><p class="eyebrow">Step 2 of 3 · Ending balance</p><h3>Does this CSV include account balances?</h3><p>When mapped, the latest dated nonblank balance in each month is used. Otherwise, an existing balance is reused or you can enter one during review.</p>
+          <fieldset class="import-choice-group"><legend>Balance information</legend><label><input type="radio" name="hasBalance" value="no"${!wizard.hasBalance ? " checked" : ""} /> No balance column</label><label><input type="radio" name="hasBalance" value="yes"${wizard.hasBalance ? " checked" : ""} /> Yes, choose a column</label></fieldset>
+          ${wizard.hasBalance ? `<label class="import-field"><span>Ending balance column</span><select name="balance">${investmentHeaderOptions("balance", numeric)}</select></label>${wizardSamples(map.balance)}` : ""}
+        </div>${wizardActions()}`;
+      }
+      if (wizard.step === 2) {
+        content = `<div class="import-wizard-question"><p class="eyebrow">Step 3 of 3 · Contributions and withdrawals</p><h3>Which columns contain cash flows?</h3><p>Select one or more contribution, deposit, transfer, or withdrawal columns. Every nonzero value becomes a dated flow within its month.</p>
+          ${investmentContributionOptions()}${investmentContributionSamples()}
+        </div>${wizardActions(true)}`;
+      }
+      mappingForm.innerHTML = `${wizardNavigation()}<div class="import-wizard-panel">${content}</div>`;
     }
 
-    function updateAmountFields() {
-      if (!mappingForm.elements.amountMode) return;
-      const debit = mappingForm.elements.amountMode.value === "debitCredit";
-      mappingForm.querySelectorAll("[data-debit]").forEach((item) => { item.hidden = !debit; });
-      mappingForm.querySelectorAll("[data-unified]").forEach((item) => { item.hidden = debit; });
-    }
-
-    function mappingValue(name) {
-      const value = mappingForm.elements[name]?.value;
-      return value === "" || value === undefined ? null : Number(value);
+    function renderMapper() {
+      if (state.profile.target === "budget") renderBudgetWizard();
+      else renderInvestmentWizard();
     }
 
     function buildColumnMapping() {
@@ -234,16 +304,19 @@
           autoPopulatePerson: wizard.hasPerson && wizard.autoPopulatePerson === true,
         };
       }
+      const wizard = state.mappingWizard;
       return {
-        month: mappingValue("month"), balance: mappingValue("balance"), notes: mappingValue("notes"),
-        contributions: [...mappingForm.querySelectorAll('input[name="contributions"]:checked')].map((input) => Number(input.value)),
+        month: wizard.mapping.month,
+        balance: wizard.hasBalance ? wizard.mapping.balance : null,
+        contributions: wizard.mapping.contributions.slice(),
       };
     }
 
     function validateMapping(map, amountMode) {
       if (state.profile.target === "investment") {
-        if (map.month === null || map.balance === null) throw new Error("Map a reporting month/date and ending balance.");
-        if (map.month === map.balance) throw new Error("Month and balance must use different columns.");
+        if (map.month === null || !(map.contributions || []).length) throw new Error("Map an activity date and at least one cash-flow column.");
+        const mapped = [map.month, map.balance, ...(map.contributions || [])].filter((value) => window.ImportUtils.columnIndex(value) !== null);
+        if (new Set(mapped.map(window.ImportUtils.columnIndex)).size !== mapped.length) throw new Error("Each investment field must use a different CSV column.");
         return;
       }
       if (map.date === null || map.vendorDescription === null) throw new Error("Map a date and vendor description.");
@@ -255,7 +328,7 @@
       if (new Set(allMapped).size !== allMapped.length) throw new Error("Each transaction field must use a different CSV column.");
     }
 
-    function captureWizardControls(changedName = "") {
+    function captureBudgetWizardControls(changedName = "") {
       const wizard = state.mappingWizard;
       if (!wizard) return;
       const numberValue = (name) => {
@@ -293,7 +366,47 @@
       }
     }
 
-    function validateWizardStep() {
+    function captureInvestmentWizardControls(changedName = "") {
+      const wizard = state.mappingWizard;
+      if (!wizard) return;
+      const numberValue = (name) => {
+        const control = mappingForm.elements[name];
+        return control && control.value !== "" ? Number(control.value) : null;
+      };
+      ["month", "balance"].forEach((field) => {
+        if (mappingForm.elements[field]) wizard.mapping[field] = numberValue(field);
+      });
+      if (mappingForm.elements.dateFormat) wizard.dateFormat = mappingForm.elements.dateFormat.value;
+      const balance = mappingForm.querySelector('input[name="hasBalance"]:checked');
+      if (balance) {
+        wizard.hasBalance = balance.value === "yes";
+        if (!wizard.hasBalance) wizard.mapping.balance = null;
+      }
+      if (mappingForm.elements.contributions) {
+        wizard.mapping.contributions = [...mappingForm.querySelectorAll('input[name="contributions"]:checked')]
+          .map((input) => Number(input.value));
+      }
+      if (["month", "balance"].includes(changedName)) {
+        const selected = wizard.mapping[changedName];
+        if (selected !== null) {
+          if (changedName !== "month" && wizard.mapping.month === selected) wizard.mapping.month = null;
+          if (changedName !== "balance" && wizard.mapping.balance === selected) wizard.mapping.balance = null;
+          wizard.mapping.contributions = wizard.mapping.contributions.filter((value) => value !== selected);
+        }
+      }
+      if (changedName === "month") {
+        const formats = window.ImportUtils.validMonthFormats(state.parsed, wizard.mapping.month);
+        wizard.dateFormat = formats.includes("YYYY-MM") ? "YYYY-MM"
+          : formats.includes("MM/DD/YYYY") ? "MM/DD/YYYY" : formats.includes("MM/DD/YY") ? "MM/DD/YY" : formats[0] || "";
+      }
+    }
+
+    function captureWizardControls(changedName = "") {
+      if (state.profile?.target === "investment") captureInvestmentWizardControls(changedName);
+      else captureBudgetWizardControls(changedName);
+    }
+
+    function validateBudgetWizardStep() {
       const wizard = state.mappingWizard, map = wizard.mapping;
       if (wizard.step === 0) {
         if (map.date === null) throw new Error("Choose the column containing transaction dates.");
@@ -314,6 +427,34 @@
       if (wizard.step === 3 && wizard.hasCategory && map.categoryDescription === null) throw new Error("Choose the category column.");
       if (wizard.step === 4 && wizard.hasPerson && map.personDescription === null) throw new Error("Choose the person or cardholder column.");
       if (wizard.step === 5 && wizard.hasNotes && map.notes === null) throw new Error("Choose the notes column.");
+    }
+
+    function validateInvestmentWizardStep() {
+      const wizard = state.mappingWizard, map = wizard.mapping;
+      if (wizard.step === 0) {
+        if (map.month === null) throw new Error("Choose the column containing reporting months or dates.");
+        const formats = window.ImportUtils.validMonthFormats(state.parsed, map.month);
+        if (!formats.length || !formats.includes(wizard.dateFormat)) throw new Error("Choose a month/date column and format that fit every nonblank value.");
+        if (!state.parsed.rows.every((row) => Boolean(window.ImportUtils.parseDate(window.ImportUtils.valueAt(row, map.month), wizard.dateFormat)))) {
+          throw new Error("Every investment row must contain a valid, nonblank activity date.");
+        }
+      }
+      if (wizard.step === 1) {
+        if (wizard.hasBalance && (map.balance === null || !window.ImportUtils.isNumericColumn(state.parsed, map.balance))) throw new Error("Choose a numeric ending balance column.");
+        if (wizard.hasBalance && map.balance === map.month) throw new Error("Month and balance must use different columns.");
+      }
+      if (wizard.step === 2) {
+        if (!map.contributions.length) throw new Error("Choose at least one contribution or withdrawal column.");
+        if (map.contributions.some((column) => !window.ImportUtils.isNumericColumn(state.parsed, column))) throw new Error("Choose only numeric contribution or withdrawal columns.");
+      }
+      const mapped = [map.month, wizard.hasBalance ? map.balance : null, ...map.contributions]
+        .filter((value) => window.ImportUtils.columnIndex(value) !== null);
+      if (new Set(mapped.map(window.ImportUtils.columnIndex)).size !== mapped.length) throw new Error("Each investment field must use a different CSV column.");
+    }
+
+    function validateWizardStep() {
+      if (state.profile?.target === "investment") validateInvestmentWizardStep();
+      else validateBudgetWizardStep();
     }
 
     function references() {
@@ -371,10 +512,15 @@
       }
       else {
         const existing = window.InvestmentAPI.balances().filter((item) => item.accountId === state.profile.investmentAccountId).map((balance) => window.InvestmentAPI.monthData(balance.accountId, balance.month));
-        state.rows = window.ImportUtils.createInvestmentRows(state.parsed, state.profile, existing);
+        state.rows = window.ImportUtils.createInvestmentMonths(state.parsed, state.profile, existing);
       }
       state.filter = "all";
+      state.expandedInvestmentMonths.clear();
       mappingStep.hidden = true; reviewStep.hidden = false; renderReview();
+      if (state.profile.target === "investment") {
+        state.rows.filter((row) => row.errors.length).forEach((row) => state.expandedInvestmentMonths.add(row.stagingId));
+        renderInvestmentRows();
+      }
     }
 
     function validateRows() {
@@ -390,7 +536,7 @@
       state.rows.forEach((row) => {
         const result = state.profile.target === "budget"
           ? window.ImportUtils.validateBudgetRow(row, refs, state.profile)
-          : window.ImportUtils.validateInvestmentRow(row, refs, state.profile);
+          : window.ImportUtils.validateInvestmentMonth(row, refs, state.profile);
         row.errors = result.errors; row.warnings = result.warnings; if ("type" in result) row.type = result.type;
         if ("amount" in result && !row.amountEdited) row.amount = result.amount;
         if (!window.BudgetAPI.getActiveUser()) row.errors.push("Choose an app user in Settings.");
@@ -428,7 +574,8 @@
       const included = state.rows.filter((row) => row.include && !row.queued);
       const ready = included.filter((row) => !row.errors.length);
       let stats = [
-        [state.rows.length, "CSV rows"], [included.length, "Included"], [ready.length, "Ready"],
+        [state.profile.target === "investment" ? state.parsed.rows.length : state.rows.length, state.profile.target === "investment" ? "Source rows" : "CSV rows"],
+        [included.length, state.profile.target === "investment" ? "Included months" : "Included"], [ready.length, "Ready"],
         [included.filter((row) => row.errors.length).length, "With errors"],
       ];
       if (state.profile.target === "budget") {
@@ -436,7 +583,8 @@
         const expenses = included.filter((row) => row.type === "expense").reduce((sum, row) => sum + Number(row.amount || 0), 0);
         stats.push([included.filter((row) => !row.vendorId && row.type !== "income").length, "Unresolved vendors"], [included.filter((row) => !row.personId).length, "Unresolved people"], [included.filter((row) => !row.categoryId).length, "Missing categories"], [money(income), "Income"], [money(expenses), "Expenses"]);
       } else {
-        const flows = included.flatMap((row) => row.contributions).filter((value) => Number.isFinite(Number(value)));
+        stats.splice(1, 0, [state.rows.length, "Grouped months"]);
+        const flows = included.flatMap((row) => row.flows.map((flow) => flow.amount)).filter((value) => Number.isFinite(Number(value)));
         stats.push([included.filter((row) => row.existing).length, "Existing months"], [money(flows.filter((value) => value > 0).reduce((sum, value) => sum + value, 0)), "Contributions"], [money(Math.abs(flows.filter((value) => value < 0).reduce((sum, value) => sum + value, 0))), "Withdrawals"]);
       }
       root.querySelector("#import-summary").innerHTML = `<div class="import-summary">${stats.map(([value, label]) => `<div class="import-stat"><strong>${escapeHTML(String(value))}</strong><span>${escapeHTML(label)}</span></div>`).join("")}</div>`;
@@ -454,7 +602,7 @@
       root.querySelector("#import-review-head").innerHTML = '<tr><th class="include-column"><span class="sr-only">Include</span></th><th class="date-column">Date</th><th class="vendor-column">Vendor name</th><th class="category-column">Category</th><th class="person-column">Person</th><th class="amount-column">Amount</th><th class="notes-column">Notes</th><th class="status-column">Status</th></tr>';
       root.querySelector("#import-review-body").innerHTML = visibleRows.map((row) => `<tr data-staging-id="${row.stagingId}" class="${row.errors.length ? "has-errors" : ""}${row.queued ? " queued" : ""}">
         <td class="include-column"><input type="checkbox" aria-label="Include CSV row ${row.sourceRowNumber}" data-row-field="include"${row.include ? " checked" : ""}${row.queued ? " disabled" : ""} /></td>
-        <td class="date-column"><input type="date" aria-label="Transaction date" data-row-field="date" value="${escapeHTML(row.date || "")}"${row.queued ? " disabled" : ""} /></td>
+        <td class="date-column"><date-picker allow-empty aria-label="Transaction date" data-row-field="date" value="${escapeHTML(row.date || "")}"${row.queued ? " inert" : ""}></date-picker></td>
         <td class="vendor-column"><vendor-input data-row-field="vendorId" value="${escapeHTML(row.vendorId)}"${row.queued ? " inert" : ""}></vendor-input><span class="import-source-description">${escapeHTML(row.vendorDescription || "No source vendor")}</span></td>
         <td class="category-column"><category-select data-row-field="categoryId" type="all" create-type="${window.ImportUtils.suggestBudgetType(row)}" value="${escapeHTML(row.categoryId)}"${row.queued ? " inert" : ""}></category-select>${row.categoryDescription ? `<span class="import-source-description">${escapeHTML(row.categoryDescription)}</span>` : ""}</td>
         <td class="person-column"><people-select data-row-field="personId" allow-empty value="${escapeHTML(row.personId)}"${row.queued ? " inert" : ""}></people-select><span class="import-source-description">${escapeHTML(row.personDescription || "Shared")}</span></td>
@@ -487,15 +635,44 @@
     }
 
     function renderInvestmentRows() {
-      root.querySelector(".import-table").classList.remove("budget-review-table");
-      root.querySelector("#import-review-head").innerHTML = '<tr><th>Include</th><th>Row</th><th>Month</th><th>Account</th><th>Ending balance</th><th>Contributions / withdrawals</th><th>Notes</th><th>Status</th></tr>';
       const account = window.InvestmentAPI.accounts().find((item) => item.id === state.profile.investmentAccountId);
-      root.querySelector("#import-review-body").innerHTML = filteredRows().map((row) => `<tr data-staging-id="${row.stagingId}" class="${row.errors.length ? "has-errors" : ""}${row.queued ? " queued" : ""}"><td><input type="checkbox" data-row-field="include"${row.include ? " checked" : ""}${row.queued ? " disabled" : ""} /></td><td>${row.sourceRowNumber}</td><td><input type="month" data-row-field="month" value="${escapeHTML(row.month || "")}"${row.queued ? " disabled" : ""} /></td><td>${escapeHTML(account?.name || "Unknown")}</td><td><input type="number" step="0.01" min="0" data-row-field="balance" value="${numericInputValue(row.balance)}"${row.queued ? " disabled" : ""} /></td><td><div class="contribution-list">${row.contributions.map((value, index) => `<input type="number" step="0.01" data-contribution-index="${index}" value="${value === null ? "" : numericInputValue(value)}" aria-label="Contribution ${index + 1}"${row.queued ? " disabled" : ""} />`).join("") || "—"}</div></td><td><input type="text" data-row-field="notes" value="${escapeHTML(row.notes)}"${row.queued ? " disabled" : ""} /></td><td class="import-status">${statusMarkup(row)}</td></tr>`).join("");
+      const cards = filteredRows().map((row) => {
+        const expanded = state.expandedInvestmentMonths.has(row.stagingId);
+        const contributions = row.flows.filter((flow) => Number(flow.amount) > 0).reduce((sum, flow) => sum + Number(flow.amount), 0);
+        const withdrawals = Math.abs(row.flows.filter((flow) => Number(flow.amount) < 0).reduce((sum, flow) => sum + Number(flow.amount), 0));
+        const netFlow = contributions - withdrawals;
+        const netLabel = netFlow < 0 ? "Net withdrawal" : "Net contribution";
+        const balanceHint = row.balanceOrigin === "csv" && row.balanceSourceDate
+          ? `Latest CSV balance from ${row.balanceSourceDate}`
+          : row.balanceOrigin === "existing" ? "Existing Sheet balance" : "";
+        return `<article class="investment-import-month-card${row.errors.length ? " has-errors" : ""}${row.queued ? " queued" : ""}" data-staging-id="${row.stagingId}">
+          <div class="investment-import-month-header">
+            <label class="investment-import-include"><input type="checkbox" aria-label="Include ${escapeHTML(row.month || "investment month")}" data-row-field="include"${row.include ? " checked" : ""}${row.queued ? " disabled" : ""} /><span class="sr-only">Include month</span></label>
+            <div class="investment-import-month-field"><month-picker label="Month" data-row-field="month" value="${escapeHTML(row.month || "")}"${row.queued ? " inert" : ""}></month-picker></div>
+            <label class="import-field investment-import-balance"><span>Ending balance</span><input type="number" step="0.01" min="0" data-row-field="balance" value="${numericInputValue(row.balance)}"${balanceHint ? ` title="${escapeHTML(balanceHint)}"` : ""}${row.queued ? " disabled" : ""} /></label>
+            <div class="investment-import-totals"><span class="positive">+${money(contributions)} contributions</span><span class="negative">−${money(withdrawals)} withdrawals</span><strong class="${netFlow < 0 ? "negative" : "positive"}">${netLabel}: ${money(Math.abs(netFlow))}</strong></div>
+            <div class="import-status investment-import-status">${statusMarkup(row)}</div>
+            <button class="investment-import-toggle" type="button" data-import-action="toggle-investment-month" aria-expanded="${expanded}" aria-controls="${row.stagingId}-flows"><span aria-hidden="true">${expanded ? "▾" : "▸"}</span><span class="sr-only">${expanded ? "Collapse" : "Expand"} cash flows</span></button>
+          </div>
+          <div class="investment-import-flow-list" id="${row.stagingId}-flows"${expanded ? "" : " hidden"}>
+            ${row.flows.length ? row.flows.map((flow) => `<div class="investment-import-flow" data-flow-id="${escapeHTML(flow.id)}">
+              <time>${escapeHTML(flow.sourceDate || row.month || "No date")}</time>
+              <span class="investment-import-flow-source ${Number(flow.amount) < 0 ? "negative" : "positive"}">${Number(flow.amount) < 0 ? "Withdrawal" : "Contribution"}</span>
+              <input type="number" step="0.01" data-flow-id="${escapeHTML(flow.id)}" value="${numericInputValue(flow.amount)}" aria-label="${escapeHTML(flow.sourceColumn)} amount"${row.queued ? " disabled" : ""} />
+              <button class="text-button" type="button" data-import-action="remove-investment-flow" data-flow-id="${escapeHTML(flow.id)}"${row.queued ? " disabled" : ""}>Remove</button>
+            </div>`).join("") : '<p class="investment-import-empty">No nonzero cash flows remain for this month.</p>'}
+          </div>
+        </article>`;
+      }).join("");
+      root.querySelector("#import-investment-review").innerHTML = `<div class="investment-import-account"><span>Importing to</span><strong>${escapeHTML(account?.name || "Unknown account")}</strong></div><div class="investment-import-month-list">${cards || '<p class="investment-import-empty">No months match this filter.</p>'}</div>`;
     }
 
     function renderReview() {
       validateRows(); renderSummary(); renderFilters();
-      if (state.profile.target === "budget") renderBudgetRows(); else renderInvestmentRows();
+      const budget = state.profile.target === "budget";
+      root.querySelector("#import-budget-review").hidden = !budget;
+      root.querySelector("#import-investment-review").hidden = budget;
+      if (budget) renderBudgetRows(); else renderInvestmentRows();
       const included = state.rows.filter((row) => row.include && !row.queued);
       const commitButton = root.querySelector('[data-import-action="commit"]');
       const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
@@ -510,7 +687,7 @@
       message(root.querySelector("#import-file-message"), "Reading CSV…");
       try {
         state.parsed = window.ImportUtils.parseCSV(await file.text());
-        state.profile = null; state.rows = []; state.mappingWizard = null; state.commit = null; resetDraftEntities();
+        state.profile = null; state.rows = []; state.mappingWizard = null; state.commit = null; state.expandedInvestmentMonths.clear(); resetDraftEntities();
         mappingStep.hidden = true; reviewStep.hidden = true; progressStep.hidden = true; profileStep.hidden = false;
         window.AppRouter.setNavigationGuard(null);
         window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -529,7 +706,7 @@
       if (!profile || profile.headerSignature !== state.parsed.signature) return false;
       const map = profile.columnMapping || {};
       const indexes = profile.target === "investment"
-        ? [map.month, map.balance, map.notes, ...(map.contributions || [])]
+        ? [map.month, map.balance, ...(map.contributions || [])]
         : [map.date, map.vendorDescription, map.categoryDescription, map.personDescription, map.notes,
           profile.amountMode === "debitCredit" ? map.debit : map.amount,
           profile.amountMode === "debitCredit" ? map.credit : null];
@@ -538,6 +715,10 @@
       try {
         validateMapping(map, profile.amountMode);
         if (profile.target === "budget" && !window.ImportUtils.validDateFormats(state.parsed, map.date).includes(profile.dateFormat)) return false;
+        if (profile.target === "investment" && (
+          !window.ImportUtils.validMonthFormats(state.parsed, map.month).includes(profile.dateFormat)
+          || !state.parsed.rows.every((row) => Boolean(window.ImportUtils.parseDate(window.ImportUtils.valueAt(row, map.month), profile.dateFormat)))
+        )) return false;
         return true;
       } catch {
         return false;
@@ -579,22 +760,20 @@
     async function handleMappingSubmit(event) {
       event.preventDefault(); message(mappingMessage, "");
       try {
-        if (state.profile.target === "budget") {
-          captureWizardControls();
-          validateWizardStep();
-          if (state.mappingWizard.step < WIZARD_STEPS.length - 1) {
-            state.mappingWizard.step += 1;
-            state.mappingWizard.maxVisited = Math.max(state.mappingWizard.maxVisited, state.mappingWizard.step);
-            renderBudgetWizard();
-            return;
-          }
+        captureWizardControls();
+        validateWizardStep();
+        if (state.mappingWizard.step < wizardSteps().length - 1) {
+          state.mappingWizard.step += 1;
+          state.mappingWizard.maxVisited = Math.max(state.mappingWizard.maxVisited, state.mappingWizard.step);
+          renderMapper();
+          return;
         }
         const columnMapping = buildColumnMapping();
         const amountMode = state.profile.target === "budget" ? state.mappingWizard.amountMode : "monthly";
         validateMapping(columnMapping, amountMode);
         state.profile = window.ImportAPI.createProfileDraft({
           ...state.profile, headerSignature: state.parsed.signature, columnMapping,
-          dateFormat: state.profile.target === "budget" ? state.mappingWizard.dateFormat : mappingForm.elements.dateFormat.value, amountMode,
+          dateFormat: state.mappingWizard.dateFormat, amountMode,
           amountMultiplier: state.profile.target === "budget" ? (state.mappingWizard.mapping.amountSignConvention === "expensesNegative" ? -1 : 1) : 1,
         });
         state.bundle = { ...state.bundle, profile: state.profile };
@@ -652,15 +831,39 @@
     function handleReviewChange(event) {
       const row = rowFromElement(event.target); if (!row || row.queued) return;
       const field = event.target.dataset.rowField;
-      if (event.target.dataset.contributionIndex === undefined && !field) return;
-      if (event.target.dataset.contributionIndex !== undefined) row.contributions[Number(event.target.dataset.contributionIndex)] = event.target.value === "" ? null : Number(event.target.value);
+      const flowId = event.target.dataset.flowId;
+      if (!flowId && !field) return;
+      if (flowId) {
+        const flow = row.flows?.find((item) => item.id === flowId);
+        if (flow) flow.amount = event.target.value === "" ? null : Number(event.target.value);
+      }
       if (field === "include") row.include = event.target.checked;
-      else if (field === "amount" || field === "balance") { row[field] = event.target.value === "" ? null : Number(event.target.value); if (field === "amount") row.amountEdited = true; }
+      else if (field === "amount" || field === "balance") {
+        row[field] = event.target.value === "" ? null : Number(event.target.value);
+        if (field === "amount") row.amountEdited = true;
+        if (field === "balance") row.balanceOrigin = "manual";
+      }
       else if (field === "vendorId" || field === "personId") applyReference(row, field, event.target.value);
       else if (field) {
+        const priorMonth = field === "month" ? row.month : "";
         row[field] = event.target.value;
+        if (field === "month" && priorMonth !== row.month) {
+          row.existing = window.InvestmentAPI.monthData(row.accountId, row.month);
+          if (!row.existing?.balance && !row.existing?.contributions?.length) row.existing = null;
+          if (row.balanceOrigin === "existing") {
+            row.balance = row.existing?.balance ? Number(row.existing.balance.balance) : null;
+            row.balanceOrigin = row.existing?.balance ? "existing" : "";
+          }
+        }
         if (field === "categoryId" && references().categories.find((item) => item.id === row.categoryId)?.type === "income") row.vendorId = "";
       }
+      renderReview();
+    }
+
+    function handleReviewDateChange(event) {
+      const row = rowFromElement(event.target);
+      if (!row || row.queued || state.profile?.target !== "budget") return;
+      row.date = event.detail?.value || "";
       renderReview();
     }
 
@@ -673,9 +876,11 @@
     }
 
     function handleMappingChange(event) {
-      if (state.profile?.target !== "budget") { updateAmountFields(); return; }
       captureWizardControls(event.target.name);
-      if (["date", "amountMode", "amount", "debit", "credit", "hasCategory", "hasPerson", "hasNotes"].includes(event.target.name)) renderBudgetWizard();
+      const rerender = state.profile?.target === "investment"
+        ? ["month", "balance", "hasBalance", "contributions"].includes(event.target.name)
+        : ["date", "amountMode", "amount", "debit", "credit", "hasCategory", "hasPerson", "hasNotes"].includes(event.target.name);
+      if (rerender) renderMapper();
     }
 
     function handleWizardNavigation(event) {
@@ -683,7 +888,7 @@
       if (!control || !state.mappingWizard || control.disabled) return;
       captureWizardControls();
       state.mappingWizard.step = Number(control.dataset.wizardStep);
-      renderBudgetWizard();
+      renderMapper();
       mappingStep.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
@@ -713,7 +918,7 @@
       finish.hidden = state.commit.status !== "complete";
       sync.hidden = state.commit.status !== "complete";
       root.querySelector("#import-progress-summary").textContent = state.commit.status === "complete"
-        ? `${state.commit.included.length} ${state.commit.included.length === 1 ? "row was" : "rows were"} confirmed in Google Sheets.`
+        ? `${state.commit.included.length} ${state.profile.target === "investment" ? (state.commit.included.length === 1 ? "month was" : "months were") : (state.commit.included.length === 1 ? "row was" : "rows were")} confirmed in Google Sheets.`
         : "Keep this page open while each step is confirmed in Google Sheets.";
     }
 
@@ -796,8 +1001,8 @@
           const queued = window.InvestmentAPI.queueImportedMonths(state.commit.included.map((row) => ({
             accountId: row.accountId, month: row.month, balance: row.balance,
             balanceId: row.existing?.balance?.id || "", existingContributions: row.existing?.contributions || [],
-            contributions: row.contributions.filter((value) => value !== null && Number(value) !== 0).map((amount) => ({ amount })),
-            notes: row.notes,
+            contributions: row.flows.filter((flow) => Number.isFinite(Number(flow.amount)) && Number(flow.amount) !== 0).map((flow) => ({ amount: Number(flow.amount) })),
+            notes: row.existing?.balance?.notes || "",
           })));
           checkpoint.recordIds = queued.map((item) => item.syncOperationId);
         } else {
@@ -899,7 +1104,7 @@
         if (action === "clear") {
           if (!guardNavigation()) return;
           fileInput.value = ""; state.parsed = null; state.profile = null; state.rows = [];
-          state.mappingWizard = null; state.commit = null; resetDraftEntities();
+          state.mappingWizard = null; state.commit = null; state.expandedInvestmentMonths.clear(); resetDraftEntities();
           profileStep.hidden = true; mappingStep.hidden = true; reviewStep.hidden = true; progressStep.hidden = true; renderSourcePreview();
           window.AppRouter.setNavigationGuard(null);
           window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -908,7 +1113,7 @@
         if (action === "wizard-back") {
           captureWizardControls();
           state.mappingWizard.step = Math.max(0, state.mappingWizard.step - 1);
-          renderBudgetWizard();
+          renderMapper();
         }
         if (action === "archive-profile") {
           if (!profileForm.elements.profileId.value || !window.confirm("Archive this import profile? Saved mappings will be retained.")) return;
@@ -917,6 +1122,20 @@
           message(profileMessage, "Profile archived.", "success");
         }
         if (action === "back-to-mapping") { reviewStep.hidden = true; mappingStep.hidden = false; if (state.mappingWizard) state.mappingWizard.step = 0; renderMapper(); }
+        if (action === "toggle-investment-month") {
+          const row = rowFromElement(event.target);
+          if (!row) return;
+          if (state.expandedInvestmentMonths.has(row.stagingId)) state.expandedInvestmentMonths.delete(row.stagingId);
+          else state.expandedInvestmentMonths.add(row.stagingId);
+          renderInvestmentRows();
+        }
+        if (action === "remove-investment-flow") {
+          const row = rowFromElement(event.target);
+          const flowId = event.target.closest("[data-flow-id]")?.dataset.flowId;
+          if (!row || row.queued || !flowId) return;
+          row.flows = row.flows.filter((flow) => flow.id !== flowId);
+          renderReview();
+        }
         if (action === "commit") await commitImport(false);
         if (action === "retry-commit") await commitImport(true);
         if (action === "return-review") {
@@ -930,7 +1149,7 @@
           state.commit = null;
           progressStep.hidden = true;
           fileInput.value = ""; state.parsed = null; state.profile = null; state.rows = []; state.mappingWizard = null;
-          resetDraftEntities(); profileStep.hidden = true; mappingStep.hidden = true; reviewStep.hidden = true; renderSourcePreview();
+          state.expandedInvestmentMonths.clear(); resetDraftEntities(); profileStep.hidden = true; mappingStep.hidden = true; reviewStep.hidden = true; renderSourcePreview();
           message(root.querySelector("#import-file-message"), "Ready for another CSV.");
         }
         if (action === "open-sync") window.AppRouter.navigate("sync");
@@ -942,6 +1161,13 @@
       state.filter = filter; renderReview();
     }
 
+    function refreshProfiles() {
+      window.ImportAPI.listProfiles().then((profiles) => {
+        state.profiles = profiles;
+        profileOptions();
+      }).catch((error) => message(root.querySelector("#import-file-message"), `Profiles could not be loaded: ${error.message}`, "error"));
+    }
+
     fileInput.addEventListener("change", handleFileChange);
     profileForm.addEventListener("submit", handleProfileSubmit);
     profileForm.elements.profileId.addEventListener("change", chooseProfileCandidate);
@@ -949,15 +1175,17 @@
     mappingForm.addEventListener("submit", handleMappingSubmit);
     mappingForm.addEventListener("change", handleMappingChange);
     root.addEventListener("change", handleReviewChange);
+    root.addEventListener("date-change", handleReviewDateChange);
     root.addEventListener("vendor-selected", handleReviewSelection);
     root.addEventListener("person-selected", handleReviewSelection);
     root.addEventListener("category-selected", handleReviewSelection);
     root.addEventListener("click", handleAction);
     root.addEventListener("click", handleFilter);
     root.addEventListener("click", handleWizardNavigation);
+    window.addEventListener("budget:import-profiles-changed", refreshProfiles);
 
     accountOptions(); updateTargetFields();
-    window.ImportAPI.listProfiles({ refresh: true }).then((profiles) => { state.profiles = profiles; profileOptions(); }).catch((error) => message(root.querySelector("#import-file-message"), `Profiles could not be refreshed: ${error.message}`, "error"));
+    refreshProfiles();
 
     cleanup = () => {
       fileInput.removeEventListener("change", handleFileChange);
@@ -967,12 +1195,14 @@
       mappingForm.removeEventListener("submit", handleMappingSubmit);
       mappingForm.removeEventListener("change", handleMappingChange);
       root.removeEventListener("change", handleReviewChange);
+      root.removeEventListener("date-change", handleReviewDateChange);
       root.removeEventListener("vendor-selected", handleReviewSelection);
       root.removeEventListener("person-selected", handleReviewSelection);
       root.removeEventListener("category-selected", handleReviewSelection);
       root.removeEventListener("click", handleAction);
       root.removeEventListener("click", handleFilter);
       root.removeEventListener("click", handleWizardNavigation);
+      window.removeEventListener("budget:import-profiles-changed", refreshProfiles);
       window.AppRouter.setNavigationGuard(null);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };

@@ -54,6 +54,31 @@ test("date inference filters impossible and invalid formats while retaining genu
   assert.deepEqual(Array.from(utils.validDateFormats(utils.parseCSV("When\n02/03/24"), 0)), ["MM/DD/YY", "DD/MM/YY"]);
 });
 
+test("investment month inference accepts monthly and full-date values", () => {
+  const utils = loadUtils();
+  const monthly = utils.parseCSV("Month\n2026-06\n2026-07");
+  assert.deepEqual(Array.from(utils.validMonthFormats(monthly, 0)), ["YYYY-MM"]);
+
+  const ambiguous = utils.parseCSV("Statement Date\n07/08/2026\n08/09/2026");
+  const formats = Array.from(utils.validMonthFormats(ambiguous, 0));
+  assert.equal(formats.includes("MM/DD/YYYY"), true);
+  assert.equal(formats.includes("DD/MM/YYYY"), true);
+
+  const invalid = utils.parseCSV("Month\n2026-06\nnot-a-date");
+  assert.deepEqual(Array.from(utils.validMonthFormats(invalid, 0)), []);
+});
+
+test("investment suggestions identify balances and signed flows while ignoring notes", () => {
+  const utils = loadUtils();
+  const parsed = utils.parseCSV("Month,Ending Balance,Employee Contribution,Withdrawal,Notes\n2026-06,1000,50,-10,June");
+  const suggested = utils.suggestInvestmentMapping(parsed);
+  assert.equal(suggested.month, 0);
+  assert.equal(suggested.balance, 1);
+  assert.deepEqual(Array.from(suggested.contributions), [2, 3]);
+  assert.equal(suggested.notes, undefined);
+  assert.equal(suggested.dateFormat, "YYYY-MM");
+});
+
 test("transaction suggestions prioritize headings and only offer numeric amount columns", () => {
   const utils = loadUtils();
   const unified = utils.parseCSV("Memo,Posted Date,Merchant,Amount,Card Member\nlunch,07/13/2026,Cafe,-12.50,Alex");
@@ -163,21 +188,54 @@ test("split amount staging flags rows with both or neither debit and credit", ()
   assert.match(rows[1].amountLayoutError, /either a debit or credit/);
 });
 
-test("investment staging keeps multiple signed flows and flags duplicate account-months", () => {
+test("investment staging groups rows, keeps signed flows, and uses the latest dated balance", () => {
   const utils = loadUtils();
-  const parsed = utils.parseCSV("Month,Balance,Employee,Withdrawal\n2026-06,1000,50,-10\n2026-06,1100,60,");
-  const rows = utils.createInvestmentRows(parsed, {
-    investmentAccountId: "account", dateFormat: "YYYY-MM",
+  const parsed = utils.parseCSV("Date,Balance,Employee,Withdrawal\n06/03/2026,1000,50,-10\n06/30/2026,1200,60,\n06/14/2026,1100,,25\n07/05/2026,,75,");
+  const months = utils.createInvestmentMonths(parsed, {
+    investmentAccountId: "account", dateFormat: "MM/DD/YYYY",
     columnMapping: { month: 0, balance: 1, contributions: [2, 3] },
+  }, [{
+    accountId: "account", month: "2026-07",
+    balance: { id: "balance-july", balance: 1300, notes: "Keep this note" },
+    contributions: [],
+  }]);
+  assert.equal(months.length, 2);
+  assert.equal(months[0].month, "2026-06");
+  assert.equal(months[0].sourceRowCount, 3);
+  assert.equal(months[0].balance, 1200);
+  assert.equal(months[0].balanceSourceDate, "2026-06-30");
+  assert.equal(months[0].balanceOrigin, "csv");
+  assert.deepEqual(Array.from(months[0].flows, (flow) => [flow.sourceDate, flow.sourceColumn, flow.amount]), [
+    ["2026-06-03", "Employee", 50],
+    ["2026-06-03", "Withdrawal", -10],
+    ["2026-06-30", "Employee", 60],
+    ["2026-06-14", "Withdrawal", 25],
+  ]);
+  assert.equal(months[1].balance, 1300);
+  assert.equal(months[1].balanceOrigin, "existing");
+  assert.equal(months[1].existing.balance.notes, "Keep this note");
+});
+
+test("investment staging breaks balance ties by later CSV row and leaves missing balances editable", () => {
+  const utils = loadUtils();
+  const parsed = utils.parseCSV("Month,Balance,Deposit\n2026-06,1000,50\n2026-06,1100,\n2026-07,,25");
+  const months = utils.createInvestmentMonths(parsed, {
+    investmentAccountId: "account", dateFormat: "YYYY-MM",
+    columnMapping: { month: 0, balance: 1, contributions: [2] },
   }, []);
-  assert.deepEqual(Array.from(rows[0].contributions), [50, -10]);
-  assert.match(rows[0].errors[0], /more than once/);
-  assert.match(rows[1].errors[0], /more than once/);
+  assert.equal(months[0].balance, 1100);
+  assert.equal(months[0].balanceSourceDate, "2026-06");
+  assert.equal(months[1].balance, null);
+  assert.equal(months[1].balanceOrigin, "");
+  const validation = utils.validateInvestmentMonth(months[1], { accounts: [{ id: "account", active: true }] }, { id: "profile" });
+  assert.match(validation.errors.join(" "), /nonnegative ending balance/);
 });
 
 test("import route and scripts are wired for direct index loading", () => {
   const html = fs.readFileSync("index.html", "utf8");
+  const navigationTemplate = fs.readFileSync("html templates/navigation-bar.html", "utf8");
   const router = fs.readFileSync("js/router.js", "utf8");
+  const api = fs.readFileSync("js/import-api.js", "utf8");
   assert.match(html, /data-tab="import"/);
   assert.match(html, /id="route-import"/);
   assert.match(html, /js\/import-utils\.js[\s\S]*js\/api\.js[\s\S]*js\/import-api\.js/);
@@ -185,12 +243,34 @@ test("import route and scripts are wired for direct index loading", () => {
   const route = fs.readFileSync("js/routes/import.js", "utf8");
   assert.match(route, /Step 1 of 6 · Date/);
   assert.match(route, /Step 4 of 6 · Category/);
+  assert.match(route, /Step 1 of 3 · Activity date/);
+  assert.match(route, /Step 2 of 3 · Ending balance/);
+  assert.match(route, /Step 3 of 3 · Contributions and withdrawals/);
+  assert.match(route, /validMonthFormats/);
+  assert.match(route, /hasBalance/);
+  assert.match(route, /createInvestmentMonths/);
+  assert.match(route, /investment-import-month-card/);
+  assert.match(route, /<month-picker label="Month" data-row-field="month"/);
+  assert.match(route, /<date-picker allow-empty/);
+  assert.match(route, /remove-investment-flow/);
+  assert.match(route, /Net withdrawal[\s\S]*Net contribution/);
+  assert.match(route, /Number\(flow\.amount\) < 0 \? "Withdrawal" : "Contribution"/);
+  assert.doesNotMatch(route, /source \$\{row\.sourceRowCount/);
+  assert.doesNotMatch(route, /if \(row\.errors\.length\) state\.expandedInvestmentMonths\.add/);
+  assert.doesNotMatch(route, /type="month"/);
+  assert.doesNotMatch(route, /data-contribution-index/);
+  assert.match(route, /notes: row\.existing\?\.balance\?\.notes \|\| ""/);
+  const datePicker = fs.readFileSync("js/components/date-picker.js", "utf8");
+  assert.match(datePicker, /!this\.#value && !this\.hasAttribute\("allow-empty"\)/);
   assert.match(route, /Match or create vendors using these values/);
   assert.match(route, /Match or create categories using these values/);
   assert.match(route, /Match or create people using these values/);
   assert.match(route, /data-import-action="commit"/);
   assert.doesNotMatch(route, /data-import-action="save-mappings"/);
   assert.equal((route.match(/ImportAPI\.saveProfile\(/g) || []).length, 1);
+  assert.doesNotMatch(route, /listProfiles\(\{ refresh: true \}\)/);
+  assert.match(api, /function applyBootstrapData/);
+  assert.match(api, /request\("getImportProfileBundle"/);
   assert.match(route, /profileMappingIsUsable\(state\.profile\)[\s\S]*stageRows\(\)/);
   assert.match(route, /Creating or updating the import profile[\s\S]*Creating new vendors[\s\S]*Creating categories[\s\S]*Creating people[\s\S]*Saving imported records/);
   assert.match(route, /Expenses are negative; deposits are positive/);
@@ -202,4 +282,14 @@ test("import route and scripts are wired for direct index loading", () => {
   assert.match(route, /<people-select data-row-field="personId" allow-empty/);
   assert.match(route, /include-column[\s\S]*date-column[\s\S]*vendor-column[\s\S]*category-column[\s\S]*person-column[\s\S]*amount-column[\s\S]*notes-column/);
   assert.match(route, /number\.toFixed\(2\)/);
+
+  const budgetingStart = html.indexOf('data-nav-section="budgeting"');
+  const budgetingEnd = html.indexOf('data-nav-section="investments"');
+  const footerStart = html.indexOf('class="nav-footer"');
+  const importPosition = html.indexOf('data-tab="import"');
+  const syncPosition = html.indexOf('data-tab="sync"', footerStart);
+  assert.equal((html.match(/data-tab="import"/g) || []).length, 1);
+  assert.equal(html.slice(budgetingStart, budgetingEnd).includes('data-tab="import"'), false);
+  assert.equal(importPosition > footerStart && importPosition < syncPosition, true);
+  assert.match(navigationTemplate, /class="nav-footer"[\s\S]*data-tab="import"[\s\S]*data-tab="sync"[\s\S]*data-tab="settings"/);
 });

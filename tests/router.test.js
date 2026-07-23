@@ -163,6 +163,8 @@ test("main treats drawer parameters as overlays rather than new content", () => 
   assert.match(main, /delete contentParams\.investmentMonth/);
   assert.match(main, /delete contentParams\.investmentReviewId/);
   assert.match(main, /if \(contentKey === mountedContentKey\) return/);
+  assert.match(main, /BudgetAPI\.loadAppData/);
+  assert.doesNotMatch(main, /BudgetAPI\.(?:loadReferenceData|listTransactions)/);
   assert.match(drawer, /AppRouter\.updateParams/);
   assert.doesNotMatch(drawer, /AppRouter\.navigate\("transactions"/);
   assert.doesNotMatch(drawer, /window\.TransactionEditor/);
@@ -186,6 +188,29 @@ test("settings route delegates state to cached custom-element forms", () => {
   assert.match(userForm, /budget:reference-data-changed/);
   assert.match(
     urlForm,
-    /await window\.BudgetAPI\.loadReferenceData\(\)[\s\S]*await window\.BudgetUI\.loadTransactions\(\)[\s\S]*budget:connection-changed/,
+    /await window\.BudgetUI\.initializeData\(\{ refresh: true \}\)[\s\S]*budget:connection-changed/,
   );
+});
+
+test("startup uses a cold splash, cached refresh lifecycle, and paginated monthly transactions", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  const main = fs.readFileSync("js/main.js", "utf8");
+  const transactions = fs.readFileSync("js/routes/transactions.js", "utf8");
+
+  assert.match(html, /id="app-loading-splash"/);
+  assert.match(html, /id="app-refresh-indicator"/);
+  assert.match(html, /id="route-transactions"[\s\S]*<date-range-picker preset="month"/);
+  assert.match(html, /id="load-more-transactions"/);
+  assert.match(main, /BudgetAPI\.getCachedTransactions/);
+  assert.match(main, /budget:data-refresh-started/);
+  assert.match(main, /budget:data-refresh-complete/);
+  assert.match(main, /budget:data-refresh-failed/);
+  assert.match(main, /detail: \{ source: "cache" \}/);
+  assert.match(main, /detail: \{ source: "server" \}/);
+  assert.match(transactions, /const PAGE_SIZE = 250/);
+  assert.match(transactions, /activeRange = rangePicker\?\.value/);
+  assert.match(transactions, /const visible = items\.slice\(0, visibleLimit\)/);
+  assert.match(transactions, /Showing \$\{visible\.length\} of \$\{total\} transactions/);
+  assert.match(transactions, /visibleLimit \+= PAGE_SIZE/);
+  assert.match(transactions, /function updateSummary\(\)[\s\S]*window\.BudgetUI\?\.getTransactions/);
 });

@@ -112,7 +112,7 @@ const datePickerTemplate = () => `
       this.#hiddenInput = this.querySelector('input[type="hidden"]');
 
       // Set the date value
-      if (!this.#value) {
+      if (!this.#value && !this.hasAttribute("allow-empty")) {
         this.value = toISODate(new Date()); // Call shared utility
       }
 

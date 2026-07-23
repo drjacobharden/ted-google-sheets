@@ -20,7 +20,7 @@
 .import-preview th, .import-table th { color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
 .import-contribution-options { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-small); }
 .import-contribution-options label { display: flex; gap: 6px; align-items: center; font-size: 13px; }
-.import-wizard-progress { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 0 0 20px; padding: 0; list-style: none; }
+.import-wizard-progress { display: grid; grid-template-columns: repeat(var(--wizard-step-count, 6), minmax(0, 1fr)); gap: 8px; margin: 0 0 20px; padding: 0; list-style: none; }
 .import-wizard-progress button { width: 100%; padding: 10px 8px; border: 1px solid var(--border); border-radius: var(--radius-small); background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; text-align: left; }
 .import-wizard-progress button:not(:disabled) { cursor: pointer; }
 .import-wizard-progress button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); color: var(--text); font-weight: 700; }
@@ -62,6 +62,9 @@
 .budget-review-table .include-column { width: 38px; min-width: 38px; text-align: center; }
 .budget-review-table td.include-column input[type="checkbox"] { width: 19px; height: 19px; margin-top: 10px; accent-color: var(--accent); }
 .budget-review-table .date-column { width: 132px; min-width: 132px; }
+.budget-review-table .date-column date-picker { display: block; width: 100%; }
+.budget-review-table .date-column date-picker > .form-field > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.budget-review-table .date-column .date-picker-trigger { width: 100%; min-width: 116px; padding-inline: 9px; font-size: 11px; }
 .budget-review-table .vendor-column { width: 220px; min-width: 220px; }
 .budget-review-table .category-column { width: 205px; min-width: 205px; }
 .budget-review-table .person-column { width: 195px; min-width: 195px; }
@@ -87,6 +90,41 @@
 .import-status .error { display: block; color: var(--danger, #b42318); }
 .import-status .warning { display: block; color: #8a5a00; }
 .import-table .contribution-list { display: grid; gap: 6px; min-width: 130px; }
+.investment-import-review { display: grid; gap: 12px; }
+.investment-import-review[hidden] { display: none; }
+.investment-import-account { display: flex; gap: 8px; align-items: baseline; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-small); background: var(--surface-subtle, #fafafa); }
+.investment-import-account span { color: var(--muted); font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; }
+.investment-import-month-list { display: grid; gap: 12px; }
+.investment-import-month-card { border: 1px solid var(--border); border-radius: var(--radius-large); background: var(--surface); }
+.investment-import-month-card.has-errors { border-color: color-mix(in srgb, var(--danger, #b42318) 55%, var(--border)); }
+.investment-import-month-card.queued { opacity: .62; }
+.investment-import-month-header { display: grid; grid-template-columns: 26px minmax(210px, 1fr) minmax(210px, 1fr) minmax(220px, 1.15fr) minmax(190px, 1fr) 32px; gap: 14px; align-items: end; padding: 14px; }
+.investment-import-include { display: grid; min-height: 40px; place-items: center; }
+.investment-import-include input { width: 19px; height: 19px; margin: 0; accent-color: var(--accent); }
+.investment-import-toggle { display: grid; width: 32px; height: 40px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-small); background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
+.investment-import-toggle:hover { background: var(--surface-subtle, #f3f3f3); color: var(--text); }
+.investment-import-month-field { display: grid; min-width: 0; }
+.investment-import-month-header month-picker { min-width: 0; width: 100%; }
+.investment-import-month-header .month-picker-trigger { width: 100%; height: 44px; min-height: 44px; }
+.investment-import-balance { min-width: 0; }
+.investment-import-balance input, .investment-import-flow input { min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-small); background: var(--surface); color: var(--text); font: inherit; }
+.investment-import-balance input { width: 100%; height: 44px; min-height: 44px; }
+.investment-import-balance small { overflow: hidden; color: var(--muted); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.investment-import-totals { display: grid; min-height: 40px; gap: 2px; align-content: center; font-size: 12px; }
+.investment-import-totals .positive { color: var(--success, #267a45); }
+.investment-import-totals .negative { color: var(--danger, #b42318); }
+.investment-import-totals strong { font-size: 12px; }
+.investment-import-status { min-width: 0; min-height: 40px; align-content: center; }
+.investment-import-flow-list { overflow: hidden; padding: 4px 14px 14px 54px; border-top: 1px solid var(--border); border-radius: 0 0 calc(var(--radius-large) - 1px) calc(var(--radius-large) - 1px); background: var(--surface-subtle, #fafafa); }
+.investment-import-flow-list[hidden] { display: none; }
+.investment-import-flow { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(180px, 1.6fr) minmax(120px, .8fr) auto; gap: 12px; align-items: center; min-height: 58px; border-bottom: 1px solid var(--border); }
+.investment-import-flow:last-child { border-bottom: 0; }
+.investment-import-flow time { color: var(--muted); font-size: 12px; }
+.investment-import-flow-source { overflow-wrap: anywhere; font-size: 13px; font-weight: 650; }
+.investment-import-flow-source.positive { color: var(--success, #267a45); }
+.investment-import-flow-source.negative { color: var(--danger, #b42318); }
+.investment-import-flow .text-button { justify-self: end; padding: 6px 4px; border: 0; background: transparent; color: var(--danger, #b42318); cursor: pointer; font: inherit; font-weight: 650; }
+.investment-import-empty { margin: 0; padding: 16px; color: var(--muted); text-align: center; }
 .import-commit-progress { display: grid; max-width: 760px; gap: 0; margin: 18px 0 0; padding: 0; list-style: none; }
 .import-commit-progress li { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; min-height: 54px; padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
 .import-commit-progress li strong, .import-commit-progress li small { display: block; }
@@ -99,5 +137,27 @@
 .import-commit-progress li.failed strong { color: var(--danger, #b42318); }
 .import-commit-progress li.skipped { opacity: .7; }
 @keyframes import-pulse { to { transform: scale(1.08); } }
-@media (max-width: 900px) { .import-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .import-grid { grid-template-columns: 1fr; } .import-grid .wide { grid-column: auto; } .import-heading { align-items: start; flex-direction: column; } .import-wizard-progress { grid-template-columns: repeat(6, 44px); overflow-x: auto; } .import-wizard-progress button { overflow: hidden; white-space: nowrap; } .import-wizard-progress span { margin-right: 12px; } }
+@media (max-width: 900px) {
+  .import-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .investment-import-month-header { grid-template-columns: 26px minmax(170px, 1fr) minmax(170px, 1fr) 32px; }
+  .investment-import-totals { grid-column: 2 / 3; }
+  .investment-import-status { grid-column: 3 / 4; }
+  .investment-import-toggle { grid-column: 4; grid-row: 1; align-self: end; }
+}
+@media (max-width: 560px) {
+  .import-grid { grid-template-columns: 1fr; }
+  .import-grid .wide { grid-column: auto; }
+  .import-heading { align-items: start; flex-direction: column; }
+  .import-wizard-progress { grid-template-columns: repeat(var(--wizard-step-count, 6), 44px); overflow-x: auto; }
+  .import-wizard-progress button { overflow: hidden; white-space: nowrap; }
+  .import-wizard-progress span { margin-right: 12px; }
+  .investment-import-month-header { grid-template-columns: 24px minmax(0, 1fr) 32px; gap: 10px; padding: 12px; }
+  .investment-import-include { grid-column: 1; grid-row: 1; align-self: end; }
+  .investment-import-month-field { grid-column: 2; }
+  .investment-import-toggle { grid-column: 3; grid-row: 1; align-self: end; }
+  .investment-import-balance, .investment-import-totals, .investment-import-status { grid-column: 2 / -1; }
+  .investment-import-flow-list { padding: 4px 12px 12px; }
+  .investment-import-flow { grid-template-columns: 1fr minmax(110px, .8fr); padding: 10px 0; }
+  .investment-import-flow time, .investment-import-flow-source { grid-column: 1; }
+  .investment-import-flow input, .investment-import-flow .text-button { grid-column: 2; }
+}

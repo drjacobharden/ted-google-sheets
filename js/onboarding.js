@@ -90,7 +90,7 @@
     await window.BudgetAPI.testConnection(value);
     window.BudgetAPI.saveConfig({ endpoint: value });
     try {
-      await window.BudgetAPI.loadReferenceData();
+      await window.BudgetAPI.loadAppData({ refresh: true });
       const users = window.BudgetAPI.listUsers();
       window.dispatchEvent(
         new CustomEvent("budget:connection-changed", {

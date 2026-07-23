@@ -13,6 +13,7 @@
   const RETRY_DELAYS = [2000, 5000, 15000, 30000, 60000];
   let syncPromise = null;
   let retryTimer = null;
+  let bootstrapped = false;
 
   const read = (key) => { try { const value = JSON.parse(localStorage.getItem(key)); return Array.isArray(value) ? value : []; } catch { return []; } };
   const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -152,18 +153,32 @@
   }
   function applyLocalMonth(value) { const balanceRecords = balances(); const contributionRecords = contributions(); applyMonthToArrays(balanceRecords, contributionRecords, value); write(KEYS.balances, balanceRecords); write(KEYS.contributions, contributionRecords); }
 
-  async function load() {
-    if (endpoint()) {
+  function applyServerData(serverAccounts, serverBalances, serverContributions) {
+    if (!Array.isArray(serverAccounts)) throw new Error("The sheet response did not include an investment account list.");
+    if (!Array.isArray(serverBalances)) throw new Error("The sheet response did not include an investment balance list.");
+    if (!Array.isArray(serverContributions)) throw new Error("The sheet response did not include an investment contribution list.");
+    const pendingAccounts = new Map(accountOutbox().map((item) => [item.record.id, item.record]));
+    write(KEYS.accounts, [...serverAccounts.filter((item) => !pendingAccounts.has(item.id)), ...pendingAccounts.values()]);
+    const localBalances = serverBalances.map(migrateBalance); const localContributions = serverContributions.map(migrateContribution); const outbox = monthOutbox(); let repaired = false;
+    outbox.forEach((item) => {
+      const serverMonth = { accountId: item.accountId, month: item.month, balance: localBalances.find((entry) => entry.accountId === item.accountId && entry.month === item.month) || null, contributions: localContributions.filter((entry) => entry.accountId === item.accountId && entry.month === item.month) };
+      if (item.failureCode === "conflict") { if (JSON.stringify(item.current) !== JSON.stringify(serverMonth)) { item.current = serverMonth; repaired = true; } applyMonthToArrays(localBalances, localContributions, serverMonth); }
+      else applyMonthToArrays(localBalances, localContributions, item.draft);
+    });
+    write(KEYS.balances, localBalances); write(KEYS.contributions, localContributions); if (repaired) write(KEYS.monthOutbox, outbox);
+    bootstrapped = true;
+  }
+
+  function applyBootstrapData(data) {
+    applyServerData(data?.investmentAccounts, data?.investmentBalances, data?.investmentContributions);
+    emit("budget:investments-changed");
+    return { accounts: accounts().map(hydrateAccount), balances: balances().map(hydrateBalance), contributions: contributions().map(hydrateContribution) };
+  }
+
+  async function load(options = {}) {
+    if (endpoint() && (!bootstrapped || options.refresh)) {
       const [serverAccounts, serverBalances, serverContributions] = await Promise.all([request("listInvestmentAccounts", {}), request("listInvestmentBalances", {}), request("listInvestmentContributions", {})]);
-      const pendingAccounts = new Map(accountOutbox().map((item) => [item.record.id, item.record]));
-      write(KEYS.accounts, [...serverAccounts.filter((item) => !pendingAccounts.has(item.id)), ...pendingAccounts.values()]);
-      const localBalances = serverBalances.map(migrateBalance); const localContributions = serverContributions.map(migrateContribution); const outbox = monthOutbox(); let repaired = false;
-      outbox.forEach((item) => {
-        const serverMonth = { accountId: item.accountId, month: item.month, balance: localBalances.find((entry) => entry.accountId === item.accountId && entry.month === item.month) || null, contributions: localContributions.filter((entry) => entry.accountId === item.accountId && entry.month === item.month) };
-        if (item.failureCode === "conflict") { if (JSON.stringify(item.current) !== JSON.stringify(serverMonth)) { item.current = serverMonth; repaired = true; } applyMonthToArrays(localBalances, localContributions, serverMonth); }
-        else applyMonthToArrays(localBalances, localContributions, item.draft);
-      });
-      write(KEYS.balances, localBalances); write(KEYS.contributions, localContributions); if (repaired) write(KEYS.monthOutbox, outbox);
+      applyServerData(serverAccounts, serverBalances, serverContributions);
     }
     emit("budget:investments-changed");
     return { accounts: accounts().map(hydrateAccount), balances: balances().map(hydrateBalance), contributions: contributions().map(hydrateContribution) };
@@ -303,7 +318,7 @@
   function calculateGrowth(openingBalance, endingBalance, periodFlows) { if (openingBalance === null || openingBalance === undefined || endingBalance === null || endingBalance === undefined) return null; return Number(endingBalance) - Number(openingBalance) - periodFlows.reduce((sum, item) => sum + Number(item.amount ?? item.contribution ?? 0), 0); }
 
   const originalSyncItems = window.BudgetAPI.getSyncItems.bind(window.BudgetAPI); window.BudgetAPI.getSyncItems = () => [...originalSyncItems(), ...syncItems()];
-  window.InvestmentAPI = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, addAccount, updateAccount, archiveAccount, queueMonth, queueImportedMonths, awaitImportedMonths, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard };
+  window.InvestmentAPI = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, applyBootstrapData, addAccount, updateAccount, archiveAccount, queueMonth, queueImportedMonths, awaitImportedMonths, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard };
   window.addEventListener("online", () => { write(KEYS.accountOutbox, accountOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); write(KEYS.monthOutbox, monthOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); sync(); });
   window.addEventListener("offline", () => { if (retryTimer) clearTimeout(retryTimer); retryTimer = null; emit("budget:sync-changed"); }); scheduleNext();
 })();
