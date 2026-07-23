@@ -30,10 +30,12 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
    Hit the button to "Open the spreadsheet template". This will take you to a screen
 
-<p float="left">
+<table>
+<tr>
 <td width="50%"><img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen" width="100%"></td>
 <td width="50%"><img src="images/google-copy.png" alt="Onboarding copy spreadsheet screen" width="100%"></td>
-</p>
+</tr>
+</table>
 
 <img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen" width="400">
 
