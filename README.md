@@ -70,12 +70,17 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 <table>
     <tr>
         <td width="50%"><img src="images/google-verify-1.png" alt="TED menu"></td>
-         <td width="50%"><img src="images/google-verify-2.png" alt="TED menu"></td>
-        <td width="50%"><img src="images/google-confirm.png" alt="TED menu"></td>
+         <td width="50%"><img src="images/google-verify-2.png" alt="TED menu"></td>  
     </tr>
 </table>
 
-5.
+5. Once you click Continue, you should be brought back to the spreadsheet and see a confirmation that the budget has been intialized.
+
+<table>
+    <tr>
+        <td width="50%"><img src="images/google-confirm.png" alt="TED menu"></td>
+    </tr>
+</table>
 
 ## CSV imports
 
