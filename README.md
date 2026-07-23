@@ -2,21 +2,13 @@
 
 Track Every Dollar (or TED for short) provides a front end wrapper around Google Sheets for budgeting and financial management.
 
-Spreadsheets have long been the go to choice for people tracking their finances, but data entry can be cumbersome for those not used to working with the format. TED removes the need for understanding sheets and formulas and instead provides you with a simple interface to see everything you need.
+To download the app to your computer, find "Releases" on the right side bar and click on the latest release. Once you are there, you should see a "Source code" file that you can download as a zip file.
 
-V1 of the app is currently split into two main features...Budgeting and Investments.
+Download it to your computer, unzip it, and move the new folder into your applications folder. You are welcome to put the folder wherever you like, but applications makes the most sense.
 
-### Budgeting
+You will access the app by opening the index.html file.
 
-At the core of tracking every dollar is logging every transaction you make.
-
-You will track how much you paid, who you paid, and what category it falls into. This will then let you see exactly where your money is going. And in a future release, we will allow you to set targets for categories and vendors so that you can adjust your spending habits with accountability.
-
-### Investments
-
-Every investment account you have can be added. You will track your total contributions to each account and the balance at the end of the month. This will let you see your growth and rate of return over time.
-
-Future releases will let you set investment targets and calculate how much time is left until you can retire based on your current balance.
+I suggest right clicking on the index file and creating an alias. This creates a linked file that you can name whatever you want and move wherever you want without touching the source code. I created an alias, named it TED, and put it in my applications folder for quick access.
 
 ## Starting a new spreadsheet
 
