@@ -93,7 +93,36 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
     </tr>
 </table>
 
-![alt text](image.png)
+7. This will bring up a window where you will configure the script. Make sure "Web App" is selected for the deployment type. If it is not, use the gear icon to select it. Set "Execute as" to "Me" and set "Who has access" to "Anyone". This will let your TED app speak to the sheet.
+
+   Once you have the settings correct, hit "Deploy".
+
+<table>
+    <tr>
+        <td width="50%"><img src="images/app-script-deployment-1.png" alt="App script deployment settings"></td>
+         <td width="50%"><img src="images/app-script-deployment-2.png" alt="App script url"></td>
+    </tr>
+</table>
+
+8.  The script will be connected to your spreadsheet and you will be shown a confirmation with a URL. Copy this URL.
+
+    Back in the TED app, walk through the onboarding steps if you haven't done so already until you get to a screen asking you to enter the Web App URL. Paste in the URL which you copied. Then click "Test and connect".
+
+<table>
+    <tr>
+         <td width="50%"><img src="images/app-script-id.png" alt="App script page"></td>
+        <td width="50%"><img src="images/onboarding-3.png" alt="App script menu"></td>
+    </tr>
+</table>
+
+9. If connection was successful, you will be asked to create your profile. Enter your first and last name. This is used to keep track of which transactions you log into the system.
+
+<table>
+    <tr>
+         <td width="50%"><img src="images/onboarding-4.png" alt="App script page"></td>
+        <td width="50%"><img src="images/onboarding-5.png" alt="App script menu"></td>
+    </tr>
+</table>
 
 ## CSV imports
 
