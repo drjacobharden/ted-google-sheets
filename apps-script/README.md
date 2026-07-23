@@ -34,20 +34,20 @@ template. Recipients do not paste or edit Apps Script source.
    initial data read. If the project uses a standard Google Cloud project,
    enable the Google Sheets API there as well.
 3. Save the project and reload the Sheet.
-4. Verify that **My Finance → Set up budget** initializes the Sheet and displays
+4. Verify that **Track Every Dollar → Set up budget** initializes the Sheet and displays
    a completion message. Remove any sample financial data before distribution.
 5. Share a forced-copy link by replacing the Sheet URL's trailing `/edit...`
    with `/copy`. Google includes the bound script when a recipient copies the
    container-bound Sheet.
 
-Each copied Sheet must be initialized from its own **My Finance** menu and must
+Each copied Sheet must be initialized from its own **Track Every Dollar** menu and must
 receive its own web-app deployment.
 
 ## Recipient workflow
 
 1. Open the template's `/copy` link and choose **Make a copy**.
-2. Reload the new Sheet if the **My Finance** menu is not visible yet.
-3. Choose **My Finance → Set up budget** and approve Google's authorization
+2. Reload the new Sheet if the **Track Every Dollar** menu is not visible yet.
+3. Choose **Track Every Dollar → Set up budget** and approve Google's authorization
    prompt. The menu action binds the script to this copied Sheet, creates and
    seeds the normalized tabs, migrates compatible legacy data, rebuilds the
    Ledger, and displays a completion message. It is safe to run again.
@@ -89,7 +89,7 @@ itself is optional and separate from sharing the connection URL.
 
 ## Maintenance and development
 
-Use **My Finance → Rebuild Ledger** to regenerate the presentation sheet from
+Use **Track Every Dollar → Rebuild Ledger** to regenerate the presentation sheet from
 normalized data. The menu refuses to rebuild an uninitialized copy. Entity and
 transaction data in the normalized sheets remain authoritative.
 
@@ -100,7 +100,7 @@ before running it.
 
 After changing `Code.gs`, edit the existing deployment and publish a new
 version; its `/exec` URL remains unchanged. Run
-**My Finance → Rebuild Ledger** whenever the Ledger reports that it needs
+**Track Every Dollar → Rebuild Ledger** whenever the Ledger reports that it needs
 repair.
 
 ## Web actions
@@ -146,7 +146,7 @@ separate Contribution and Withdrawal sections; withdrawals are stored as negativ
 amounts for net-flow and contribution-adjusted growth calculations.
 
 After upgrading an existing template, save both Apps Script files and run
-**My Finance → Set up budget** once. Setup version 6 creates the balance and
+**Track Every Dollar → Set up budget** once. Setup version 6 creates the balance and
 contribution tabs and migrates every prior investment snapshot layout. Each old
 aggregate becomes one signed flow record, while zero aggregates create no flow.
 The old snapshot tab is retained as a hidden legacy archive after migration.
