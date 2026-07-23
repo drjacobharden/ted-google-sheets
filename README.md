@@ -24,11 +24,19 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
 1. When you first open the app, you will be presented with an onboarding screen. Select the option to "Start a new budget".
 
-<img src="images/onboarding-1.png" alt="Onboarding welcome" width="400">
+<table>
+    <tr>
+        <td width="50%"><img src="images/onboarding-1.png" alt="Onboarding welcome"></td>
+    </tr>
+</table>
 
 2. This will bring you into the onboarding process for a new spreadsheet. The first step here is to make a copy of the spreadsheet template. The spreadsheet will be where all your data is stored. And because it is on Google Sheets, you can inspect it at any time.\
 
-   Hit the button to "Open the spreadsheet template". This will take you to a screen
+   Hit the button to "Open the spreadsheet template".\
+
+   This will take you to a screen asking if you would like to copy the document and the App Script file associated with it. The App Script is what connects TED to the spreadsheet.\
+
+   Click "Make a copy" to move forward.
 
 <table>
     <tr>
