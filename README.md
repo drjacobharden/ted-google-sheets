@@ -127,24 +127,19 @@ TED fully supports collaboration and multiple household members entering and edi
 
 1. Once you have TED downloaded and open, click "Join existing budget" in the first onboarding step.
 
-<table>
-    <tr>
-         <td width="50%"><img src="images/onboarding-6.png" alt="App script page" width="50%"></td>
-    </tr>
-</table>
-
-2. You will be asked to enter the URL for web app connected to your spreadsheet. If you have access to the spreadsheet, this can be found under at
+   You will be asked to enter the URL for web app connected to your spreadsheet. If you have access to the spreadsheet, this can be found at
    Extensions -> App Scripts -> Deploy -> Manage Deployments
 
    If you don't have access to the spreadsheet, have the sheet owner send you the URL so you can copy it in.
 
 <table>
     <tr>
+         <td width="50%"><img src="images/onboarding-6.png" alt="App script page" width="50%"></td>
          <td width="50%"><img src="images/onboarding-7.png" alt="App script page" width="50%"></td>
     </tr>
 </table>
 
-3. If connection was successful, you will be asked to create your profile. Enter your first and last name. This is used to keep track of which transactions you log into the system.
+2. If connection was successful, you will be asked to create your profile. Enter your first and last name. This is used to keep track of which transactions you log into the system.
 
    Once you create your profile, you will be asked to look in the spreadsheet under the Accounts tab and confirm that your name was entered correctly. If it was, check the box and click "Finish setup".
 
