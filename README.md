@@ -36,16 +36,38 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
    This will take you to a screen asking if you would like to copy the document and the App Script file associated with it. The App Script is what connects TED to the spreadsheet.
 
-   Click "Make a copy" to move forward.
+   Click "Make a copy". This will open your spreadsheet and save it to your Google Drive. You can rename it to whatever you want and move it around in your Drive as needed.
 
 <table>
     <tr>
         <td width="50%"><img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen"></td>
-        <td width="50%"><img src="images/google-copy.png" alt="Onboarding copy spreadsheet screen"></td>
+        <td width="50%"><img src="images/google-copy.png" alt="Google copy document confirmation"></td>
     </tr>
 </table>
 
-3.
+3. Inside the spreadsheet, look to the right hand side and you should see a menu called "Track Every Dollar".
+
+   Click on it and select "Set up budget". You will receive an alert asking for authorization to run a script. Click ok on the alert.
+
+<table>
+    <tr>
+        <td width="50%"><img src="images/google-menu.png" alt="TED menu" width="50%"></td>
+         <td width="50%"><img src="images/google-auth-alert.png" alt="TED menu" width="50%"></td>
+        ![alt text](image.png)
+    </tr>
+</table>
+
+4. This will open a window saying Google has not verified this app. This occurs for all apps created privately.
+
+   Click "Advanced" and then select "Go to Personal Finance Tracker (unsafe)".
+
+<table>
+    <tr>
+        <td width="50%"><img src="images/google-verify-1.png" alt="TED menu" width="50%"></td>
+         <td width="50%"><img src="images/google-verify-2.png" alt="TED menu" width="50%"></td>
+        ![alt text](image.png)
+    </tr>
+</table>
 
 ## CSV imports
 
