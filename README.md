@@ -53,7 +53,6 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
     <tr>
         <td width="50%"><img src="images/google-menu.png" alt="TED menu"></td>
          <td width="50%"><img src="images/google-auth-alert.png" alt="Google authorization needed alert"></td>
-        ![alt text](image.png)
     </tr>
 </table>
 
@@ -116,6 +115,8 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 </table>
 
 9. If connection was successful, you will be asked to create your profile. Enter your first and last name. This is used to keep track of which transactions you log into the system.
+
+   Once you create your profile, you will be asked to look in the spreadsheet under the Accounts tab and confirm that your name was entered correctly. If it was, check the box and click "Finish setup".
 
 <table>
     <tr>
