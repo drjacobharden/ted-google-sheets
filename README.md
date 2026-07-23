@@ -134,8 +134,8 @@ TED fully supports collaboration and multiple household members entering and edi
 
 <table>
     <tr>
-         <td width="50%"><img src="images/onboarding-6.png" alt="App script page" width="50%"></td>
-         <td width="50%"><img src="images/onboarding-7.png" alt="App script page" width="50%"></td>
+         <td width="50%"><img src="images/onboarding-6.png" alt="App script page"></td>
+         <td width="50%"><img src="images/onboarding-7.png" alt="App script page"></td>
     </tr>
 </table>
 
