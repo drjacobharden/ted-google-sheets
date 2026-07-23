@@ -22,7 +22,9 @@ Future releases will let you set investment targets and calculate how much time 
 
 If you are starting a new spreadsheet from scratch, you will need to go through the following steps.
 
-1.
+1. When you first open the app, you will be presented with an onboarding screen.
+
+![alt text](image.png)
 
 ## CSV imports
 
