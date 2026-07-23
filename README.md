@@ -24,7 +24,7 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
 1. When you first open the app, you will be presented with an onboarding screen. Select the option to "Start a new budget".
 
-<img src="image.png" alt="Onboarding welcome" width="100">
+<img src="image.png" alt="Onboarding welcome" width="400">
 
 2. This will bring you into the onboarding process for a new spreadsheet. The first step here is to make a copy of the spreadsheet template. The spreadsheet will be where all your data is stored. And because it is on Google Sheets, you can inspect it at any time.
 
