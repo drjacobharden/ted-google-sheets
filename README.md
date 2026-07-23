@@ -65,7 +65,6 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
     <tr>
         <td width="50%"><img src="images/google-verify-1.png" alt="TED menu"></td>
          <td width="50%"><img src="images/google-verify-2.png" alt="TED menu"></td>
-        ![alt text](image.png)
     </tr>
 </table>
 
