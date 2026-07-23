@@ -52,7 +52,7 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 <table>
     <tr>
         <td width="50%"><img src="images/google-menu.png" alt="TED menu"></td>
-         <td width="50%"><img src="images/google-auth-alert.png" alt="TED menu"></td>
+         <td width="50%"><img src="images/google-auth-alert.png" alt="Google authorization needed alert"></td>
         ![alt text](image.png)
     </tr>
 </table>
@@ -69,8 +69,8 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/google-verify-1.png" alt="TED menu"></td>
-         <td width="50%"><img src="images/google-verify-2.png" alt="TED menu"></td>  
+        <td width="50%"><img src="images/google-verify-1.png" alt="Google verification screen"></td>
+         <td width="50%"><img src="images/google-verify-2.png" alt="Google access screen"></td>  
     </tr>
 </table>
 
@@ -78,9 +78,22 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/google-confirm.png" alt="TED menu"></td>
+        <td width="50%"><img src="images/google-confirm.png" alt="Google confirmation that budget was initialized"></td>
     </tr>
 </table>
+
+6. Back in the spreadsheet, find the "Extensions" menu and select "App Scripts".
+
+   This will take you to the App Script page. This is the code that lets TED talk to your spreadsheet. Hit "Deploy" in the top right and select "New deployment". This will create your personal version of the app code and link it to your spreadsheet.
+
+<table>
+    <tr>
+        <td width="50%"><img src="images/app-script-menu.png" alt="App script menu"></td>
+         <td width="50%"><img src="images/app-script-page.png" alt="App script page"></td>
+    </tr>
+</table>
+
+![alt text](image.png)
 
 ## CSV imports
 
