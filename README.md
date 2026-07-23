@@ -61,12 +61,21 @@ If you are starting a new spreadsheet from scratch, you will need to go through 
 
    Click "Advanced" and then select "Go to Personal Finance Tracker (unsafe)".
 
+   You will then get a confirmation screen asking to allow the script access to your Google account. This is necessary for the app to insert and edit entries to the spreadsheet as you add data. And despite it saying it can See, Edit, and Delete all of your Google Sheets, there is no code that allows that to happen. It only gets access to the TED sheet.
+
+   Click "Continue".
+
+   This should bring you back to the spreadsheet and show you a confirmation that the budget has been intialized.
+
 <table>
     <tr>
         <td width="50%"><img src="images/google-verify-1.png" alt="TED menu"></td>
          <td width="50%"><img src="images/google-verify-2.png" alt="TED menu"></td>
+        <td width="50%"><img src="images/google-confirm.png" alt="TED menu"></td>
     </tr>
 </table>
+
+5.
 
 ## CSV imports
 
