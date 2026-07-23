@@ -24,6 +24,8 @@ function loadAPI(seed = {}, fetchImpl, runtimeOptions = {}) {
         (listeners.get(event.type) || []).forEach((listener) => listener(event));
       },
       addEventListener: (type, listener) => listeners.set(type, [...(listeners.get(type) || []), listener]),
+      InvestmentAPI: runtimeOptions.investmentAPI,
+      ImportAPI: runtimeOptions.importAPI,
     },
     fetch: fetchImpl || (() => { throw new Error("Unexpected network request"); }),
     navigator,
@@ -207,6 +209,144 @@ test("rejects an invalid user list during reference-data hydration", async () =>
   );
 });
 
+test("loads and caches all app data with one bootstrap request while preserving optimistic state", async () => {
+  const seed = connectedSeed();
+  const transactionId = "423e4567-e89b-42d3-a456-426614174000";
+  const optimisticVendorId = "523e4567-e89b-42d3-a456-426614174000";
+  seed.values["myFinance.transactionOutbox.v2"] = [{
+    id: transactionId,
+    operation: "update",
+    record: {
+      id: transactionId, createdAt: "2026-01-01T12:00:00.000Z", createdBy: seed.userId,
+      type: "expense", amount: 25, date: "2026-01-01",
+      categoryId: seed.values["myFinance.categories.v1"][0].id,
+      vendorId: seed.vendorId,
+      assignmentId: seed.values["myFinance.people.v1"][0].id,
+      notes: "Optimistic",
+    },
+    baseRecord: null, revision: 1, status: "pending", attempts: 0, nextRetryAt: 0,
+  }];
+  seed.values["myFinance.entityOutbox.v1"] = [{
+    kind: "vendor",
+    record: { id: optimisticVendorId, name: "Queued Market", active: true },
+    status: "pending", attempts: 0, nextRetryAt: 0,
+  }];
+  const investmentPayloads = [];
+  const importPayloads = [];
+  const actions = [];
+  const bootstrap = {
+    transactions: [{
+      id: transactionId, createdAt: "2026-01-01T12:00:00.000Z", createdBy: seed.userId,
+      type: "expense", amount: 10, date: "2026-01-01",
+      categoryId: seed.values["myFinance.categories.v1"][0].id,
+      vendorId: seed.vendorId,
+      assignmentId: seed.values["myFinance.people.v1"][0].id,
+      notes: "Server", category: "Dining", vendor: "Cafe", assignment: "Shared", createdByName: "Ada Byron",
+    }],
+    categories: seed.values["myFinance.categories.v1"],
+    vendors: seed.values["myFinance.vendors.v1"],
+    assignments: seed.values["myFinance.people.v1"],
+    users: seed.values["myFinance.users.v1"],
+    importProfiles: [{ id: "profile-1", name: "Bank CSV" }],
+    investmentAccounts: [{ id: "account-1", name: "401k" }],
+    investmentBalances: [{ id: "balance-1", accountId: "account-1", month: "2026-06", balance: 100 }],
+    investmentContributions: [{ id: "flow-1", accountId: "account-1", month: "2026-06", amount: 10 }],
+  };
+  const runtime = loadAPI(seed.values, async (url) => {
+    actions.push(new URL(String(url)).searchParams.get("action"));
+    return { ok: true, json: async () => ({ ok: true, data: bootstrap }) };
+  }, {
+    investmentAPI: { applyBootstrapData: (data) => investmentPayloads.push(data) },
+    importAPI: { applyBootstrapData: (data) => importPayloads.push(data) },
+  });
+
+  const [first, second] = await Promise.all([runtime.api.loadAppData(), runtime.api.loadAppData()]);
+  assert.deepEqual(actions, ["bootstrap"]);
+  assert.equal(first, second);
+  assert.equal(first.transactions.length, 1);
+  assert.equal(first.transactions[0].amount, 25);
+  assert.equal(first.transactions[0].syncOperation, "update");
+  assert.equal(runtime.api.listVendors().some((item) => item.id === optimisticVendorId), true);
+  assert.equal(investmentPayloads.length, 1);
+  assert.equal(importPayloads.length, 1);
+  assert.equal(runtime.events.some((event) => event.type === "budget:reference-data-changed"), true);
+  const cached = JSON.parse(runtime.values.get("myFinance.confirmedTransactions.v1"));
+  assert.equal(cached.endpoint, seed.values["myFinance.config.v1"].endpoint);
+  assert.equal(cached.transactions[0].amount, 10, "only confirmed server data is cached");
+  assert.equal(runtime.api.getCachedTransactions()[0].amount, 25, "the local outbox is reapplied over the cache");
+});
+
+test("ignores another endpoint cache and replaces remote edits and deletions after refresh", async () => {
+  const seed = connectedSeed();
+  const firstId = "423e4567-e89b-42d3-a456-426614174000";
+  const deletedId = "523e4567-e89b-42d3-a456-426614174000";
+  const base = {
+    createdAt: "2026-01-01T12:00:00.000Z", createdBy: seed.userId,
+    type: "expense", date: "2026-01-01",
+    categoryId: seed.values["myFinance.categories.v1"][0].id,
+    vendorId: seed.vendorId, assignmentId: seed.values["myFinance.people.v1"][0].id,
+    notes: "", category: "Dining", vendor: "Cafe", assignment: "Shared", createdByName: "Ada Byron",
+  };
+  seed.values["myFinance.confirmedTransactions.v1"] = {
+    version: 1,
+    endpoint: seed.values["myFinance.config.v1"].endpoint,
+    cachedAt: "2026-07-22T12:00:00.000Z",
+    transactions: [{ ...base, id: firstId, amount: 10 }, { ...base, id: deletedId, amount: 20 }],
+  };
+  const bootstrap = {
+    transactions: [{ ...base, id: firstId, amount: 15 }],
+    categories: seed.values["myFinance.categories.v1"],
+    vendors: seed.values["myFinance.vendors.v1"],
+    assignments: seed.values["myFinance.people.v1"],
+    users: seed.values["myFinance.users.v1"],
+    importProfiles: [], investmentAccounts: [], investmentBalances: [], investmentContributions: [],
+  };
+  const runtime = loadAPI(seed.values, async () => ({
+    ok: true,
+    json: async () => ({ ok: true, data: bootstrap }),
+  }));
+
+  assert.equal(runtime.api.getCachedTransactions().length, 2);
+  assert.equal(runtime.api.getCachedTransactions()[0].amount, 10);
+  const fresh = await runtime.api.loadAppData();
+  assert.equal(fresh.transactions.length, 1);
+  assert.equal(fresh.transactions[0].amount, 15);
+  assert.equal(runtime.api.getCachedTransactions().some((item) => item.id === deletedId), false);
+
+  const otherEndpoint = loadAPI({
+    ...seed.values,
+    "myFinance.config.v1": { endpoint: "https://script.google.com/macros/s/another/exec" },
+  });
+  assert.equal(otherEndpoint.api.getCachedTransactions(), null);
+});
+
+test("falls back to legacy startup lists when bootstrap is unavailable", async () => {
+  const seed = connectedSeed();
+  const actions = [];
+  const runtime = loadAPI(seed.values, async (url) => {
+    const action = new URL(String(url)).searchParams.get("action");
+    actions.push(action);
+    if (action === "bootstrap") {
+      return { ok: true, json: async () => ({ ok: false, error: "Unknown action." }) };
+    }
+    const data = {
+      listCategories: seed.values["myFinance.categories.v1"],
+      listVendors: seed.values["myFinance.vendors.v1"],
+      listAssignments: seed.values["myFinance.people.v1"],
+      listUsers: seed.values["myFinance.users.v1"],
+      listTransactions: [],
+    }[action];
+    return { ok: true, json: async () => ({ ok: true, data }) };
+  });
+
+  const data = await runtime.api.loadAppData();
+  assert.equal(data.transactions.length, 0);
+  assert.equal(actions[0], "bootstrap");
+  assert.deepEqual(new Set(actions.slice(1)), new Set([
+    "listCategories", "listVendors", "listAssignments", "listUsers", "listTransactions",
+  ]));
+});
+
 function connectedSeed() {
   const userId = "123e4567-e89b-42d3-a456-426614174000";
   const vendorId = "223e4567-e89b-42d3-a456-426614174000";
@@ -227,6 +367,12 @@ function connectedSeed() {
 
 test("queues immediately, batch-syncs, and protects the configured household", async () => {
   const seed = connectedSeed();
+  seed.values["myFinance.confirmedTransactions.v1"] = {
+    version: 1,
+    endpoint: seed.values["myFinance.config.v1"].endpoint,
+    cachedAt: "2026-07-23T12:00:00.000Z",
+    transactions: [],
+  };
   const requests = [];
   const { api, values } = loadAPI(seed.values, async (url, options) => {
     const body = JSON.parse(options.body);
@@ -252,6 +398,7 @@ test("queues immediately, batch-syncs, and protects the configured household", a
   assert.equal(requests[0].action, "addTransactions");
   assert.equal(api.getOutboxStatus().total, 0);
   assert.deepEqual(JSON.parse(values.get("myFinance.transactionOutbox.v2")), []);
+  assert.equal(JSON.parse(values.get("myFinance.confirmedTransactions.v1")).transactions[0].id, queued.id);
 });
 
 test("retains validation failures and transport failures for retry or removal", async () => {

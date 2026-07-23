@@ -30,6 +30,9 @@ template. Recipients do not paste or edit Apps Script source.
 1. Create a blank Google Sheet and choose **Extensions → Apps Script**.
 2. Add this folder's `Code.gs` and `Setup.gs` to the bound Apps Script
    project. Copy the settings from `appsscript.json` into the project manifest.
+   The manifest enables the Advanced Sheets v4 service used to batch the
+   initial data read. If the project uses a standard Google Cloud project,
+   enable the Google Sheets API there as well.
 3. Save the project and reload the Sheet.
 4. Verify that **My Finance → Set up budget** initializes the Sheet and displays
    a completion message. Remove any sample financial data before distribution.

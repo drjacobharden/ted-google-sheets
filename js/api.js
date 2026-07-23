@@ -9,6 +9,7 @@
     assignments: "myFinance.people.v1",
     users: "myFinance.users.v1",
     activeUser: "myFinance.activeUser.v1",
+    confirmedTransactions: "myFinance.confirmedTransactions.v1",
     transactionOutbox: "myFinance.transactionOutbox.v2",
     legacyTransactionOutbox: "myFinance.transactionOutbox.v1",
     entityOutbox: "myFinance.entityOutbox.v1",
@@ -30,6 +31,12 @@
     { id: "00000000-0000-4000-8000-000000000010", name: "Other", type: "expense" },
   ]);
   const OUTBOX_BATCH_SIZE = 50;
+  const CONFIRMED_TRANSACTION_CACHE_VERSION = 1;
+  const TRANSACTION_FIELDS = Object.freeze([
+    "id", "createdAt", "createdBy", "type", "amount", "date",
+    "categoryId", "vendorId", "assignmentId", "notes",
+    "category", "vendor", "assignment", "createdByName",
+  ]);
   const RETRY_DELAYS = Object.freeze([2000, 5000, 15000, 30000, 60000]);
   let syncPromise = null;
   let retryTimer = null;
@@ -38,6 +45,7 @@
   let entitySyncPromise = null;
   let entityRetryTimer = null;
   let batchEntitiesSupported = null;
+  let appDataPromise = null;
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -90,6 +98,7 @@
     batchTransactionsSupported = null;
     batchTransactionUpdatesSupported = null;
     batchEntitiesSupported = null;
+    appDataPromise = null;
   }
 
   function migrateLocalData() {
@@ -595,6 +604,23 @@
     return normalizeResponse(await response.json());
   }
 
+  function applyReferenceData(data, queuedAtStart = new Set()) {
+    const collections = {
+      categories: [data.categories, KEYS.categories],
+      vendors: [data.vendors, KEYS.vendors],
+      assignments: [data.assignments, KEYS.assignments],
+    };
+    Object.entries(collections).forEach(([name, [serverRecords, key]]) => {
+      if (!Array.isArray(serverRecords)) throw new Error(`The sheet response did not include a ${name} list.`);
+      const merged = serverRecords.slice();
+      const known = new Set(merged.map((record) => record.id));
+      readArray(key).filter((record) => queuedAtStart.has(record.id) && !known.has(record.id)).forEach((record) => merged.push(record));
+      writeArray(key, merged);
+    });
+    replaceCachedUsers(data.users);
+    restoreQueuedEntities();
+  }
+
   async function loadReferenceData() {
     ensureLocalData();
     if (getConfig().endpoint) {
@@ -602,17 +628,7 @@
       const [categories, vendors, assignments, users] = await Promise.all([
         request("listCategories"), request("listVendors"), request("listAssignments"), request("listUsers"),
       ]);
-      function preserveInFlight(serverRecords, key) {
-        const merged = serverRecords.slice();
-        const known = new Set(merged.map((record) => record.id));
-        readArray(key).filter((record) => queuedAtStart.has(record.id) && !known.has(record.id)).forEach((record) => merged.push(record));
-        return merged;
-      }
-      writeArray(KEYS.categories, preserveInFlight(categories, KEYS.categories));
-      writeArray(KEYS.vendors, preserveInFlight(vendors, KEYS.vendors));
-      writeArray(KEYS.assignments, preserveInFlight(assignments, KEYS.assignments));
-      replaceCachedUsers(users);
-      restoreQueuedEntities();
+      applyReferenceData({ categories, vendors, assignments, users }, queuedAtStart);
     }
     window.dispatchEvent(new CustomEvent("budget:reference-data-changed"));
     return { categories: listCategories(), vendors: listVendors(), assignments: listPeople(), users: listUsers() };
@@ -624,13 +640,51 @@
     const vendor = vendors.find((item) => item.id === transaction.vendorId);
     const assignment = assignments.find((item) => item.id === transaction.assignmentId);
     const creator = users.find((item) => item.id === transaction.createdBy);
-    return { ...transaction, category: category?.name || "Unknown", vendor: vendor?.name || "", assignment: assignment?.name || "Unknown", createdByName: creator ? `${creator.firstName} ${creator.lastName}` : "Unknown" };
+    return {
+      ...transaction,
+      category: category?.name || transaction.category || "Unknown",
+      vendor: vendor?.name || transaction.vendor || "",
+      assignment: assignment?.name || transaction.assignment || "Unknown",
+      createdByName: creator
+        ? `${creator.firstName} ${creator.lastName}`
+        : transaction.createdByName || "Unknown",
+    };
   }
-  async function listTransactions() {
-    ensureLocalData();
-    const data = getConfig().endpoint ? await request("listTransactions") : readArray(KEYS.transactions).map(hydrateTransaction);
+  function confirmedTransactionRecord(transaction) {
+    return Object.fromEntries(TRANSACTION_FIELDS.map((field) => [field, transaction[field] ?? ""]));
+  }
+  function readConfirmedTransactionCache() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(KEYS.confirmedTransactions));
+      if (!cached || cached.version !== CONFIRMED_TRANSACTION_CACHE_VERSION) return null;
+      if (!getConfig().endpoint || cached.endpoint !== getConfig().endpoint) return null;
+      if (!Array.isArray(cached.transactions)) return null;
+      return cached;
+    } catch {
+      return null;
+    }
+  }
+  function writeConfirmedTransactionCache(transactions) {
+    const endpoint = getConfig().endpoint;
+    if (!endpoint || !Array.isArray(transactions)) return;
+    localStorage.setItem(KEYS.confirmedTransactions, JSON.stringify({
+      version: CONFIRMED_TRANSACTION_CACHE_VERSION,
+      endpoint,
+      cachedAt: new Date().toISOString(),
+      transactions: transactions.map(confirmedTransactionRecord),
+    }));
+  }
+  function updateConfirmedTransactionCache(transactions) {
+    const cached = readConfirmedTransactionCache();
+    if (!cached || !Array.isArray(transactions) || !transactions.length) return;
+    const byId = new Map(cached.transactions.map((transaction) => [transaction.id, transaction]));
+    transactions.forEach((transaction) => byId.set(transaction.id, confirmedTransactionRecord(transaction)));
+    writeConfirmedTransactionCache([...byId.values()]);
+  }
+  function mergeServerTransactions(data) {
     if (!Array.isArray(data)) throw new Error("The sheet response did not include a transaction list.");
-    const serverIds = new Set(data.map((transaction) => transaction.id));
+    const hydrated = data.map(hydrateTransaction);
+    const serverIds = new Set(hydrated.map((transaction) => transaction.id));
     const outbox = getOutbox();
     const remaining = outbox.filter((item) => item.operation === "update" || !serverIds.has(item.record.id));
     if (remaining.length !== outbox.length) {
@@ -638,7 +692,66 @@
       emitSyncStatus();
     }
     const optimisticIds = new Set(remaining.map((item) => item.record.id));
-    return [...data.filter((transaction) => !optimisticIds.has(transaction.id)), ...remaining.map(outboxTransaction)];
+    return [...hydrated.filter((transaction) => !optimisticIds.has(transaction.id)), ...remaining.map(outboxTransaction)];
+  }
+
+  async function listTransactions() {
+    ensureLocalData();
+    const data = getConfig().endpoint ? await request("listTransactions") : readArray(KEYS.transactions).map(hydrateTransaction);
+    if (getConfig().endpoint) writeConfirmedTransactionCache(data);
+    return mergeServerTransactions(data);
+  }
+
+  function getCachedTransactions() {
+    ensureLocalData();
+    restoreQueuedEntities();
+    const cached = readConfirmedTransactionCache();
+    if (!cached) return null;
+    return mergeServerTransactions(cached.transactions);
+  }
+
+  async function fetchAppData() {
+    ensureLocalData();
+    if (!getConfig().endpoint) {
+      const referenceData = await loadReferenceData();
+      const transactions = await listTransactions();
+      const investments = await window.InvestmentAPI?.load?.();
+      const importProfiles = await window.ImportAPI?.listProfiles?.();
+      return { ...referenceData, transactions, importProfiles: importProfiles || [], ...(investments || {}) };
+    }
+
+    const queuedAtStart = new Set(getEntityOutbox().map((item) => item.record.id));
+    try {
+      const data = await request("bootstrap");
+      if (!data || typeof data !== "object") throw new Error("The sheet response did not include bootstrap data.");
+      applyReferenceData(data, queuedAtStart);
+      writeConfirmedTransactionCache(data.transactions);
+      const transactions = mergeServerTransactions(data.transactions);
+      window.InvestmentAPI?.applyBootstrapData?.(data);
+      window.ImportAPI?.applyBootstrapData?.(data);
+      window.dispatchEvent(new CustomEvent("budget:reference-data-changed"));
+      return { ...data, transactions };
+    } catch (error) {
+      if (!(error.isApiError && /unknown action/i.test(error.message))) throw error;
+      const [referenceData, transactions, investments, importProfiles] = await Promise.all([
+        loadReferenceData(),
+        listTransactions(),
+        window.InvestmentAPI?.load?.({ refresh: true }),
+        window.ImportAPI?.listProfiles?.({ refresh: true }),
+      ]);
+      return { ...referenceData, transactions, importProfiles: importProfiles || [], ...(investments || {}) };
+    }
+  }
+
+  function loadAppData(options = {}) {
+    if (options.refresh) appDataPromise = null;
+    if (!appDataPromise) {
+      appDataPromise = fetchAppData().catch((error) => {
+        appDataPromise = null;
+        throw error;
+      });
+    }
+    return appDataPromise;
   }
 
   function createTransactionRecord(transaction) {
@@ -923,6 +1036,7 @@
             return [{ ...item, status: "failed", error: "The Sheet did not return a result for this transaction.", nextRetryAt: 0 }];
           });
           writeOutbox(items);
+          updateConfirmedTransactionCache(result.saved);
           if (result.saved.length) window.dispatchEvent(new CustomEvent("budget:transaction-saved", { detail: { saved: result.saved, operation } }));
           emitSyncStatus(result.saved, operation);
           if (result.saved.length) window.dispatchEvent(new CustomEvent("budget:sync-succeeded", { detail: { count: result.saved.length, kind: "transaction", operation } }));
@@ -1077,7 +1191,7 @@
   recoverInterruptedSync();
   window.BudgetAPI = {
     INCOME_CATEGORY_ID, SHARED_ASSIGNMENT_ID,
-    getConfig, saveConfig, loadReferenceData,
+    getConfig, saveConfig, loadReferenceData, loadAppData, getCachedTransactions,
     listTransactions, addTransaction, queueTransaction, queueImportedTransactions, queueTransactionUpdate, syncOutbox,
     getOutboxTransactions, getOutboxStatus, getTransactionOutboxItem, getSyncItems,
     retryFailedTransactions, retryTransaction, discardTransactionChange, removeFailedTransactions,

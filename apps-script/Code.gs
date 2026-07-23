@@ -4,7 +4,7 @@ const APP = Object.freeze({
   spreadsheetIdProperty: 'SPREADSHEET_ID',
   setupVersionProperty: 'SETUP_VERSION',
   setupVersion: '7',
-  apiVersion: 9,
+  apiVersion: 10,
   ledgerDirtyProperty: 'LEDGER_DIRTY',
   incomeCategoryId: '00000000-0000-4000-8000-000000000001',
   sharedAssignmentId: '00000000-0000-4000-8000-000000000101',
@@ -105,7 +105,8 @@ function handleRequest_(request) {
   try {
     assertInitialized_();
     switch (String(request.action || '')) {
-      case 'health': return success_({ status: 'ok', apiVersion: APP.apiVersion, features: ['batchTransactions', 'batchEntities', 'batchTransactionUpdates', 'investmentAccounts', 'investmentMonthlyFlows', 'batchInvestmentMonths', 'importProfiles', 'importMappings'], ledgerNeedsRebuild: isLedgerDirty_() });
+      case 'health': return success_({ status: 'ok', apiVersion: APP.apiVersion, features: ['bootstrap', 'batchTransactions', 'batchEntities', 'batchTransactionUpdates', 'investmentAccounts', 'investmentMonthlyFlows', 'batchInvestmentMonths', 'importProfiles', 'importMappings'], ledgerNeedsRebuild: isLedgerDirty_() });
+      case 'bootstrap': return success_(bootstrap_());
       case 'listTransactions': return success_(listTransactions_());
       case 'addTransaction': return successResult_(addTransaction_(request.transaction));
       case 'addTransactions': return successResult_(addTransactions_(request.transactions));
@@ -215,6 +216,121 @@ function listTransactions_() {
   const records = readRecordsFromSheet_(requiredSheet_(spreadsheet, TABLES.transactions), TABLES.transactions, true);
   const references = referenceMapsFromSpreadsheet_(spreadsheet);
   return records.map(function (transaction) { return hydrateTransaction_(transaction, references); });
+}
+
+function bootstrap_() {
+  let recordsBySheet = null;
+  try {
+    recordsBySheet = readBootstrapWithSheetsApi_();
+  } catch (error) {
+    console.warn('Sheets API batch bootstrap failed; using SpreadsheetApp fallback: ' + errorMessage_(error));
+  }
+  if (!recordsBySheet) recordsBySheet = readBootstrapWithSpreadsheetApp_();
+  return buildBootstrapPayload_(recordsBySheet);
+}
+
+function bootstrapSpecs_() {
+  return [
+    TABLES.transactions,
+    TABLES.categories,
+    TABLES.vendors,
+    TABLES.assignments,
+    TABLES.users,
+    TABLES.investmentAccounts,
+    TABLES.investmentBalances,
+    TABLES.investmentContributions,
+    TABLES.importProfiles,
+  ];
+}
+
+function readBootstrapWithSheetsApi_() {
+  if (typeof Sheets === 'undefined' || !Sheets.Spreadsheets || !Sheets.Spreadsheets.Values) return null;
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty(APP.spreadsheetIdProperty);
+  if (!spreadsheetId) return null;
+  const specs = bootstrapSpecs_();
+  const ranges = specs.map(function (spec) {
+    return "'" + spec.name.replace(/'/g, "''") + "'!A:" + columnLabel_(spec.headers.length);
+  });
+  const response = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, {
+    ranges: ranges,
+    majorDimension: 'ROWS',
+    valueRenderOption: 'UNFORMATTED_VALUE',
+    dateTimeRenderOption: 'SERIAL_NUMBER',
+  });
+  const valueRanges = response && response.valueRanges;
+  if (!Array.isArray(valueRanges) || valueRanges.length !== specs.length) {
+    throw new Error('The Sheets API did not return every bootstrap range.');
+  }
+  const recordsBySheet = {};
+  specs.forEach(function (spec, index) {
+    const values = valueRanges[index].values || [];
+    if (!values.length || !headersMatch_(values[0], spec.headers)) {
+      throw new Error('The ' + spec.name + ' sheet headers do not match the expected schema.');
+    }
+    recordsBySheet[spec.name] = values.slice(1)
+      .filter(function (row) { return row[0] !== '' && row[0] !== undefined && row[0] !== null; })
+      .map(function (row) { return rowToRecord_(spec, normalizeBatchRow_(spec, row)); });
+  });
+  return recordsBySheet;
+}
+
+function readBootstrapWithSpreadsheetApp_() {
+  const spreadsheet = getSpreadsheet_();
+  const recordsBySheet = {};
+  bootstrapSpecs_().forEach(function (spec) {
+    recordsBySheet[spec.name] = readRecordsFromSheet_(requiredSheet_(spreadsheet, spec), spec, true);
+  });
+  return recordsBySheet;
+}
+
+function buildBootstrapPayload_(recordsBySheet) {
+  const transactions = recordsBySheet[TABLES.transactions.name];
+  const categories = recordsBySheet[TABLES.categories.name];
+  const vendors = recordsBySheet[TABLES.vendors.name];
+  const assignments = recordsBySheet[TABLES.assignments.name];
+  const users = recordsBySheet[TABLES.users.name];
+  const references = {
+    categories: new Map(categories.map(function (item) { return [item.id, item]; })),
+    vendors: new Map(vendors.map(function (item) { return [item.id, item]; })),
+    assignments: new Map(assignments.map(function (item) { return [item.id, item]; })),
+    users: new Map(users.map(function (item) { return [item.id, item]; })),
+  };
+  function active(records) {
+    return records.filter(function (record) { return record.active !== false; });
+  }
+  return {
+    transactions: transactions.map(function (transaction) { return hydrateTransaction_(transaction, references); }),
+    categories: active(categories),
+    vendors: active(vendors),
+    assignments: active(assignments),
+    users: active(users),
+    importProfiles: active(recordsBySheet[TABLES.importProfiles.name]).map(publicImportProfile_),
+    investmentAccounts: recordsBySheet[TABLES.investmentAccounts.name],
+    investmentBalances: recordsBySheet[TABLES.investmentBalances.name],
+    investmentContributions: recordsBySheet[TABLES.investmentContributions.name],
+  };
+}
+
+function columnLabel_(count) {
+  let value = count, label = '';
+  while (value > 0) {
+    value -= 1;
+    label = String.fromCharCode(65 + value % 26) + label;
+    value = Math.floor(value / 26);
+  }
+  return label;
+}
+
+function normalizeBatchRow_(spec, row) {
+  return spec.fields.map(function (field, index) {
+    const value = row[index] === undefined || row[index] === null ? '' : row[index];
+    if (typeof value !== 'number') return value;
+    if (field !== 'date' && field !== 'month' && !/At$/.test(field)) return value;
+    const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
+    if (field === 'date') return Utilities.formatDate(date, 'UTC', 'yyyy-MM-dd');
+    if (field === 'month') return Utilities.formatDate(date, 'UTC', 'yyyy-MM');
+    return Utilities.formatDate(date, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+  });
 }
 
 function addTransaction_(input) {
