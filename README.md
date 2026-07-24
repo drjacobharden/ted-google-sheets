@@ -4,11 +4,11 @@ Track Every Dollar (or TED for short) provides a front end wrapper around Google
 
 To download the app to your computer, find "Releases" on the right side bar and click on the latest release. Once you are there, you should see a "Source code" file that you can download as a zip file.
 
-Download it to your computer, unzip it, and move the new folder into your applications folder. You are welcome to put the folder wherever you like, but applications makes the most sense.
+Download it to your computer, unzip it, and move the folder a safe place. You are welcome to put the folder wherever you like, but I suggest using your applications folder.
 
-You will access the app by opening the index.html file.
+You will access the app by opening the index.html file inside the folder.
 
-I suggest right clicking on the index file and creating an alias. This creates a linked file that you can name whatever you want and move wherever you want without touching the source code. I created an alias, named it TED, and put it in my applications folder for quick access.
+_I suggest right clicking on the index file and creating an alias. This creates a linked file that you can name whatever you want and move wherever you want without touching the source code. I created an alias, named it TED, and put it in my applications folder for quick access._
 
 ## Starting a new spreadsheet
 
