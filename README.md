@@ -8,9 +8,9 @@ Download it to your computer, unzip it, and move the folder a safe place. You ar
 
 You will access the app by opening the index.html file inside the folder.
 
-> \_I suggest right clicking on the index file and creating an alias. This creates a linked file that you can name whatever you want and move wherever you want without touching the source code. I created an alias, named it TED, and put it in my applications folder for quick access.
-
-> From there on, all you have to do is click that alias and the app will open.\_
+> \I suggest right clicking on the index file and creating an alias. This creates a linked file that you can name whatever you want and move wherever you want without touching the source code. I created an alias, named it TED, and put it in my applications folder for quick access.
+>
+> From there on, all you have to do is click that alias and the app will open.\
 
 ## Starting a new spreadsheet
 
