@@ -1,12 +1,12 @@
 :root {
   /* Background of the page surrounding the app */
-  --page-background: #f2f3f0;
+  --page-background: hsl(30, 0%, 96%);
 
   /* Main content area on the right side of the app */
-  --surface: #ffffff;
+  --surface: hsl(30, 0%, 100%);
 
   /* Background color of the navigation sidebar on the left */
-  --sidebar-background: #fbfbfa;
+  --sidebar-background: hsl(30, 0%, 98%);
 
   /* Color of all standard borders */
   --border: #e5e7e2;
@@ -28,9 +28,11 @@
 
   /* Darker accent color used for buttons and text */
   --accent-dark: #4d7f47;
+  /* --accent-dark: hsl(255deg 78% 59%); */
 
   /* Lighter accent color used for highlighting active navigation button and background of icons */
   --accent-soft: #eaf0e7;
+  /* --accent-soft: hsl(255, 52%, 96%); */
 
   /* Muted accent color */
   --accent-muted: #595655;
