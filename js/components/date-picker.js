@@ -121,6 +121,11 @@ const datePickerTemplate = () => `
         this.#hiddenInput.name = this.getAttribute("name");
       }
 
+      if (this.#value) {
+        const date = fromISODate(this.#value);
+        this.#displayElement.textContent = longDateFormatter.format(date);
+      }
+
       // Add listeners to the elements
       this.#triggerElement.addEventListener("click", this);
       this.#prevBtn.addEventListener("click", this);
