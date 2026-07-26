@@ -21,11 +21,13 @@
     <link rel="stylesheet" href="css/toast.css" />
     <link rel="stylesheet" href="css/responsiveness.css" />
     <link rel="stylesheet" href="css/import.css" />
+    <link rel="stylesheet" href="dist/bundle.css" />
 
+    <script src="dist/bundle.js"></script>
     <!-- Component imports -->
     <script src="js/components/close-button.js" defer></script>
     <script src="js/components/drawer-header.js" defer></script>
-    <script src="js/components/page-title.js" defer></script>
+    <!-- <script src="js/components/page-title.js" defer></script> -->
     <script src="js/components/date-picker.js" defer></script>
     <script src="js/components/currency-input.js" defer></script>
     <script src="js/components/month-picker.js" defer></script>
@@ -290,6 +292,7 @@
               </div>
             </section>
           </template>
+          <!-- Import tab -->
           <template id="route-import">
             <section
               class="screen import-screen"
@@ -622,6 +625,7 @@
               </div>
             </section>
           </template>
+          <!-- Entity archive -->
           <template id="route-entity-archive">
             <section class="screen" data-screen="entity-archive">
               <button class="back-button" type="button" data-archive-back>
@@ -934,6 +938,7 @@
       </section>
     </main>
 
+    <!-- Splash screen -->
     <div
       class="app-loading-splash"
       id="app-loading-splash"
