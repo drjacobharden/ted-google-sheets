@@ -2,10 +2,10 @@
   "name": "ted-google-sheets",
   "private": true,
   "scripts": {
-    "build:bundle": "bun run build.ts",
-    "build:types": "bun x tsc --watch --noEmit",
-    "dev": "bun run build:bundle & bun run build:types",
-    "css": "cat src/main.css src/components/**/*.css > dist/bundle.css"
+    "build": "bun run build.ts",
+    "types": "bun x tsc --watch --noEmit",
+    "dev": "bun run build & bun run types",
+    "css": "cat src/main.css src/components/**/*.css src/templates/**/*.css > dist/bundle.css"
   },
   "module": "index.ts",
   "type": "module",
