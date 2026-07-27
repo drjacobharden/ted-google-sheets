@@ -1,0 +1,39 @@
+.navigation-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.navigation-button:hover {
+  background: var(--accent-soft-muted);
+}
+
+.navigation-button.active {
+  color: var(--accent-dark-muted);
+  background: var(--accent-soft);
+}
+
+.navigation-button svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: var(--accent-muted);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.navigation-button.active svg {
+  stroke: var(--accent-dark);
+}
