@@ -1,4 +1,10 @@
 :root {
+  /* Hover color for transparent buttons */
+  --ghost-button-hover: hsl(240, 4%, 93%);
+
+  /* Hover color for transparent buttons */
+  --ghost-button-pressed: hsl(240, 4%, 90%);
+
   /* Background of the page surrounding the app */
   --page-background: hsl(30, 0%, 96%);
 
@@ -6,7 +12,7 @@
   --surface: hsl(30, 0%, 100%);
 
   /* Background color of the navigation sidebar on the left */
-  --sidebar-background: hsl(30, 0%, 98%);
+  --sidebar-background: hsl(240, 4%, 98%);
 
   /* Color of all standard borders */
   --border: #e5e7e2;
@@ -56,6 +62,7 @@
   --radius-large: 24px;
   --radius-medium: 16px;
   --radius-small: 12px;
+  --radius-xsmall: 8px;
 
   /* Font sizes */
   --text-large: 17px;
