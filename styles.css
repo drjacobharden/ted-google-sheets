@@ -64,11 +64,9 @@ body.onboarding-open {
   display: flex;
   min-width: 0;
   min-height: 0;
-  margin: 12px 12px 12px 0;
+  margin: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-large);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -2281,7 +2279,9 @@ body.drawer-open {
   border-radius: 999px;
   background: #eef0eb;
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
 }
 .batch-entry-toggle input::before {
   display: block;
