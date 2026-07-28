@@ -1,0 +1,36 @@
+@font-face {
+  font-family: "Chewy";
+  src: url("../assets/fonts/Chewy-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0.2em;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+span,
+p {
+  /* Scales font smoothly from 12px (0.75rem) at 390px screen up to 14px (0.875rem) at 1280px screen */
+  font-size: clamp(0.75rem, 0.695rem + 0.225vw, 0.875rem);
+
+  /* Scales line-height smoothly from 16px (1rem) at 390px screen up to 20px (1.25rem) at 1280px screen */
+  line-height: clamp(1rem, 0.89rem + 0.45vw, 1.25rem);
+
+  /* Body tracking spec */
+  letter-spacing: 0;
+}
+
+span strong,
+p strong {
+  font-weight: 500;
+}
