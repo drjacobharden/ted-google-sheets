@@ -64,36 +64,3 @@
   font-size: 28px;
   font-weight: 800;
 }
-
-.app-refresh-indicator {
-  position: absolute;
-  z-index: 45;
-  top: 18px;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: 0 8px 22px rgba(35, 45, 36, 0.12);
-  color: var(--muted);
-  font-size: 13px;
-  transform: translateX(-50%);
-}
-
-.app-refresh-indicator button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--accent-dark);
-  font-weight: 700;
-}
-
-.compact-spinner {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  border-width: 2px;
-}

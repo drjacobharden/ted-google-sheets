@@ -2,6 +2,7 @@ import { Tooltip, TooltipOptions } from "../../components/tooltip/tooltip";
 
 export class OverlayManager extends HTMLElement {
   #tooltip!: Tooltip;
+  #refreshIndicator: HTMLElement | null = null;
 
   static get observedAttributes(): string[] {
     return [];
@@ -15,6 +16,10 @@ export class OverlayManager extends HTMLElement {
     const tooltip = document.createElement("tooltip-overlay") as Tooltip;
     manager.append(tooltip);
     this.#tooltip = tooltip;
+
+    const refresh = document.createElement("reshresh-indicator");
+    manager.append(refresh);
+    this.#refreshIndicator = refresh;
 
     this.append(manager);
   }
