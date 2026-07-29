@@ -32,6 +32,10 @@ class NavigationButton extends HTMLElement {
       this.#icon.innerHTML = Icons[icon];
     }
 
+    while (this.firstChild) {
+      button.appendChild(this.firstChild);
+    }
+
     this.appendChild(clone);
   }
 }
