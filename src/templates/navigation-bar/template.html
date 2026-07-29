@@ -1,67 +1,22 @@
-<nav class="sidebar-nav" aria-label="Primary navigation">
-  <navigation-button
-    label="Dashboard"
-    icon="dashboard"
-    data-tab="dashboard"
-  ></navigation-button>
-  <span class="sidebar-section-title">Budgeting</span>
-  <navigation-button
-    label="Transactions"
-    icon="transactions"
-    data-tab="transactions"
-  ></navigation-button>
-  <navigation-button
-    label="Categories"
-    icon="category"
-    data-tab="categories"
-  ></navigation-button>
-  <navigation-button
-    label="Vendors"
-    icon="vendors"
-    data-tab="vendors"
-  ></navigation-button>
-  <navigation-button
-    label="People"
-    icon="people"
-    data-tab="people"
-  ></navigation-button>
-  <navigation-button
-    class="action"
-    label="New transaction"
-    icon="plus"
-    data-new-transaction
-  ></navigation-button>
-  <span class="sidebar-section-title">Investments</span>
-  <navigation-button
-    label="Overview"
-    icon="investments"
-    data-tab="investment-overview"
-  ></navigation-button>
-  <navigation-button
-    label="Accounts"
-    icon="accounts"
-    data-tab="investment-accounts"
-  ></navigation-button>
-  <navigation-button
-    class="action"
-    label="Update balances"
-    icon="plus"
-    data-tab="investment-accounts"
-  ></navigation-button>
-  <span class="sidebar-section-title">Utilities</span>
-  <navigation-button
-    label="Import"
-    icon="import"
-    data-tab="import"
-  ></navigation-button>
-  <navigation-button
-    label="Sync"
-    icon="sync"
-    data-tab="sync"
-  ></navigation-button>
-  <navigation-button
-    label="Settings"
-    icon="settings"
-    data-tab="settings"
-  ></navigation-button>
-</nav>
+<aside class="sidebar">
+  <header class="sidebar-header">
+    <div class="sidebar-title-wrapper">
+      <span id="sidebar-title">TED</span>
+      <button
+        id="open-sidebar"
+        class="sidebar-toggle"
+        type="button"
+        aria-label="collapse sidebar"
+        data-toggle-sidebar
+      ></button>
+    </div>
+    <button
+      id="close-sidebar"
+      class="sidebar-toggle"
+      type="button"
+      aria-label="collapse sidebar"
+      data-toggle-sidebar
+    ></button>
+  </header>
+  <nav class="sidebar-nav" aria-label="Primary navigation"></nav>
+</aside>
