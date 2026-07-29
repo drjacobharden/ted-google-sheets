@@ -216,7 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initialDraftState = "";
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
-      : document.querySelector("[data-new-investment-balance]")
+      : document.querySelector("[data-balance]")
     )?.focus();
   }
 
@@ -369,7 +369,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-new-investment-balance]");
+    const button = event.target.closest("[data-balance]");
     if (!button) return;
     event.preventDefault();
     const accounts = window.InvestmentAPI.accounts().filter(
