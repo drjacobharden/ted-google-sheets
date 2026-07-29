@@ -1,4 +1,7 @@
-import template from "./template.html" with { type: "text" };
+import PageTitleTempString from "./template.html" with { type: "text" };
+
+const PageTitleTemp = document.createElement("template");
+PageTitleTemp.innerHTML = PageTitleTempString;
 
 class PageTitle extends HTMLElement {
   #title: HTMLElement | null = null;
@@ -27,9 +30,10 @@ class PageTitle extends HTMLElement {
     if (this.dataset.initialized) return;
     this.dataset.initialized = "true";
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(template, "text/html");
-    const container = doc.querySelector(".page-heading") as HTMLElement;
+    const clone = PageTitleTemp.content.cloneNode(true) as DocumentFragment;
+    const container = clone.querySelector(".page-heading") as HTMLElement;
+
+    if (!container) return;
 
     this.#eyebrow = container.querySelector(".eyebrow");
     this.#title = container.querySelector("h1");
@@ -38,12 +42,6 @@ class PageTitle extends HTMLElement {
     const eyebrow = this.getAttribute("eyebrow");
     const title = this.getAttribute("title");
     const subtitle = this.getAttribute("subtitle");
-
-    const section = document.createElement("div");
-    section.className = "page-heading heading-row";
-
-    const textColumn = document.createElement("div");
-    section.appendChild(textColumn);
 
     if (eyebrow && this.#eyebrow) {
       this.#eyebrow.textContent = eyebrow;
@@ -64,10 +62,10 @@ class PageTitle extends HTMLElement {
     }
 
     while (this.firstChild) {
-      section.appendChild(this.firstChild);
+      container.appendChild(this.firstChild);
     }
 
-    this.appendChild(section);
+    this.appendChild(container);
   }
 }
 
