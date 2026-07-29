@@ -99,13 +99,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     const activeTab =
       name === "investment-account-detail" ? "investment-accounts" : name;
-    document.querySelectorAll(".nav-item[data-tab]").forEach((item) => {
-      const active = item.dataset.tab === activeTab;
-      item.classList.toggle("active", active);
-      active
-        ? item.setAttribute("aria-current", "page")
-        : item.removeAttribute("aria-current");
-    });
+    document
+      .querySelectorAll(".navigation-button[data-tab]")
+      .forEach((item) => {
+        const active = item.dataset.tab === activeTab;
+        item.classList.toggle("active", active);
+        active
+          ? item.setAttribute("aria-current", "page")
+          : item.removeAttribute("aria-current");
+      });
 
     enterRoute(name).catch(() => {});
     updateNavigationSection(name);
@@ -167,13 +169,6 @@ document.addEventListener("DOMContentLoaded", () => {
     renderRoute(event.detail.route, event.detail.params);
   });
 
-  document.querySelectorAll("[data-nav-section-toggle]").forEach((toggle) =>
-    toggle.addEventListener("click", () => {
-      const section = toggle.closest("[data-nav-section]");
-      const collapsed = section.classList.toggle("collapsed");
-      toggle.setAttribute("aria-expanded", String(!collapsed));
-    }),
-  );
   if (window.matchMedia("(max-width: 860px)").matches)
     navSections.forEach((section) => {
       section.classList.add("collapsed");
@@ -206,7 +201,9 @@ document.addEventListener("DOMContentLoaded", () => {
     loadingSplashMessage.textContent = "Loading your budget…";
     loadingSplashRetry.hidden = true;
     refreshIndicatorRetry.hidden = true;
-    initializeData({ refresh: true, startup: !loadingSplash.hidden }).catch(() => {});
+    initializeData({ refresh: true, startup: !loadingSplash.hidden }).catch(
+      () => {},
+    );
   }
 
   loadingSplashRetry.addEventListener("click", retryAppData);
@@ -247,7 +244,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function loadTransactions() {
-    return state.loaded ? Promise.resolve(state.transactions.slice()) : initializeData();
+    return state.loaded
+      ? Promise.resolve(state.transactions.slice())
+      : initializeData();
   }
 
   function initializeData(options = {}) {
@@ -258,35 +257,48 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (!appDataPromise) {
       const cachedTransactions = window.BudgetAPI.getCachedTransactions?.();
-      const usingCache = !state.loaded && cachedTransactions !== null && cachedTransactions !== undefined;
+      const usingCache =
+        !state.loaded &&
+        cachedTransactions !== null &&
+        cachedTransactions !== undefined;
       if (usingCache) {
         state.transactions = cachedTransactions;
         state.loaded = true;
-        window.dispatchEvent(new CustomEvent("budget:transactions-loaded", {
-          detail: { source: "cache" },
-        }));
+        window.dispatchEvent(
+          new CustomEvent("budget:transactions-loaded", {
+            detail: { source: "cache" },
+          }),
+        );
       }
       const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
-      const coldStart = Boolean(
-        options.startup &&
-        connected &&
-        !state.loaded,
+      const coldStart = Boolean(options.startup && connected && !state.loaded);
+      window.dispatchEvent(
+        new CustomEvent("budget:data-refresh-started", {
+          detail: {
+            source: usingCache ? "cache" : "network",
+            coldStart,
+            connected,
+          },
+        }),
       );
-      window.dispatchEvent(new CustomEvent("budget:data-refresh-started", {
-        detail: { source: usingCache ? "cache" : "network", coldStart, connected },
-      }));
-      appDataPromise = window.BudgetAPI.loadAppData({ refresh: options.refresh })
+      appDataPromise = window.BudgetAPI.loadAppData({
+        refresh: options.refresh,
+      })
         .then(async (data) => {
           state.transactions = data.transactions || [];
           state.loaded = true;
           referenceDataLoaded = true;
           await window.InvestmentAPI.load();
-          window.dispatchEvent(new CustomEvent("budget:transactions-loaded", {
-            detail: { source: "server" },
-          }));
-          window.dispatchEvent(new CustomEvent("budget:data-refresh-complete", {
-            detail: { source: "server" },
-          }));
+          window.dispatchEvent(
+            new CustomEvent("budget:transactions-loaded", {
+              detail: { source: "server" },
+            }),
+          );
+          window.dispatchEvent(
+            new CustomEvent("budget:data-refresh-complete", {
+              detail: { source: "server" },
+            }),
+          );
           return data;
         })
         .catch((error) => {
@@ -298,9 +310,11 @@ document.addEventListener("DOMContentLoaded", () => {
               }),
             );
           }
-          window.dispatchEvent(new CustomEvent("budget:data-refresh-failed", {
-            detail: { error, showingCachedData: state.loaded, connected },
-          }));
+          window.dispatchEvent(
+            new CustomEvent("budget:data-refresh-failed", {
+              detail: { error, showingCachedData: state.loaded, connected },
+            }),
+          );
           window.dispatchEvent(
             new CustomEvent("budget:api-warning", {
               detail: state.loaded
@@ -397,7 +411,8 @@ document.addEventListener("DOMContentLoaded", () => {
     isReferenceDataLoaded: () => referenceDataLoaded,
   };
 
-  if (!window.OnboardingUI?.isBlocking()) initializeData({ startup: true }).catch(() => {});
+  if (!window.OnboardingUI?.isBlocking())
+    initializeData({ startup: true }).catch(() => {});
 
   window.AppRouter.start();
 });
