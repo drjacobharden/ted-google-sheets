@@ -1,0 +1,31 @@
+breadcrumbs-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+breadcrumbs-header span {
+  opacity: 0.5;
+}
+
+breadcrumbs-header button {
+  background-color: transparent;
+  border: 0;
+  border-radius: var(--radius-xsmall);
+  padding: 4px 8px;
+  margin: 0px -8px;
+}
+
+breadcrumbs-header button:hover {
+  background-color: var(--ghost-button-hover);
+}
+
+breadcrumbs-header button:active {
+  opacity: 0.2;
+}
+
+.breadcrumb-slash {
+  height: 16px;
+  width: 16px;
+  opacity: 0.5;
+}

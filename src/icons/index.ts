@@ -10,6 +10,7 @@ import syncIcon from "./sync.html" with { type: "text" };
 import settingsIcon from "./settings.html" with { type: "text" };
 import cartIcon from "./cart.html" with { type: "text" };
 import sidebarIcon from "./sidebar.html" with { type: "text" };
+import chevronRightIcon from "./chevron-right.html" with { type: "text" };
 
 export const Icons: Record<string, string> = {
   dashboard: dashboardIcon,
@@ -24,4 +25,5 @@ export const Icons: Record<string, string> = {
   settings: settingsIcon,
   cart: cartIcon,
   sidebar: sidebarIcon,
+  chevronRight: chevronRightIcon,
 };
