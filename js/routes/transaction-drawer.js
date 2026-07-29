@@ -453,7 +453,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Handle the clicks that open the new transaction drawer
   function handleNewTransactionClick(event) {
-    const button = event.target.closest("[data-new-transaction]");
+    const button = event.target.closest('[data-action="new-transaction"]');
     if (!button) return;
     event.preventDefault();
     window.AppRouter.updateParams({
