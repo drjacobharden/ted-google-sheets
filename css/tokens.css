@@ -13,6 +13,8 @@
 
   /* Background of surfaces that need start contrast against the main area such as toasts and tooltips */
   --inverse-surface: hsl(240, 0%, 8%);
+  --inverse-surface-hover: hsl(240, 0%, 16%);
+  --inverse-surface-active: hsl(240, 0%, 24%);
 
   /* Background color of the navigation sidebar on the left */
   --sidebar-background: hsl(240, 4%, 98%);
