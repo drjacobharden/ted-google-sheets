@@ -1,8 +1,9 @@
+import { RefreshIndicator } from "../../components/refresh-indicator/reshresh-indicator";
 import { Tooltip, TooltipOptions } from "../../components/tooltip/tooltip";
 
 export class OverlayManager extends HTMLElement {
   #tooltip!: Tooltip;
-  #refreshIndicator: HTMLElement | null = null;
+  #refreshIndicator: RefreshIndicator | null = null;
 
   static get observedAttributes(): string[] {
     return [];
@@ -19,13 +20,31 @@ export class OverlayManager extends HTMLElement {
 
     const refresh = document.createElement("reshresh-indicator");
     manager.append(refresh);
-    this.#refreshIndicator = refresh;
+    this.#refreshIndicator = refresh as RefreshIndicator;
 
     this.append(manager);
+
+    window.addEventListener("budget:data-refresh-started", this);
+    window.addEventListener("budget:data-refresh-complete", this);
+    window.addEventListener("budget:data-refresh-failed", this);
   }
 
-  handleEvent(event: Event) {
+  handleEvent(event: CustomEvent) {
+    console.log(event.type);
+
     switch (event.type) {
+      case "budget:data-refresh-started":
+        this.#handleRefreshStarted(event);
+        break;
+
+      case "budget:data-refresh-complete":
+        this.#handleRefreshCompleted(event);
+        break;
+
+      case "budget:data-refresh-failed":
+        this.#handleRefreshFailed(event);
+        break;
+
       default:
         break;
     }
@@ -39,7 +58,29 @@ export class OverlayManager extends HTMLElement {
     this.#tooltip.hide();
   }
 
-  disconnectedCallback() {}
+  #handleRefreshStarted(event: CustomEvent) {
+    if (!event.detail.connected) return;
+    if (this.#refreshIndicator) {
+      this.#refreshIndicator.state = "inProgress";
+    }
+  }
+  #handleRefreshCompleted(event: CustomEvent) {
+    if (this.#refreshIndicator) {
+      this.#refreshIndicator.state = "idle";
+    }
+  }
+  #handleRefreshFailed(event: CustomEvent) {
+    if (!event.detail.connected) return;
+    if (this.#refreshIndicator) {
+      this.#refreshIndicator.state = "failed";
+    }
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener("budget:data-refresh-started", this);
+    window.removeEventListener("budget:data-refresh-complete", this);
+    window.removeEventListener("budget:data-refresh-failed", this);
+  }
 }
 
 customElements.define("overlay-manager", OverlayManager);
