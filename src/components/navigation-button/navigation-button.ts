@@ -1,42 +1,39 @@
-import { Icons } from "../../icons";
-import templateString from "./template.html" with { type: "text" };
-
-const navigationButtonTemplate = document.createElement("template");
-navigationButtonTemplate.innerHTML = templateString;
+import { getIcon, IconKeys } from "../../icons";
 
 class NavigationButton extends HTMLElement {
-  #label: HTMLElement | null = null;
-  #icon: SVGElement | null = null;
+  #button!: HTMLElement;
+  #label!: HTMLElement;
+  #icon!: SVGElement;
 
   static get observedAttributes(): string[] {
     return ["icon", "label", "class"];
   }
 
   connectedCallback(): void {
-    const clone = navigationButtonTemplate.content.cloneNode(
-      true,
-    ) as DocumentFragment;
-    const button = clone.querySelector("button") as HTMLElement;
-
     const label = this.getAttribute("label");
-    const icon = this.getAttribute("icon");
+    const icon = this.getAttribute("icon") as IconKeys;
 
-    this.#label = button.querySelector("span");
-    this.#icon = button.querySelector(".icon-wrapper");
+    this.#button = document.createElement("button");
+    this.#button.setAttribute("class", "navigation-button");
+    this.#button.setAttribute("type", "button");
+    this.#button.setAttribute("aria-current", "page");
 
-    if (label && this.#label) {
+    if (label) {
+      this.#label = document.createElement("span");
       this.#label.textContent = label;
+      this.#button.append(this.#label);
     }
 
-    if (icon && Icons[icon] && this.#icon) {
-      this.#icon.innerHTML = Icons[icon];
+    if (icon) {
+      this.#icon = getIcon(icon);
+      this.#button.insertBefore(this.#icon, this.#label);
     }
 
     while (this.firstChild) {
-      button.appendChild(this.firstChild);
+      this.#button.appendChild(this.firstChild);
     }
 
-    this.appendChild(clone);
+    this.appendChild(this.#button);
   }
 }
 
