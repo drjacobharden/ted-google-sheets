@@ -59,17 +59,6 @@ body.onboarding-open {
   outline-offset: -3px;
 }
 
-.workspace {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
 .app-notice {
   position: absolute;
   z-index: 50;
@@ -110,18 +99,6 @@ body.onboarding-open {
   font-size: 17px;
   font-weight: 600;
 }
-.content {
-  min-height: 0;
-  flex: 1;
-  padding: 30px 36px 34px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-.screen {
-  width: 100%;
-  max-width: none;
-}
 
 .heading-row {
   display: flex;
@@ -130,7 +107,7 @@ body.onboarding-open {
   gap: 24px;
 }
 
-.primary-button,
+/* .primary-button,
 .secondary-button {
   display: inline-flex;
   min-height: 48px;
@@ -140,7 +117,7 @@ body.onboarding-open {
   padding: 0 20px;
   border-radius: var(--radius-small);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 550;
   transition: 160ms ease;
 }
 .primary-button {
@@ -155,7 +132,8 @@ body.onboarding-open {
 .primary-button:disabled {
   cursor: wait;
   opacity: 0.65;
-}
+} */
+
 .range-calendar-actions .primary-button:disabled {
   cursor: not-allowed;
 }
@@ -671,16 +649,16 @@ body.onboarding-open {
     flex-direction: column-reverse;
   }
 }
-.secondary-button {
+/* .secondary-button {
   border: 1px solid var(--border-strong);
   background-color: white;
   color: var(--text);
 }
 .secondary-button:hover {
   background: #f6f7f4;
-}
+} */
 .compact {
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 17px;
 }
 .compact span {
