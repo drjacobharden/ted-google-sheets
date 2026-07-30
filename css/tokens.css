@@ -35,10 +35,11 @@
   --muted: #7a7d78;
 
   /* Standard accent color */
-  --accent: #6f9d66;
+  --accent: hsl(240, 0%, 8%);
 
   /* Darker accent color used for buttons and text */
-  --accent-dark: #4d7f47;
+  --accent-dark: hsl(240, 0%, 8%);
+
   /* --accent-dark: hsl(255deg 78% 59%); */
 
   /* Lighter accent color used for highlighting active navigation button and background of icons */
@@ -73,6 +74,28 @@
   --text-large: 17px;
   --text-small: 12px;
   --text-paragraph: 15px;
+
+  /* 
+
+  The color of buttons in the interface.
+  - Primary button = the buttons with a dark background and light text
+  - Secondary button = the buttons with a border and no background
+  - Ghost button = text buttons with no background or border
+
+  The secondary button border uses the standard border color from earlier.
+  The hover color is what it will transition to when you hover the mouse over.
+  The active state is what it will transition to when you click down on the button.
+
+  For color consistency purposes, if you change the hue (first number) in the base state, you should
+  change it in the hover and active states as well.
+
+  */
+  --primary-button: hsl(240, 0%, 8%);
+  --primary-button-hover: hsl(240, 0%, 16%);
+  --primary-button-active: hsl(240, 0%, 24%);
+
+  --secondary-button-hover: hsl(240, 20%, 93%);
+  --secondary-button-active: hsl(240, 20%, 90%);
 
   /* Available fonts for text */
   font-family:
