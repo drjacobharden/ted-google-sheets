@@ -52,17 +52,6 @@
 
       <!-- CONTENT AREA -->
       <section class="workspace">
-        <div
-          class="app-refresh-indicator"
-          id="app-refresh-indicator"
-          role="status"
-          aria-live="polite"
-          hidden
-        >
-          <span class="spinner compact-spinner" aria-hidden="true"></span>
-          <span id="app-refresh-text">Refreshing data…</span>
-          <button id="app-refresh-retry" type="button" hidden>Retry</button>
-        </div>
         <!-- Toast -->
         <div class="app-notice" id="app-notice" role="status" hidden>
           <span id="app-notice-text"></span>
@@ -128,6 +117,9 @@
 
           <!-- Transaction list tab -->
           <template id="route-transactions">
+            <transaction-list-screen></transaction-list-screen>
+          </template>
+          <!-- <template id="route-transactions">
             <section class="screen" data-screen="transactions">
               <page-title eyebrow="Overview" title="Transactions">
                 <button
@@ -278,7 +270,7 @@
                 </div>
               </div>
             </section>
-          </template>
+          </template> -->
           <!-- Categories tab -->
           <template id="route-categories">
             <section class="screen" data-screen="categories">
@@ -763,30 +755,6 @@
         </div>
       </section>
     </main>
-
-    <!-- Splash screen -->
-    <div
-      class="app-loading-splash"
-      id="app-loading-splash"
-      role="status"
-      aria-live="polite"
-      hidden
-    >
-      <div class="app-loading-card">
-        <div class="app-loading-mark" aria-hidden="true">$</div>
-        <h1>Track Every Dollar</h1>
-        <div class="spinner" aria-hidden="true"></div>
-        <p id="app-loading-message">Loading your budget…</p>
-        <button
-          class="primary-button compact"
-          id="app-loading-retry"
-          type="button"
-          hidden
-        >
-          Retry
-        </button>
-      </div>
-    </div>
 
     <!-- Transaction editor sidebar -->
     <div class="drawer-overlay" id="transaction-drawer-backdrop" hidden>

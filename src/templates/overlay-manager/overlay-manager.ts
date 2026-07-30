@@ -1,9 +1,11 @@
-import { RefreshIndicator } from "../../components/refresh-indicator/reshresh-indicator";
+import { SplashIndicator } from "../../components/splash-indicator/splash-indicator";
+import { RefreshIndicator } from "../../components/refresh-indicator/refresh-indicator";
 import { Tooltip, TooltipOptions } from "../../components/tooltip/tooltip";
 
 export class OverlayManager extends HTMLElement {
   #tooltip!: Tooltip;
   #refreshIndicator: RefreshIndicator | null = null;
+  #splash: SplashIndicator | null = null;
 
   static get observedAttributes(): string[] {
     return [];
@@ -22,6 +24,10 @@ export class OverlayManager extends HTMLElement {
     manager.append(refresh);
     this.#refreshIndicator = refresh as RefreshIndicator;
 
+    const splash = document.createElement("splash-indicator");
+    manager.append(splash);
+    this.#splash = splash as SplashIndicator;
+
     this.append(manager);
 
     window.addEventListener("budget:data-refresh-started", this);
@@ -30,8 +36,6 @@ export class OverlayManager extends HTMLElement {
   }
 
   handleEvent(event: CustomEvent) {
-    console.log(event.type);
-
     switch (event.type) {
       case "budget:data-refresh-started":
         this.#handleRefreshStarted(event);
