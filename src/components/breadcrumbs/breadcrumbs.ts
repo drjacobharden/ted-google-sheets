@@ -1,16 +1,33 @@
-import { Icons } from "../../icons";
+import { getIcon } from "../../icons";
 
-class Breadcrumbs extends HTMLElement {
-  #elementName: HTMLElement | null = null;
+export interface BreadcrumbPath {
+  title: string;
+  key?: string;
+}
 
-  static get observedAttributes(): string[] {
-    return [];
-  }
+export class Breadcrumbs extends HTMLElement {
+  #pathWrapper!: HTMLElement;
+  #buttonWrapper!: HTMLElement;
 
   connectedCallback(): void {
     this.setAttribute("class", "breadcrumb-wrapper");
 
+    const existingChildren = Array.from(this.childNodes);
+
+    this.#pathWrapper = document.createElement("div");
+    this.#pathWrapper.setAttribute("class", "breadcrumb-path-wrapper");
+
+    this.#buttonWrapper = document.createElement("div");
+    this.#buttonWrapper.append(...existingChildren);
+
     const path = JSON.parse(this.dataset.path ?? "[]");
+    this.#renderPath(path, this.#pathWrapper);
+
+    this.replaceChildren(this.#pathWrapper, this.#buttonWrapper);
+  }
+
+  #renderPath(path: BreadcrumbPath[], pathWrapper: HTMLElement) {
+    let children: HTMLElement[] = [];
 
     for (let i = 0, l = path.length; i < l; i++) {
       const item = path[i];
@@ -18,9 +35,9 @@ class Breadcrumbs extends HTMLElement {
 
       if (i > 0) {
         const next = document.createElement("div");
-        next.innerHTML = Icons.chevronRight;
+        next.append(getIcon("chevronRight"));
         next.setAttribute("class", "breadcrumb-slash");
-        this.append(next);
+        children.push(next);
       }
 
       if (item.key) {
@@ -32,26 +49,15 @@ class Breadcrumbs extends HTMLElement {
         element.textContent = item.title;
       }
 
-      this.append(element);
+      children.push(element);
     }
+
+    pathWrapper.replaceChildren(...children);
   }
 
-  attributeChangedCallback(
-    name: string,
-    oldValue: string | null,
-    newValue: string | null,
-  ): void {
-    if (oldValue === newValue) return;
+  setPath(path: BreadcrumbPath[]) {
+    this.#renderPath(path, this.#pathWrapper);
   }
-
-  handleEvent(event: Event) {
-    switch (event.type) {
-      default:
-        break;
-    }
-  }
-
-  disconnectedCallback() {}
 }
 
 customElements.define("breadcrumbs-header", Breadcrumbs);
