@@ -1,0 +1,248 @@
+<section class="screen" data-screen="transactions">
+  <breadcrumbs-header>
+    <refresh-button></refresh-button>
+    <custom-button
+      class="primary-button"
+      id="new-transaction-button"
+      leading-icon="plus"
+      label="Add transaction"
+    ></custom-button>
+  </breadcrumbs-header>
+  <div class="content">
+    <page-title eyebrow="Overview" title="Transactions">
+      <button class="primary-button compact" type="button" data-new-transaction>
+        <span aria-hidden="true">+</span> Add transaction
+      </button>
+    </page-title>
+
+    <date-range-picker preset="month"></date-range-picker>
+    <div class="summary-grid" aria-label="Budget summary">
+      <article class="summary-card balance-card">
+        <div class="summary-icon" aria-hidden="true">
+          <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M6 16C6 18.2091 7.79086 20 10 20H14C16.2091 20 18 18.2091 18 16C18 13.7909 16.2091 12 14 12H10C7.79086 12 6 10.2091 6 8C6 5.79086 7.79086 4 10 4H14C16.2091 4 18 5.79086 18 8M12 2V22"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </div>
+        <div>
+          <p>Net balance</p>
+          <strong id="summary-balance">$0.00</strong>
+        </div>
+      </article>
+      <article class="summary-card">
+        <div class="summary-icon income-icon" aria-hidden="true">
+          <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M7 17L17 7M17 7H7M17 7V17"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </div>
+        <div>
+          <p>Income</p>
+          <strong id="summary-income">$0.00</strong>
+        </div>
+      </article>
+      <article class="summary-card">
+        <div class="summary-icon expense-icon" aria-hidden="true">
+          <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M7 7L17 17M17 17V7M17 17H7"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </div>
+        <div>
+          <p>Spent</p>
+          <strong id="summary-expenses">$0.00</strong>
+        </div>
+      </article>
+    </div>
+
+    <div class="ledger-card">
+      <div class="table-header">
+        <div>
+          <h2>Activity</h2>
+          <p id="transaction-count">0 transactions</p>
+        </div>
+        <div class="toolbar">
+          <label class="search-field">
+            <span class="sr-only">Search transactions</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 4 4" />
+            </svg>
+            <input id="transaction-search" type="search" placeholder="Search" />
+          </label>
+          <label>
+            <span class="sr-only">Filter by type</span>
+            <select id="type-filter" class="filter-select">
+              <option value="all">All types</option>
+              <option value="expense">Expenses</option>
+              <option value="income">Income</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div id="transaction-state" class="transaction-state" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Loading your transactions…</p>
+      </div>
+
+      <div class="table-wrap" id="transaction-table-wrap" hidden>
+        <table class="investment-history-table">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Category</th>
+              <th scope="col">Vendor</th>
+              <th scope="col">Assignment</th>
+              <th scope="col">Note</th>
+              <th scope="col" class="amount-cell">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="transaction-list"></tbody>
+        </table>
+      </div>
+      <div class="transaction-pagination" id="transaction-pagination" hidden>
+        <button
+          class="secondary-button"
+          id="load-more-transactions"
+          type="button"
+        >
+          Load 250 more
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- <page-title eyebrow="Overview" title="Transactions">
+      <button class="primary-button compact" type="button" data-new-transaction>
+        <span aria-hidden="true">+</span> Add transaction
+      </button>
+    </page-title>
+
+    <date-range-picker preset="month"></date-range-picker>
+    <div class="summary-grid" aria-label="Budget summary">
+      <article class="summary-card balance-card">
+        <div class="summary-icon" aria-hidden="true">
+          <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M6 16C6 18.2091 7.79086 20 10 20H14C16.2091 20 18 18.2091 18 16C18 13.7909 16.2091 12 14 12H10C7.79086 12 6 10.2091 6 8C6 5.79086 7.79086 4 10 4H14C16.2091 4 18 5.79086 18 8M12 2V22"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </div>
+        <div>
+          <p>Net balance</p>
+          <strong id="summary-balance">$0.00</strong>
+        </div>
+      </article>
+      <article class="summary-card">
+        <div class="summary-icon income-icon" aria-hidden="true">
+          <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M7 17L17 7M17 7H7M17 7V17"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </div>
+        <div>
+          <p>Income</p>
+          <strong id="summary-income">$0.00</strong>
+        </div>
+      </article>
+      <article class="summary-card">
+        <div class="summary-icon expense-icon" aria-hidden="true">
+          <svg width="50%" height="50%" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M7 7L17 17M17 17V7M17 17H7"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </div>
+        <div>
+          <p>Spent</p>
+          <strong id="summary-expenses">$0.00</strong>
+        </div>
+      </article>
+    </div>
+
+    <div class="ledger-card">
+      <div class="table-header">
+        <div>
+          <h2>Activity</h2>
+          <p id="transaction-count">0 transactions</p>
+        </div>
+        <div class="toolbar">
+          <label class="search-field">
+            <span class="sr-only">Search transactions</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 4 4" />
+            </svg>
+            <input id="transaction-search" type="search" placeholder="Search" />
+          </label>
+          <label>
+            <span class="sr-only">Filter by type</span>
+            <select id="type-filter" class="filter-select">
+              <option value="all">All types</option>
+              <option value="expense">Expenses</option>
+              <option value="income">Income</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div id="transaction-state" class="transaction-state" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Loading your transactions…</p>
+      </div>
+
+      <div class="table-wrap" id="transaction-table-wrap" hidden>
+        <table class="investment-history-table">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Category</th>
+              <th scope="col">Vendor</th>
+              <th scope="col">Assignment</th>
+              <th scope="col">Note</th>
+              <th scope="col" class="amount-cell">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="transaction-list"></tbody>
+        </table>
+      </div>
+      <div class="transaction-pagination" id="transaction-pagination" hidden>
+        <button
+          class="secondary-button"
+          id="load-more-transactions"
+          type="button"
+        >
+          Load 250 more
+        </button>
+      </div>
+    </div> -->
