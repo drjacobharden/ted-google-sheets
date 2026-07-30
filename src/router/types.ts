@@ -39,3 +39,17 @@ export interface NavigationTarget {
 }
 
 export type NavigationGuard = (target: NavigationTarget) => boolean;
+
+export interface RouteChangedEvent extends Event {
+  detail: RouteContext;
+}
+
+export type RouterConfig = Record<
+  RouteName,
+  {
+    section: string;
+    template: string;
+    script: string;
+    module: () => RouteModule;
+  }
+>;
