@@ -47,79 +47,74 @@
     <overlay-manager></overlay-manager>
 
     <main class="app-shell">
-      <!-- NAVIGATION BAR -->
       <navigation-bar></navigation-bar>
-
-      <!-- CONTENT AREA -->
+      <div class="app-notice" id="app-notice" role="status" hidden>
+        <span id="app-notice-text"></span>
+        <button
+          id="dismiss-app-notice"
+          type="button"
+          aria-label="Dismiss notification"
+        >
+          ×
+        </button>
+      </div>
       <section class="workspace">
         <!-- Toast -->
-        <div class="app-notice" id="app-notice" role="status" hidden>
-          <span id="app-notice-text"></span>
-          <button
-            id="dismiss-app-notice"
-            type="button"
-            aria-label="Dismiss notification"
-          >
-            ×
-          </button>
-        </div>
+
         <!-- Main content area -->
-        <div class="content">
-          <div id="route-outlet"></div>
 
-          <!-- Dashboard tab -->
-          <template id="route-dashboard">
-            <section class="screen" data-screen="dashboard">
-              <div class="page-heading">
-                <p class="eyebrow">Household overview</p>
-                <h1>Dashboard</h1>
-                <p class="heading-copy">
-                  Budget surplus and paycheck investing without double-counting
-                  manual transfers.
-                </p>
-              </div>
+        <div id="route-outlet"></div>
 
-              <date-range-picker preset="month"></date-range-picker>
-              <div
-                class="summary-grid dashboard-summary"
-                id="dashboard-summary"
-                aria-label="Savings summary"
-              ></div>
-              <div class="investment-layout">
-                <section class="ledger-card chart-card">
-                  <div class="table-header">
-                    <div>
-                      <h2>Investment balance</h2>
-                      <p>Latest reported balances over time</p>
-                    </div>
+        <!-- Dashboard tab -->
+        <template id="route-dashboard">
+          <section class="screen" data-screen="dashboard">
+            <div class="page-heading">
+              <p class="eyebrow">Household overview</p>
+              <h1>Dashboard</h1>
+              <p class="heading-copy">
+                Budget surplus and paycheck investing without double-counting
+                manual transfers.
+              </p>
+            </div>
+
+            <date-range-picker preset="month"></date-range-picker>
+            <div
+              class="summary-grid dashboard-summary"
+              id="dashboard-summary"
+              aria-label="Savings summary"
+            ></div>
+            <div class="investment-layout">
+              <section class="ledger-card chart-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Investment balance</h2>
+                    <p>Latest reported balances over time</p>
                   </div>
-                  <div id="dashboard-trend" class="investment-chart"></div>
-                </section>
-                <section class="ledger-card investment-history-card">
-                  <div class="table-header">
-                    <div>
-                      <h2>Savings breakdown</h2>
-                      <p>Manual transfers are shown but not added twice.</p>
-                    </div>
+                </div>
+                <div id="dashboard-trend" class="investment-chart"></div>
+              </section>
+              <section class="ledger-card investment-history-card">
+                <div class="table-header">
+                  <div>
+                    <h2>Savings breakdown</h2>
+                    <p>Manual transfers are shown but not added twice.</p>
                   </div>
-                  <div id="dashboard-breakdown" class="breakdown-list"></div>
-                </section>
-              </div>
-            </section>
-          </template>
-          <!-- Import tab -->
-          <template id="route-import">
-            <section
-              class="screen import-screen"
-              data-screen="import"
-            ></section>
-          </template>
+                </div>
+                <div id="dashboard-breakdown" class="breakdown-list"></div>
+              </section>
+            </div>
+          </section>
+        </template>
+        <!-- Import tab -->
+        <template id="route-import">
+          <section class="screen import-screen" data-screen="import"></section>
+        </template>
 
-          <!-- Transaction list tab -->
-          <template id="route-transactions">
-            <transaction-list-screen></transaction-list-screen>
-          </template>
-          <!-- <template id="route-transactions">
+        <!-- Transaction list tab -->
+        <template id="route-transactions">
+          <transaction-list-screen></transaction-list-screen>
+        </template>
+        <!-- <template id="route-transactions">
             <section class="screen" data-screen="transactions">
               <page-title eyebrow="Overview" title="Transactions">
                 <button
@@ -271,488 +266,478 @@
               </div>
             </section>
           </template> -->
-          <!-- Categories tab -->
-          <template id="route-categories">
-            <section class="screen" data-screen="categories">
-              <page-title
-                eyebrow="Organize spending"
-                title="Categories"
-                subtitle="Manage the labels used to organize your transactions."
-              ></page-title>
+        <!-- Categories tab -->
+        <template id="route-categories">
+          <section class="screen" data-screen="categories">
+            <page-title
+              eyebrow="Organize spending"
+              title="Categories"
+              subtitle="Manage the labels used to organize your transactions."
+            ></page-title>
 
-              <div class="category-layout">
-                <section
-                  class="category-panel"
-                  aria-labelledby="category-list-title"
-                >
-                  <div class="table-header">
-                    <div>
-                      <h2 id="category-list-title">All categories</h2>
-                      <p id="category-count">0 categories</p>
-                    </div>
-                  </div>
-                  <div
-                    class="category-list"
-                    id="category-list"
-                    aria-live="polite"
-                  ></div>
-                </section>
-
-                <form class="add-category-card" id="category-form" novalidate>
-                  <h2>Add a category</h2>
-                  <p>Create a reusable category for future expenses.</p>
-                  <label class="form-field">
-                    <span>Name</span>
-                    <input
-                      name="categoryName"
-                      type="text"
-                      maxlength="50"
-                      placeholder="e.g. Subscriptions"
-                      required
-                    />
-                  </label>
-                  <p class="category-form-message" aria-live="polite"></p>
-                  <button class="primary-button" type="submit">
-                    Add category
-                  </button>
-                  <a
-                    class="secondary-button archived-entity-link"
-                    href="#/entity-archive?kind=category"
-                  >
-                    View archived categories
-                  </a>
-                </form>
-              </div>
-            </section>
-          </template>
-          <!-- Vendors tab -->
-          <template id="route-vendors">
-            <section class="screen" data-screen="vendors">
-              <page-title
-                eyebrow="Track payees"
-                title="Vendors"
-                subtitle="Manage the people and businesses attached to your transactions."
-              ></page-title>
-              <div class="category-layout">
-                <section
-                  class="category-panel"
-                  aria-labelledby="vendor-list-title"
-                >
-                  <div class="table-header">
-                    <div>
-                      <h2 id="vendor-list-title">All vendors</h2>
-                      <p id="vendor-count">0 vendors</p>
-                    </div>
-                    <label class="search-field entity-search-field">
-                      <span class="sr-only">Search vendors</span>
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="11" cy="11" r="6.5" />
-                        <path d="m16 16 4 4" />
-                      </svg>
-                      <input
-                        id="vendor-search"
-                        type="search"
-                        placeholder="Search vendors"
-                      />
-                    </label>
-                  </div>
-                  <div
-                    class="category-list"
-                    id="vendor-list"
-                    aria-live="polite"
-                  ></div>
-                </section>
-                <form class="add-category-card" id="vendor-form" novalidate>
-                  <h2>Add a vendor</h2>
-                  <p>Create a reusable vendor for future transactions.</p>
-                  <label class="form-field">
-                    <span>Name</span>
-                    <input
-                      name="vendorName"
-                      type="text"
-                      maxlength="80"
-                      placeholder="e.g. Local Market"
-                      required
-                    />
-                  </label>
-                  <p class="vendor-form-message" aria-live="polite"></p>
-                  <button class="primary-button" type="submit">
-                    Add vendor
-                  </button>
-                  <a
-                    class="secondary-button archived-entity-link"
-                    href="#/entity-archive?kind=vendor"
-                  >
-                    View archived vendors
-                  </a>
-                </form>
-              </div>
-            </section>
-          </template>
-          <!-- People tab -->
-          <template id="route-people">
-            <section class="screen" data-screen="people">
-              <page-title
-                eyebrow="View assignments"
-                title="People"
-                subtitle="See how spending breaks down across your household."
-              ></page-title>
-
-              <div class="category-layout">
-                <section
-                  class="category-panel"
-                  aria-labelledby="people-list-title"
-                >
-                  <div class="table-header">
-                    <div>
-                      <h2 id="people-list-title">Household assignments</h2>
-                      <p id="people-count">1 assignment</p>
-                    </div>
-                  </div>
-                  <div
-                    class="category-list"
-                    id="people-list"
-                    aria-live="polite"
-                  ></div>
-                </section>
-
-                <form class="add-category-card" id="people-form" novalidate>
-                  <h2>Add a person</h2>
-                  <p>Add a member to your household.</p>
-                  <label class="form-field">
-                    <span>Name</span>
-                    <input
-                      name="personName"
-                      type="text"
-                      maxlength="80"
-                      placeholder="e.g. Alex"
-                      required
-                    />
-                  </label>
-                  <p class="people-form-message" aria-live="polite"></p>
-                  <button class="primary-button" type="submit">
-                    Add person
-                  </button>
-                  <a
-                    class="secondary-button archived-entity-link"
-                    href="#/entity-archive?kind=assignment"
-                  >
-                    View archived people
-                  </a>
-                </form>
-              </div>
-            </section>
-          </template>
-          <!-- Entity archive -->
-          <template id="route-entity-archive">
-            <section class="screen" data-screen="entity-archive">
-              <button class="back-button" type="button" data-archive-back>
-                ← Back
-              </button>
-              <page-title
-                eyebrow="Archived"
-                title="Archived entities"
-                subtitle="Reactivate an archived item to make it available again."
-              ></page-title>
-              <section class="category-panel archived-entity-panel">
+            <div class="category-layout">
+              <section
+                class="category-panel"
+                aria-labelledby="category-list-title"
+              >
                 <div class="table-header">
                   <div>
-                    <h2 data-archive-title>Archived items</h2>
-                    <p data-archive-count>0 items</p>
+                    <h2 id="category-list-title">All categories</h2>
+                    <p id="category-count">0 categories</p>
+                  </div>
+                </div>
+                <div
+                  class="category-list"
+                  id="category-list"
+                  aria-live="polite"
+                ></div>
+              </section>
+
+              <form class="add-category-card" id="category-form" novalidate>
+                <h2>Add a category</h2>
+                <p>Create a reusable category for future expenses.</p>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input
+                    name="categoryName"
+                    type="text"
+                    maxlength="50"
+                    placeholder="e.g. Subscriptions"
+                    required
+                  />
+                </label>
+                <p class="category-form-message" aria-live="polite"></p>
+                <button class="primary-button" type="submit">
+                  Add category
+                </button>
+                <a
+                  class="secondary-button archived-entity-link"
+                  href="#/entity-archive?kind=category"
+                >
+                  View archived categories
+                </a>
+              </form>
+            </div>
+          </section>
+        </template>
+        <!-- Vendors tab -->
+        <template id="route-vendors">
+          <section class="screen" data-screen="vendors">
+            <page-title
+              eyebrow="Track payees"
+              title="Vendors"
+              subtitle="Manage the people and businesses attached to your transactions."
+            ></page-title>
+            <div class="category-layout">
+              <section
+                class="category-panel"
+                aria-labelledby="vendor-list-title"
+              >
+                <div class="table-header">
+                  <div>
+                    <h2 id="vendor-list-title">All vendors</h2>
+                    <p id="vendor-count">0 vendors</p>
                   </div>
                   <label class="search-field entity-search-field">
-                    <span class="sr-only">Search archived items</span>
+                    <span class="sr-only">Search vendors</span>
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <circle cx="11" cy="11" r="6.5" />
                       <path d="m16 16 4 4" />
                     </svg>
                     <input
-                      data-archive-search
+                      id="vendor-search"
                       type="search"
-                      placeholder="Search archived items"
+                      placeholder="Search vendors"
                     />
                   </label>
                 </div>
                 <div
-                  class="category-list archived-entity-list"
-                  data-archive-list
+                  class="category-list"
+                  id="vendor-list"
                   aria-live="polite"
                 ></div>
               </section>
-            </section>
-          </template>
-          <!-- Entity drill down tab -->
-          <template id="route-entity-detail">
-            <section class="screen" data-screen="entity-detail">
-              <page-title eyebrow="Details" title="Entity">
-                <button
-                  class="primary-button compact"
-                  id="edit-entity"
-                  type="button"
+              <form class="add-category-card" id="vendor-form" novalidate>
+                <h2>Add a vendor</h2>
+                <p>Create a reusable vendor for future transactions.</p>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input
+                    name="vendorName"
+                    type="text"
+                    maxlength="80"
+                    placeholder="e.g. Local Market"
+                    required
+                  />
+                </label>
+                <p class="vendor-form-message" aria-live="polite"></p>
+                <button class="primary-button" type="submit">Add vendor</button>
+                <a
+                  class="secondary-button archived-entity-link"
+                  href="#/entity-archive?kind=vendor"
                 >
-                  Edit entity
-                </button>
-              </page-title>
-              <date-range-picker preset="month"></date-range-picker>
-              <div
-                class="summary-grid entity-summary-grid"
-                id="entity-summary-grid"
-                aria-label="Entity summary"
-              ></div>
-              <div class="ledger-card">
+                  View archived vendors
+                </a>
+              </form>
+            </div>
+          </section>
+        </template>
+        <!-- People tab -->
+        <template id="route-people">
+          <section class="screen" data-screen="people">
+            <page-title
+              eyebrow="View assignments"
+              title="People"
+              subtitle="See how spending breaks down across your household."
+            ></page-title>
+
+            <div class="category-layout">
+              <section
+                class="category-panel"
+                aria-labelledby="people-list-title"
+              >
                 <div class="table-header">
                   <div>
-                    <h2>Activity</h2>
-                    <p id="entity-transaction-count">0 transactions</p>
+                    <h2 id="people-list-title">Household assignments</h2>
+                    <p id="people-count">1 assignment</p>
                   </div>
                 </div>
                 <div
-                  class="transaction-state"
-                  id="entity-transaction-state"
+                  class="category-list"
+                  id="people-list"
+                  aria-live="polite"
                 ></div>
-                <div
-                  class="table-wrap"
-                  id="entity-transaction-table-wrap"
+              </section>
+
+              <form class="add-category-card" id="people-form" novalidate>
+                <h2>Add a person</h2>
+                <p>Add a member to your household.</p>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input
+                    name="personName"
+                    type="text"
+                    maxlength="80"
+                    placeholder="e.g. Alex"
+                    required
+                  />
+                </label>
+                <p class="people-form-message" aria-live="polite"></p>
+                <button class="primary-button" type="submit">Add person</button>
+                <a
+                  class="secondary-button archived-entity-link"
+                  href="#/entity-archive?kind=assignment"
+                >
+                  View archived people
+                </a>
+              </form>
+            </div>
+          </section>
+        </template>
+        <!-- Entity archive -->
+        <template id="route-entity-archive">
+          <section class="screen" data-screen="entity-archive">
+            <button class="back-button" type="button" data-archive-back>
+              ← Back
+            </button>
+            <page-title
+              eyebrow="Archived"
+              title="Archived entities"
+              subtitle="Reactivate an archived item to make it available again."
+            ></page-title>
+            <section class="category-panel archived-entity-panel">
+              <div class="table-header">
+                <div>
+                  <h2 data-archive-title>Archived items</h2>
+                  <p data-archive-count>0 items</p>
+                </div>
+                <label class="search-field entity-search-field">
+                  <span class="sr-only">Search archived items</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="6.5" />
+                    <path d="m16 16 4 4" />
+                  </svg>
+                  <input
+                    data-archive-search
+                    type="search"
+                    placeholder="Search archived items"
+                  />
+                </label>
+              </div>
+              <div
+                class="category-list archived-entity-list"
+                data-archive-list
+                aria-live="polite"
+              ></div>
+            </section>
+          </section>
+        </template>
+        <!-- Entity drill down tab -->
+        <template id="route-entity-detail">
+          <section class="screen" data-screen="entity-detail">
+            <page-title eyebrow="Details" title="Entity">
+              <button
+                class="primary-button compact"
+                id="edit-entity"
+                type="button"
+              >
+                Edit entity
+              </button>
+            </page-title>
+            <date-range-picker preset="month"></date-range-picker>
+            <div
+              class="summary-grid entity-summary-grid"
+              id="entity-summary-grid"
+              aria-label="Entity summary"
+            ></div>
+            <div class="ledger-card">
+              <div class="table-header">
+                <div>
+                  <h2>Activity</h2>
+                  <p id="entity-transaction-count">0 transactions</p>
+                </div>
+              </div>
+              <div
+                class="transaction-state"
+                id="entity-transaction-state"
+              ></div>
+              <div class="table-wrap" id="entity-transaction-table-wrap" hidden>
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Date</th>
+                      <th scope="col">Category</th>
+                      <th scope="col">Vendor</th>
+                      <th scope="col">Assignment</th>
+                      <th scope="col">Note</th>
+                      <th scope="col" class="amount-cell">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="entity-transaction-list"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </template>
+        <!-- Sync tab -->
+        <template id="route-sync">
+          <section class="screen" data-screen="sync">
+            <page-title
+              eyebrow="Background activity"
+              title="Sync"
+              subtitle="Review changes waiting to be saved to your Google Sheet."
+            ></page-title>
+            <div class="sync-card">
+              <div class="table-header">
+                <div>
+                  <h2>Changes</h2>
+                  <p id="sync-screen-summary">All changes are saved.</p>
+                </div>
+                <button
+                  class="secondary-button compact"
+                  id="retry-all-sync"
+                  type="button"
                   hidden
                 >
-                  <table>
-                    <thead>
-                      <tr>
-                        <th scope="col">Date</th>
-                        <th scope="col">Category</th>
-                        <th scope="col">Vendor</th>
-                        <th scope="col">Assignment</th>
-                        <th scope="col">Note</th>
-                        <th scope="col" class="amount-cell">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody id="entity-transaction-list"></tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
-          </template>
-          <!-- Sync tab -->
-          <template id="route-sync">
-            <section class="screen" data-screen="sync">
-              <page-title
-                eyebrow="Background activity"
-                title="Sync"
-                subtitle="Review changes waiting to be saved to your Google Sheet."
-              ></page-title>
-              <div class="sync-card">
-                <div class="table-header">
-                  <div>
-                    <h2>Changes</h2>
-                    <p id="sync-screen-summary">All changes are saved.</p>
-                  </div>
-                  <button
-                    class="secondary-button compact"
-                    id="retry-all-sync"
-                    type="button"
-                    hidden
-                  >
-                    Retry all now
-                  </button>
-                </div>
-                <div class="sync-empty" id="sync-empty">
-                  <div class="empty-symbol" aria-hidden="true">✓</div>
-                  <h3>Everything is up to date</h3>
-                  <p>New changes will appear here while they are syncing.</p>
-                </div>
-                <div class="sync-list" id="sync-list" aria-live="polite"></div>
-              </div>
-            </section>
-          </template>
-          <!-- Settings tab -->
-          <template id="route-settings">
-            <section class="screen" data-screen="settings">
-              <page-title
-                eyebrow="Preferences"
-                title="Settings"
-                subtitle="Manage your profile and connect this app to Google Sheets."
-              ></page-title>
-
-              <div class="settings-grid">
-                <user-form></user-form>
-                <url-form></url-form>
-                <aside class="contract-card">
-                  <p class="eyebrow">Expected API</p>
-                  <h2>Apps Script contract</h2>
-                  <p>
-                    The frontend sends normalized transaction and entity
-                    actions:
-                  </p>
-                  <dl>
-                    <div>
-                      <dt>GET</dt>
-                      <dd><code>?action=health</code></dd>
-                    </div>
-                    <div>
-                      <dt>GET</dt>
-                      <dd><code>?action=listTransactions</code></dd>
-                    </div>
-                    <div>
-                      <dt>POST</dt>
-                      <dd>
-                        <code>add/update Transactions</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>GET</dt>
-                      <dd><code>?action=listUsers</code></dd>
-                    </div>
-                    <div>
-                      <dt>POST</dt>
-                      <dd><code>addUser / updateUser</code></dd>
-                    </div>
-                    <div>
-                      <dt>GET</dt>
-                      <dd>
-                        <code
-                          >listCategories / listVendors / listAssignments</code
-                        >
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>POST</dt>
-                      <dd>
-                        <code>addEntities / update / archive entity</code>
-                      </dd>
-                    </div>
-                  </dl>
-                  <p class="contract-note">
-                    List responses can be a JSON array or
-                    <code>{ "data": [...] }</code>.
-                  </p>
-                </aside>
-              </div>
-            </section>
-          </template>
-          <!-- Investment overview tab -->
-          <template id="route-investment-overview">
-            <section class="screen" data-screen="investment-overview">
-              <page-title
-                eyebrow="Long-term savings"
-                title="Investment overview"
-                subtitle="Balances, contributions, and contribution-adjusted growth for retirement planning."
-              ></page-title>
-              <date-range-picker preset="month"></date-range-picker>
-              <div class="summary-grid" id="investment-summary"></div>
-              <section class="ledger-card chart-card">
-                <div class="table-header">
-                  <div>
-                    <h2>Balance trend</h2>
-                    <p id="investment-coverage">No investment history yet.</p>
-                  </div>
-                </div>
-                <div id="investment-trend" class="investment-chart"></div>
-                <div
-                  id="investment-allocation"
-                  class="investment-allocation"
-                  aria-label="Investment allocation"
-                ></div>
-              </section>
-            </section>
-          </template>
-          <!-- Investment accounts tab -->
-          <template id="route-investment-accounts">
-            <section class="screen" data-screen="investment-accounts">
-              <page-title
-                eyebrow="Investments"
-                title="Accounts"
-                subtitle="Manage the investment accounts included in household reporting."
-              ></page-title>
-              <div class="investment-layout">
-                <section class="ledger-card investment-account-list-card">
-                  <div class="table-header">
-                    <div>
-                      <h2>Accounts</h2>
-                      <p id="investment-account-count">0 accounts</p>
-                    </div>
-                  </div>
-                  <div id="investment-account-list" class="category-list"></div>
-                </section>
-
-                <form class="add-category-card" id="investment-account-form">
-                  <h2>Add an account</h2>
-                  <p>Create a record of the accounts you invest into.</p>
-                  <label class="form-field">
-                    <span>Name</span>
-                    <input
-                      name="name"
-                      type="text"
-                      maxlength="80"
-                      placeholder="e.g. Roth IRA"
-                      required
-                    />
-                  </label>
-                  <label class="form-field">
-                    <span>Source</span>
-                    <select name="source" required>
-                      <option value="manual">Manual transfer</option>
-                      <option value="paycheck">Paycheck deduction</option>
-                    </select></label
-                  >
-
-                  <p class="form-footnote">
-                    Paycheck deductions are considered when calculating your
-                    total savings. Manual transfers are not because they come
-                    from savings already counted in income minus spending.
-                  </p>
-                  <button class="primary-button" type="submit">
-                    Add account
-                  </button>
-                  <p class="settings-message" role="status"></p>
-                </form>
-              </div>
-            </section>
-          </template>
-          <!-- Investment account detail -->
-          <template id="route-investment-account-detail">
-            <section class="screen" data-screen="investment-account-detail">
-              <page-title
-                eyebrow="Investments"
-                title="Investment account"
-                subtitle="Monthly balance history"
-              >
-                <button
-                  class="primary-button compact"
-                  id="edit-investment-account"
-                  type="button"
-                >
-                  Edit account
+                  Retry all now
                 </button>
-              </page-title>
-              <section class="ledger-card">
+              </div>
+              <div class="sync-empty" id="sync-empty">
+                <div class="empty-symbol" aria-hidden="true">✓</div>
+                <h3>Everything is up to date</h3>
+                <p>New changes will appear here while they are syncing.</p>
+              </div>
+              <div class="sync-list" id="sync-list" aria-live="polite"></div>
+            </div>
+          </section>
+        </template>
+        <!-- Settings tab -->
+        <template id="route-settings">
+          <section class="screen" data-screen="settings">
+            <page-title
+              eyebrow="Preferences"
+              title="Settings"
+              subtitle="Manage your profile and connect this app to Google Sheets."
+            ></page-title>
+
+            <div class="settings-grid">
+              <user-form></user-form>
+              <url-form></url-form>
+              <aside class="contract-card">
+                <p class="eyebrow">Expected API</p>
+                <h2>Apps Script contract</h2>
+                <p>
+                  The frontend sends normalized transaction and entity actions:
+                </p>
+                <dl>
+                  <div>
+                    <dt>GET</dt>
+                    <dd><code>?action=health</code></dd>
+                  </div>
+                  <div>
+                    <dt>GET</dt>
+                    <dd><code>?action=listTransactions</code></dd>
+                  </div>
+                  <div>
+                    <dt>POST</dt>
+                    <dd>
+                      <code>add/update Transactions</code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>GET</dt>
+                    <dd><code>?action=listUsers</code></dd>
+                  </div>
+                  <div>
+                    <dt>POST</dt>
+                    <dd><code>addUser / updateUser</code></dd>
+                  </div>
+                  <div>
+                    <dt>GET</dt>
+                    <dd>
+                      <code
+                        >listCategories / listVendors / listAssignments</code
+                      >
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>POST</dt>
+                    <dd>
+                      <code>addEntities / update / archive entity</code>
+                    </dd>
+                  </div>
+                </dl>
+                <p class="contract-note">
+                  List responses can be a JSON array or
+                  <code>{ "data": [...] }</code>.
+                </p>
+              </aside>
+            </div>
+          </section>
+        </template>
+        <!-- Investment overview tab -->
+        <template id="route-investment-overview">
+          <section class="screen" data-screen="investment-overview">
+            <page-title
+              eyebrow="Long-term savings"
+              title="Investment overview"
+              subtitle="Balances, contributions, and contribution-adjusted growth for retirement planning."
+            ></page-title>
+            <date-range-picker preset="month"></date-range-picker>
+            <div class="summary-grid" id="investment-summary"></div>
+            <section class="ledger-card chart-card">
+              <div class="table-header">
+                <div>
+                  <h2>Balance trend</h2>
+                  <p id="investment-coverage">No investment history yet.</p>
+                </div>
+              </div>
+              <div id="investment-trend" class="investment-chart"></div>
+              <div
+                id="investment-allocation"
+                class="investment-allocation"
+                aria-label="Investment allocation"
+              ></div>
+            </section>
+          </section>
+        </template>
+        <!-- Investment accounts tab -->
+        <template id="route-investment-accounts">
+          <section class="screen" data-screen="investment-accounts">
+            <page-title
+              eyebrow="Investments"
+              title="Accounts"
+              subtitle="Manage the investment accounts included in household reporting."
+            ></page-title>
+            <div class="investment-layout">
+              <section class="ledger-card investment-account-list-card">
                 <div class="table-header">
                   <div>
-                    <h2>Balance history</h2>
-                    <p id="investment-account-history-count">0 balances</p>
+                    <h2>Accounts</h2>
+                    <p id="investment-account-count">0 accounts</p>
                   </div>
                 </div>
-                <div class="table-wrap" id="investment-account-history-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Month</th>
-                        <th>Net contribution</th>
-                        <th class="amount-cell">Ending balance</th>
-                      </tr>
-                    </thead>
-                    <tbody id="investment-account-history-body"></tbody>
-                  </table>
-                </div>
-                <div
-                  id="investment-account-history-empty"
-                  class="investment-empty"
-                >
-                  No monthly balances have been recorded.
-                </div>
+                <div id="investment-account-list" class="category-list"></div>
               </section>
+
+              <form class="add-category-card" id="investment-account-form">
+                <h2>Add an account</h2>
+                <p>Create a record of the accounts you invest into.</p>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input
+                    name="name"
+                    type="text"
+                    maxlength="80"
+                    placeholder="e.g. Roth IRA"
+                    required
+                  />
+                </label>
+                <label class="form-field">
+                  <span>Source</span>
+                  <select name="source" required>
+                    <option value="manual">Manual transfer</option>
+                    <option value="paycheck">Paycheck deduction</option>
+                  </select></label
+                >
+
+                <p class="form-footnote">
+                  Paycheck deductions are considered when calculating your total
+                  savings. Manual transfers are not because they come from
+                  savings already counted in income minus spending.
+                </p>
+                <button class="primary-button" type="submit">
+                  Add account
+                </button>
+                <p class="settings-message" role="status"></p>
+              </form>
+            </div>
+          </section>
+        </template>
+        <!-- Investment account detail -->
+        <template id="route-investment-account-detail">
+          <section class="screen" data-screen="investment-account-detail">
+            <page-title
+              eyebrow="Investments"
+              title="Investment account"
+              subtitle="Monthly balance history"
+            >
+              <button
+                class="primary-button compact"
+                id="edit-investment-account"
+                type="button"
+              >
+                Edit account
+              </button>
+            </page-title>
+            <section class="ledger-card">
+              <div class="table-header">
+                <div>
+                  <h2>Balance history</h2>
+                  <p id="investment-account-history-count">0 balances</p>
+                </div>
+              </div>
+              <div class="table-wrap" id="investment-account-history-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th>Net contribution</th>
+                      <th class="amount-cell">Ending balance</th>
+                    </tr>
+                  </thead>
+                  <tbody id="investment-account-history-body"></tbody>
+                </table>
+              </div>
+              <div
+                id="investment-account-history-empty"
+                class="investment-empty"
+              >
+                No monthly balances have been recorded.
+              </div>
             </section>
-          </template>
-        </div>
+          </section>
+        </template>
       </section>
     </main>
 

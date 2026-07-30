@@ -66,12 +66,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const navSections = document.querySelectorAll("[data-nav-section]");
   const screens = document.querySelectorAll(".screen[data-screen]");
   const appNotice = document.getElementById("app-notice");
-  const appShell = document.querySelector(".app-shell");
+  // const appShell = document.querySelector(".app-shell");
   const loadingSplash = document.getElementById("app-loading-splash");
   const loadingSplashMessage = document.getElementById("app-loading-message");
   const loadingSplashRetry = document.getElementById("app-loading-retry");
-  const refreshIndicator = document.getElementById("app-refresh-indicator");
-  const refreshIndicatorText = document.getElementById("app-refresh-text");
+  // const refreshIndicator = document.getElementById("app-refresh-indicator");
+  // const refreshIndicatorText = document.getElementById("app-refresh-text");
   const refreshIndicatorRetry = document.getElementById("app-refresh-retry");
   let appNoticeTimer;
 
@@ -209,40 +209,6 @@ document.addEventListener("DOMContentLoaded", () => {
   loadingSplashRetry.addEventListener("click", retryAppData);
   refreshIndicatorRetry.addEventListener("click", retryAppData);
 
-  window.addEventListener("budget:data-refresh-started", (event) => {
-    if (!event.detail.connected) return;
-    loadingSplashRetry.hidden = true;
-    refreshIndicatorRetry.hidden = true;
-    if (event.detail.coldStart) {
-      loadingSplash.hidden = false;
-      loadingSplashMessage.textContent = "Loading your budget…";
-      appShell.inert = true;
-      return;
-    }
-    refreshIndicator.hidden = false;
-    refreshIndicatorText.textContent = "Refreshing data…";
-  });
-
-  window.addEventListener("budget:data-refresh-complete", () => {
-    loadingSplash.hidden = true;
-    refreshIndicator.hidden = true;
-    loadingSplashRetry.hidden = true;
-    refreshIndicatorRetry.hidden = true;
-    if (!window.OnboardingUI?.isBlocking()) appShell.inert = false;
-  });
-
-  window.addEventListener("budget:data-refresh-failed", (event) => {
-    if (!event.detail.connected) return;
-    if (!loadingSplash.hidden && !event.detail.showingCachedData) {
-      loadingSplashMessage.textContent = `We couldn’t load your budget. ${event.detail.error.message}`;
-      loadingSplashRetry.hidden = false;
-      return;
-    }
-    refreshIndicator.hidden = false;
-    refreshIndicatorText.textContent = "Showing saved data · refresh failed";
-    refreshIndicatorRetry.hidden = false;
-  });
-
   function loadTransactions() {
     return state.loaded
       ? Promise.resolve(state.transactions.slice())
@@ -255,6 +221,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.loaded = false;
       referenceDataLoaded = false;
     }
+
     if (!appDataPromise) {
       const cachedTransactions = window.BudgetAPI.getCachedTransactions?.();
       const usingCache =
@@ -270,8 +237,10 @@ document.addEventListener("DOMContentLoaded", () => {
           }),
         );
       }
+
       const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
       const coldStart = Boolean(options.startup && connected && !state.loaded);
+
       window.dispatchEvent(
         new CustomEvent("budget:data-refresh-started", {
           detail: {
@@ -279,8 +248,10 @@ document.addEventListener("DOMContentLoaded", () => {
             coldStart,
             connected,
           },
+          bubbles: true,
         }),
       );
+
       appDataPromise = window.BudgetAPI.loadAppData({
         refresh: options.refresh,
       })
