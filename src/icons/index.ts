@@ -12,7 +12,9 @@ import cartIcon from "./cart.html" with { type: "text" };
 import sidebarIcon from "./sidebar.html" with { type: "text" };
 import chevronRightIcon from "./chevron-right.html" with { type: "text" };
 
-export const Icons: Record<string, string> = {
+export type IconKeys = keyof typeof iconStrings;
+
+const iconStrings = {
   dashboard: dashboardIcon,
   transactions: transcationsIcon,
   label: labelIcon,
@@ -27,3 +29,18 @@ export const Icons: Record<string, string> = {
   sidebar: sidebarIcon,
   chevronRight: chevronRightIcon,
 };
+
+const iconTemplateCache = new Map();
+
+for (const [name, svgString] of Object.entries(iconStrings)) {
+  const template = document.createElement("template");
+  template.innerHTML = svgString.trim();
+  iconTemplateCache.set(name, template);
+}
+
+export function getIcon(name: IconKeys) {
+  const template = iconTemplateCache.get(name);
+  if (!template) return null;
+
+  return template.content.firstElementChild.cloneNode(true);
+}

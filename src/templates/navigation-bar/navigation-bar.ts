@@ -1,4 +1,4 @@
-import { Icons } from "../../icons";
+import { getIcon } from "../../icons";
 import { OverlayManager } from "../overlay-manager/overlay-manager";
 import NavBarTempString from "./template.html" with { type: "text" };
 
@@ -67,11 +67,11 @@ class NavBar extends HTMLElement {
     }
 
     if (this.#panelCloseButton) {
-      this.#panelCloseButton.innerHTML = Icons.sidebar;
+      this.#panelCloseButton.append(getIcon("sidebar"));
     }
 
     if (this.#panelOpenButton) {
-      this.#panelOpenButton.innerHTML = Icons.sidebar;
+      this.#panelOpenButton.append(getIcon("sidebar"));
       this.#panelOpenButton.dataset.tooltip = "Open sidebar";
     }
 
@@ -92,7 +92,7 @@ class NavBar extends HTMLElement {
           if (section.action) {
             const action = document.createElement("button");
             action.dataset.action = section.action;
-            action.innerHTML = Icons.plus;
+            action.append(getIcon("plus"));
             header.append(action);
           }
           this.#nav.append(header);
