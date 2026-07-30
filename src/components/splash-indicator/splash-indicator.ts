@@ -1,3 +1,4 @@
+import { RefreshStates } from "../refresh-indicator/refresh-indicator";
 import SplashTempString from "./template.html" with { type: "text" };
 
 const SplashTemp = document.createElement("template");
@@ -8,37 +9,36 @@ export class SplashIndicator extends HTMLElement {
   #message: HTMLElement | null = null;
   #button: HTMLElement | null = null;
   #spinner: HTMLElement | null = null;
-  #mark: HTMLElement | null = null;
 
-  // set state(value: RefreshStates) {
-  //   if (!this.#refreshIndicator) return;
+  set state(value: RefreshStates) {
+    if (!this.#splash) return;
 
-  //   if (value === "idle") {
-  //     this.#refreshIndicator.hidden = true;
-  //     return;
-  //   }
+    if (value === "idle") {
+      this.#splash.hidden = true;
+      return;
+    }
 
-  //   if (value === "inProgress") {
-  //     this.#refreshIndicator.hidden = false;
-  //     this.#spinner!.hidden = false;
-  //     this.#button!.hidden = true;
-  //     this.#message!.textContent = "Refreshing data…";
-  //   }
+    if (value === "inProgress") {
+      this.#splash.hidden = false;
+      this.#spinner!.hidden = false;
+      this.#button!.hidden = true;
+      this.#message!.textContent = "Loading your budget…";
+    }
 
-  //   if (value === "failed") {
-  //     this.#refreshIndicator.hidden = false;
-  //     this.#spinner!.hidden = true;
-  //     this.#button!.hidden = false;
-  //     this.#label!.textContent = "Refresh failed. Showing saved data.";
-  //   }
-  // }
+    if (value === "failed") {
+      this.#splash.hidden = false;
+      this.#spinner!.hidden = true;
+      this.#button!.hidden = false;
+      this.#message!.textContent =
+        "We couldn't load your budget. Check your connection and try again.";
+    }
+  }
 
   connectedCallback(): void {
     const clone = SplashTemp.content.cloneNode(true) as DocumentFragment;
     const container = clone.querySelector("#app-loading-splash") as HTMLElement;
 
     this.#splash = container;
-    this.#mark = container.querySelector("#app-loading-mark");
     this.#spinner = container.querySelector(".spinner");
     this.#message = container.querySelector("#app-loading-message");
     this.#button = container.querySelector("#app-loading-retry");

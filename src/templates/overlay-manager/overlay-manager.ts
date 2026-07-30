@@ -64,17 +64,33 @@ export class OverlayManager extends HTMLElement {
 
   #handleRefreshStarted(event: CustomEvent) {
     if (!event.detail.connected) return;
-    if (this.#refreshIndicator) {
+
+    if (this.#splash && event.detail.coldStart) {
+      this.#splash.state = "inProgress";
+    } else if (this.#refreshIndicator) {
       this.#refreshIndicator.state = "inProgress";
     }
   }
   #handleRefreshCompleted(event: CustomEvent) {
+    if (this.#splash) {
+      this.#splash.state = "idle";
+    }
+
     if (this.#refreshIndicator) {
       this.#refreshIndicator.state = "idle";
     }
   }
   #handleRefreshFailed(event: CustomEvent) {
     if (!event.detail.connected) return;
+
+    if (this.#splash && !this.#splash.hidden) {
+      if (!event.detail.showingCachedData) {
+        this.#splash.state = "failed";
+      } else {
+        this.#splash.state = "idle";
+      }
+    }
+
     if (this.#refreshIndicator) {
       this.#refreshIndicator.state = "failed";
     }

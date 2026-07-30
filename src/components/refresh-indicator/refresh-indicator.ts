@@ -1,6 +1,6 @@
 import RefreshTempString from "./template.html" with { type: "text" };
 
-type RefreshStates = "inProgress" | "idle" | "failed";
+export type RefreshStates = "inProgress" | "idle" | "failed";
 
 const RefreshTemp = document.createElement("template");
 RefreshTemp.innerHTML = RefreshTempString;
