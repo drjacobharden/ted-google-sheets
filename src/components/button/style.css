@@ -1,0 +1,65 @@
+.primary-button,
+.secondary-button,
+.ghost-button {
+  height: 32px;
+  padding: 3.5px 10px 3.5px 8px;
+  border-radius: var(--radius-xsmall);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+}
+
+.primary-button {
+  background-color: var(--primary-button);
+  color: var(--inverse-text);
+}
+
+.ghost-button {
+  background-color: transparent;
+  color: var(--text);
+}
+
+.secondary-button {
+  background-color: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.primary-button:hover {
+  background-color: var(--primary-button-hover);
+}
+
+.primary-button:active {
+  background-color: var(--primary-button-active);
+}
+
+.ghost-button:hover,
+.secondary-button:hover {
+  background-color: var(--secondary-button-hover);
+}
+
+.ghost-button:hover,
+.secondary-button:active {
+  background-color: var(--secondary-button-active);
+}
+
+.custom-button-icon {
+  height: 16px;
+  width: 16px;
+  stroke-width: 0.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.custom-button-label {
+  font-size: 12px;
+  opacity: 1;
+}
+
+.square {
+  height: 32px;
+  width: 32px;
+  padding: 0;
+}
