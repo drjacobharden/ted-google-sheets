@@ -1,0 +1,12 @@
+#app-refresh-button {
+  margin-left: auto;
+}
+
+#app-refresh-button svg {
+  height: 16px;
+  width: 16px;
+  stroke: var(--accent-muted);
+  stroke-width: 0.25px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
