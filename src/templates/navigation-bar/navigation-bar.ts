@@ -1,4 +1,3 @@
-import { TooltipPlacement } from "../../components/tooltip/tooltip";
 import { Icons } from "../../icons";
 import { OverlayManager } from "../overlay-manager/overlay-manager";
 import NavBarTempString from "./template.html" with { type: "text" };
