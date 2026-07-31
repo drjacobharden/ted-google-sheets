@@ -1,0 +1,93 @@
+<breadcrumbs-header>
+  <refresh-button></refresh-button>
+  <custom-button
+    class="primary-button"
+    id="new-category-button"
+    leading-icon="plus"
+    label="Add category"
+    data-action="new-category"
+  ></custom-button>
+</breadcrumbs-header>
+
+<div class="table-action-row">
+  <custom-button
+    class="ghost-button table-view-button"
+    label="Expenses"
+    data-table-view="expense"
+  >
+  </custom-button>
+  <custom-button
+    class="ghost-button table-view-button"
+    label="Income"
+    data-table-view="income"
+  >
+  </custom-button>
+  <custom-button
+    class="ghost-button table-view-button"
+    label="Archived"
+    data-table-view="archived"
+  >
+  </custom-button>
+
+  <custom-button
+    class="secondary-button push-right"
+    label="Sort"
+    leading-icon="sort"
+  ></custom-button>
+  <custom-button
+    class="secondary-button"
+    label="Filter"
+    leading-icon="filter"
+  ></custom-button>
+</div>
+
+<div class="content category-screen__content">
+  <div class="category-screen__layout">
+    <section
+      class="category-screen__panel"
+      aria-labelledby="category-list-title"
+    >
+      <div class="category-screen_list-header">
+        <span class="col 2">Name</span>
+        <span class="col 3">Transaction count</span>
+        <span class="col 4">Total</span>
+      </div>
+      <div
+        class="category-screen__list"
+        id="category-list"
+        aria-live="polite"
+      ></div>
+    </section>
+
+    <!-- <form class="category-screen__form" id="category-form" novalidate>
+      <h2>Add a category</h2>
+      <p>Create a reusable category for future expenses.</p>
+      <label class="form-field">
+        <span>Name</span>
+        <input
+          name="categoryName"
+          type="text"
+          maxlength="50"
+          placeholder="e.g. Subscriptions"
+          required
+        />
+      </label>
+      <p
+        class="category-screen__form-message"
+        id="category-form-message"
+        aria-live="polite"
+      ></p>
+      <button class="primary-button" type="submit">Add category</button>
+      <a
+        class="secondary-button category-screen__archive-link"
+        href="#/entity-archive?kind=category"
+      >
+        View archived categories
+      </a>
+    </form> -->
+  </div>
+</div>
+
+<div class="category-screen_page-control">
+  <span id="category-count">Showing 0 of 0 categories</span>
+</div>
