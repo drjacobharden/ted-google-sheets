@@ -1,0 +1,15 @@
+<page-title eyebrow="View assignments" title="People" subtitle="See how spending breaks down across your household."></page-title>
+<div class="people-screen__layout">
+  <section class="people-screen__panel" aria-labelledby="people-list-title">
+    <div class="table-header"><div><h2 id="people-list-title">Household assignments</h2><p id="people-count">1 assignment</p></div></div>
+    <div class="people-screen__list" id="people-list" aria-live="polite"></div>
+  </section>
+  <form class="people-screen__form" id="people-form" novalidate>
+    <h2>Add a person</h2>
+    <p>Add a member to your household.</p>
+    <label class="form-field"><span>Name</span><input name="personName" type="text" maxlength="80" placeholder="e.g. Alex" required /></label>
+    <p class="people-screen__message" aria-live="polite"></p>
+    <button class="primary-button" type="submit">Add person</button>
+    <a class="secondary-button people-screen__archive-link" href="#/entity-archive?kind=assignment">View archived people</a>
+  </form>
+</div>
