@@ -1,0 +1,30 @@
+sync-screen { display: block; }
+.sync-screen__card { overflow: hidden; margin-top: 24px; border: 1px solid var(--border); border-radius: var(--radius-medium); background: var(--surface); }
+.sync-screen__empty { min-height: clamp(340px, calc(100vh - 280px), 650px); padding: 54px 24px; text-align: center; }
+.sync-screen__empty h3, .sync-screen__empty p { margin: 0; }
+.sync-screen__empty p { margin-top: 5px; color: var(--muted); }
+.sync-screen__empty .empty-symbol { margin: 0 auto 14px; }
+.sync-screen__list { display: grid; }
+.sync-screen__list:empty { display: none; }
+.sync-screen__item { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 18px 24px; border-bottom: 1px solid var(--border); }
+.sync-screen__item:last-child { border-bottom: 0; }
+.sync-screen__icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; }
+.sync-screen__copy { min-width: 0; font-weight: 500; }
+.sync-screen__copy span, .sync-screen__copy small { display: block; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.sync-screen__copy span { margin-top: 4px; font-size: 14px; font-weight: 400; }
+.sync-screen__copy small.error { margin-top: 4px; color: var(--danger); white-space: normal; }
+.sync-screen__copy small.retry, .sync-screen__copy small.transport { margin-top: 4px; white-space: normal; }
+.sync-screen__copy small.retry { color: #9a5b12; font-weight: 700; }
+.sync-screen__copy small.retry.offline { color: var(--danger); }
+.sync-screen__actions { display: flex; align-items: center; gap: 8px; }
+.sync-screen__spinner { width: 20px; height: 20px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+.sync-screen__pending { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.sync-screen__retry, .sync-screen__retry-now, .sync-screen__discard, .sync-screen__review { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); color: var(--text); font-size: 12px; font-weight: 700; }
+.sync-screen__retry-now { color: var(--accent-dark); }
+.sync-screen__retry-now:disabled { cursor: not-allowed; opacity: .5; }
+.sync-screen__retry { display: grid; width: 34px; height: 34px; padding: 0; place-items: center; color: var(--danger); font-size: 19px; }
+.sync-screen__retry .retry-hover { display: none; }
+.sync-screen__retry:hover .retry-idle, .sync-screen__retry:focus-visible .retry-idle { display: none; }
+.sync-screen__retry:hover .retry-hover, .sync-screen__retry:focus-visible .retry-hover { display: inline; }
+.sync-screen__discard:hover { border-color: var(--danger); color: var(--danger); }
+@media (max-width: 680px) { .sync-screen__item { grid-template-columns: 34px minmax(0, 1fr); } .sync-screen__actions { grid-column: 2; } }
