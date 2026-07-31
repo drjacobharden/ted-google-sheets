@@ -1,0 +1,12 @@
+settings-screen { display: block; }
+.settings-screen__grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, .85fr); gap: 18px; margin-top: 26px; }
+.settings-screen__contract { padding: 25px; border: 1px solid var(--border-strong); border-radius: var(--radius-medium); background: var(--surface); }
+.settings-screen__contract h2 { margin: 4px 0 10px; }
+.settings-screen__contract > p { color: var(--muted); line-height: 1.55; }
+.settings-screen__contract dl { display: grid; gap: 10px; margin: 20px 0; }
+.settings-screen__contract dl div { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.settings-screen__contract dt { color: var(--accent-dark); font-size: 11px; font-weight: 800; }
+.settings-screen__contract dd { min-width: 0; margin: 0; }
+.settings-screen__contract code { overflow-wrap: anywhere; }
+.settings-screen__note { margin-bottom: 0; font-size: 12px; }
+@media (max-width: 920px) { .settings-screen__grid { grid-template-columns: 1fr; } }
