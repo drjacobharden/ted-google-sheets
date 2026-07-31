@@ -85,13 +85,15 @@ test("value, min, and max properties reflect valid values and clear invalid ones
 
 test("month and date-range pickers are wired into investment selections", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const overview = fs.readFileSync("js/routes/investment-overview.js", "utf8");
+  const overview = fs.readFileSync("src/screens/investment-overview-screen/investment-overview-screen.ts", "utf8");
+  const overviewTemplate = fs.readFileSync("src/screens/investment-overview-screen/template.html", "utf8");
   const monthDrawer = fs.readFileSync("js/routes/investment-month-drawer.js", "utf8");
   const component = fs.readFileSync("js/components/month-picker.js", "utf8");
   assert.doesNotMatch(html, /type=["']month["']/);
   assert.doesNotMatch(overview + monthDrawer, /type=["']month["']/);
   assert.match(html, /<month-picker\s+label="Reporting month"\s+alignment="right"/);
-  assert.match(html, /id="route-investment-overview"[\s\S]*<date-range-picker preset="month"><\/date-range-picker>/);
+  assert.match(html, /id="route-investment-overview"[\s\S]*<investment-overview-screen>/);
+  assert.match(overviewTemplate, /<date-range-picker preset="month"><\/date-range-picker>/);
   assert.match(html, /<script src="js\/components\/month-picker\.js" defer><\/script>[\s\S]*<script src="js\/routes\/investment-month-drawer\.js"><\/script>/);
   assert.match(monthDrawer, /monthPicker\.addEventListener\("change", changeTarget\)/);
   assert.match(overview, /date-range-changed/);

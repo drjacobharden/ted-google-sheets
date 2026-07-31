@@ -922,24 +922,20 @@ test("Sheet timestamps normalize to canonical reporting months", () => {
 test("investment routes and drawers replace the legacy global screens", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const source = [
-    "js/routes/dashboard.js",
-    "js/investments-api.js",
+    "src/screens/dashboard-screen/dashboard-screen.ts",
+    "src/api/investment-api.ts",
     "js/utils/investment-view.js",
-    "js/routes/investment-overview.js",
-    "js/routes/investment-accounts.js",
-    "js/routes/investment-account-detail.js",
+    "src/screens/investment-overview-screen/investment-overview-screen.ts",
+    "src/screens/investment-accounts-screen/investment-accounts-screen.ts",
+    "src/screens/investment-account-detail-screen/investment-account-detail-screen.ts",
     "js/routes/investment-account-drawer.js",
     "js/routes/investment-month-drawer.js",
   ]
     .map((file) => fs.readFileSync(file, "utf8"))
     .join("\n");
-  assert.match(
-    html,
-    /<template id="route-dashboard">[\s\S]*data-screen="dashboard"/,
-  );
-  assert.equal((html.match(/data-screen="dashboard"/g) || []).length, 1);
+  assert.match(html, /<template id="route-dashboard">\s*<dashboard-screen>/);
   assert.doesNotMatch(html, /js\/investments\.js/);
-  assert.match(html, /js\/routes\/dashboard\.js/);
+  assert.doesNotMatch(html, /js\/routes\/dashboard\.js/);
   assert.match(html, /id="route-investment-overview"/);
   assert.match(html, /id="route-investment-accounts"/);
   assert.match(html, /id="route-investment-account-detail"/);
@@ -969,14 +965,14 @@ test("investment routes and drawers replace the legacy global screens", () => {
   assert.match(source, /investmentReviewId/);
   assert.match(source, /createdByName/);
   assert.match(source, /formatMonth\(series\.months\[0\]\)/);
-  assert.match(source, /mountTrend\(trend,[\s\S]*includeContributions: true/);
+  assert.match(source, /mountTrend\(this\.#trend, \{ range, includeContributions: true/);
   assert.match(source, /monthRangeFromDates/);
   assert.match(source, /trend-scrub-tooltip/);
-  assert.match(source, /window\.DashboardRoute = \{ mount, unmount \}/);
+  assert.match(source, /registerLegacyRouteAdapter\("DashboardRoute"/);
   assert.match(source, /budget:transaction-queued/);
   assert.match(
     source,
-    /removeEventListener\("budget:investments-changed", render\)/,
+    /removeEventListener\("budget:investments-changed", this\)/,
   );
   assert.doesNotMatch(source, /window\.InvestmentUI/);
   assert.match(source, /formatMonth\(balance\.month\)/);

@@ -108,26 +108,30 @@ test("transaction entry exposes an accessible vendor combobox", () => {
 
 test("entity lists drill down into a shared detail screen and rename drawer", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const category = fs.readFileSync("js/routes/categories.js", "utf8");
-  const vendor = fs.readFileSync("js/routes/vendors.js", "utf8");
-  const people = fs.readFileSync("js/routes/people.js", "utf8");
-  const detail = fs.readFileSync("js/routes/entity-detail.js", "utf8");
+  const category = fs.readFileSync(
+    "src/screens/category-screen/category-screen.ts",
+    "utf8",
+  );
+  const vendor = fs.readFileSync("src/screens/vendors-screen/vendors-screen.ts", "utf8");
+  const people = fs.readFileSync("src/screens/people-screen/people-screen.ts", "utf8");
+  const detail = fs.readFileSync("src/screens/entity-detail-screen/entity-detail-screen.ts", "utf8");
+  const detailTemplate = fs.readFileSync("src/screens/entity-detail-screen/template.html", "utf8");
   const editor = fs.readFileSync("js/routes/entity-drawer.js", "utf8");
   assert.match(html, /id="route-entity-detail"/);
-  assert.match(html, /data-screen="entity-detail"/);
+  assert.match(detail, /this\.dataset\.screen = "entity-detail"/);
   assert.match(html, /id="entity-drawer-backdrop"/);
   assert.doesNotMatch(html, /id="focus-(category|vendor|person)-form"/);
   [category, vendor, people].forEach((source) => {
-    assert.match(source, /AppRouter\.navigate\("entity-detail", \{/);
+    assert.match(source, /appRouter\(\)\.navigate\("entity-detail", \{/);
     assert.match(source, /kind:/);
     assert.match(source, /id:/);
   });
-  assert.match(detail, /function mount\(root, \{ params = \{\} \} = \{\}\)/);
-  assert.match(detail, /createTransactionRow/);
-  assert.match(detail, /AppRouter\.updateParams/);
+  assert.match(detail, /class EntityDetailScreen extends HTMLElement/);
+  assert.match(detail, /transactionRow\(\)\.create/);
+  assert.match(detail, /appRouter\(\)\.updateParams/);
   assert.match(detail, /drawer: "entity-edit"/);
-  assert.match(detail, /entityKind: selected\.kind/);
-  assert.match(detail, /entityId: selected\.id/);
+  assert.match(detail, /entityKind: this\.#selected\.kind/);
+  assert.match(detail, /entityId: this\.#selected\.id/);
   assert.match(detail, /transactionId:/);
   assert.match(detail, /Total spent/);
   assert.match(detail, /Net activity/);
@@ -135,11 +139,42 @@ test("entity lists drill down into a shared detail screen and rename drawer", ()
   assert.match(editor, /Discard your unsaved changes/);
 });
 
-test("vendor search and normalized select styling are present", () => {
+test("category routing renders the TypeScript category-screen component", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const vendor = fs.readFileSync("js/routes/vendors.js", "utf8");
+  const main = fs.readFileSync("src/main.ts", "utf8");
+  const screen = fs.readFileSync(
+    "src/screens/category-screen/category-screen.ts",
+    "utf8",
+  );
+  const template = fs.readFileSync(
+    "src/screens/category-screen/template.html",
+    "utf8",
+  );
+  const style = fs.readFileSync(
+    "src/screens/category-screen/style.css",
+    "utf8",
+  );
+
+  assert.match(
+    html,
+    /<template id="route-categories">\s*<category-screen><\/category-screen>\s*<\/template>/,
+  );
+  assert.doesNotMatch(html, /js\/routes\/categories\.js/);
+  assert.match(main, /screens\/category-screen\/category-screen\.ts/);
+  assert.match(screen, /customElements\.define\("category-screen"/);
+  assert.match(screen, /connectedCallback\(\): void/);
+  assert.match(screen, /disconnectedCallback\(\): void/);
+  assert.match(template, /id="category-form"/);
+  assert.match(template, /id="category-list"/);
+  assert.match(style, /\.category-screen__layout/);
+  assert.equal(fs.existsSync("js/routes/categories.js"), false);
+});
+
+test("vendor search and normalized select styling are present", () => {
+  const template = fs.readFileSync("src/screens/vendors-screen/template.html", "utf8");
+  const vendor = fs.readFileSync("src/screens/vendors-screen/vendors-screen.ts", "utf8");
   const css = fs.readFileSync("styles.css", "utf8");
-  assert.match(html, /id="vendor-search"/);
+  assert.match(template, /id="vendor-search"/);
   assert.match(vendor, /\$\{vendors\.length\} of \$\{allVendors\.length\} vendors/);
   assert.match(css, /select \{[\s\S]*appearance: none/);
   assert.match(css, /border-radius: var\(--radius-small\)/);
