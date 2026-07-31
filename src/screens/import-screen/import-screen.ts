@@ -1,20 +1,148 @@
-(function () {
-  const { escapeHTML, money } = window.AppUtils;
-  let cleanup = null;
-  const PAGE_SIZE = 50;
+import { APIs } from "../../api/api";
+import type { BudgetEntity, EntityKind, ImportedEntityResolution, TransactionType } from "../../api/budget-api";
+import type { AmountMode, ImportColumnMapping, ImportMapping, ImportProfile, ImportTarget } from "../../api/import-api";
+import { appRouter } from "../../utilities/legacy-runtime";
+import { importUtilities, type ImportColumnKey, type ImportColumnReference, type ImportReferences, type ParsedImport, type StagedImportRow } from "../../utilities/import-runtime";
+import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
+import { escapeHTML, messageFromError, money } from "../../utilities/view-formatters";
+import templateString from "./template.html" with { type: "text" };
 
-  function mount(root) {
-    const state = {
-      parsed: null,
+const template = document.createElement("template");
+template.innerHTML = templateString;
+let cleanup: (() => void) | null = null;
+const PAGE_SIZE = 50;
+
+type ImportFilter = "all" | "errors" | "excluded" | "ready" | "vendors" | "people" | "categories";
+type CommitStatus = "pending" | "running" | "failed" | "complete" | "skipped";
+
+interface WizardMapping {
+  date: ImportColumnReference;
+  amount: ImportColumnReference;
+  debit: ImportColumnReference;
+  credit: ImportColumnReference;
+  vendorDescription: ImportColumnReference;
+  categoryDescription: ImportColumnReference;
+  personDescription: ImportColumnReference;
+  notes: ImportColumnReference;
+  month: ImportColumnReference;
+  balance: ImportColumnReference;
+  contributions: number[];
+  amountSignConvention: "expensesNegative" | "expensesPositive";
+}
+
+interface MappingWizard {
+  profileId: string;
+  step: number;
+  maxVisited: number;
+  mapping: WizardMapping;
+  dateFormat: string;
+  amountMode: "unified" | "debitCredit";
+  hasCategory: boolean;
+  hasPerson: boolean;
+  hasNotes: boolean;
+  hasBalance: boolean;
+  autoPopulateVendor: boolean;
+  autoPopulateCategory: boolean;
+  autoPopulatePerson: boolean;
+}
+
+interface ImportBundleState {
+  profile?: ImportProfile;
+  vendorMappings: ImportMapping[];
+  personMappings: ImportMapping[];
+}
+
+interface ImportRoot extends HTMLElement {
+  querySelector<E extends HTMLElement = HTMLElement>(selectors: string): E;
+}
+
+interface ImportSelectControl extends HTMLElement {
+  value: string;
+  configureOptions(options: {
+    getOptions: () => BudgetEntity[];
+    createOption: (name: string) => BudgetEntity;
+    onCreate: () => void;
+  }): void;
+}
+
+interface ImportCommitStep { key: string; label: string; status: CommitStatus; detail: string; }
+interface ImportCommit {
+  status: "running" | "failed" | "complete";
+  included: StagedImportRow[];
+  checkpoint: { profile?: boolean; associations?: boolean; recordIds?: string[] };
+  steps: ImportCommitStep[];
+}
+
+interface ImportState {
+  parsed: ParsedImport;
+  profiles: ImportProfile[];
+  profile: ImportProfile;
+  bundle: ImportBundleState;
+  rows: StagedImportRow[];
+  pendingVendors: Map<string, ImportMapping>;
+  pendingPeople: Map<string, ImportMapping>;
+  filter: ImportFilter;
+  target: ImportTarget;
+  mappingWizard: MappingWizard;
+  draftEntities: Record<EntityKind, Map<string, BudgetEntity>>;
+  resolvedCategoryMatches: Set<string>;
+  expandedInvestmentMonths: Set<string>;
+  commit: ImportCommit;
+  visibleLimit: number;
+}
+
+interface ImportProfileControls extends HTMLFormControlsCollection {
+  profileId: HTMLSelectElement;
+  target: HTMLSelectElement;
+  name: HTMLInputElement;
+  investmentAccountId: HTMLSelectElement;
+}
+
+interface ImportProfileForm extends HTMLFormElement { readonly elements: ImportProfileControls; }
+
+interface ImportMappingForm extends HTMLFormElement {
+  readonly elements: HTMLFormControlsCollection & Record<string, HTMLInputElement>;
+}
+
+type WizardField = Exclude<ImportColumnKey, "month" | "balance">;
+type ImportControlEvent = Event & { target: HTMLInputElement };
+type ImportDateEvent = CustomEvent<{ value?: string }> & { target: HTMLInputElement };
+
+/** Extracts successfully committed entity records from an API failure. */
+function partialEntityResults(error: unknown): ImportedEntityResolution[] {
+  if (typeof error !== "object" || error === null || !("partialResults" in error)) {
+    return [];
+  }
+  const results = error.partialResults;
+  if (!Array.isArray(results)) return [];
+  return results.filter((item): item is ImportedEntityResolution => {
+    if (typeof item !== "object" || item === null) return false;
+    const candidate = item as Record<string, unknown>;
+    return (
+      (candidate.kind === "vendor" ||
+        candidate.kind === "category" ||
+        candidate.kind === "assignment") &&
+      typeof candidate.requestedId === "string" &&
+      typeof candidate.record === "object" &&
+      candidate.record !== null
+    );
+  });
+}
+
+  /** Mounts the complete CSV import workflow into its route component. */
+  function mount(root: ImportRoot): void {
+    const importUtils = importUtilities();
+    const state: ImportState = {
+      parsed: null as unknown as ParsedImport,
       profiles: [],
-      profile: null,
+      profile: null as unknown as ImportProfile,
       bundle: { vendorMappings: [], personMappings: [] },
       rows: [],
       pendingVendors: new Map(),
       pendingPeople: new Map(),
       filter: "all",
       target: "budget",
-      mappingWizard: null,
+      mappingWizard: null as unknown as MappingWizard,
       draftEntities: {
         vendor: new Map(),
         category: new Map(),
@@ -22,63 +150,33 @@
       },
       resolvedCategoryMatches: new Set(),
       expandedInvestmentMonths: new Set(),
-      commit: null,
+      commit: null as unknown as ImportCommit,
       visibleLimit: PAGE_SIZE,
     };
-    root.innerHTML = `
-      <header class="import-heading"><div><p class="eyebrow">Google Sheets</p><h1>Import CSV data</h1><p>Map a recurring CSV format, review every row, then commit the ready records together.</p></div><button class="secondary-button" type="button" data-import-action="clear">Clear import</button></header>
-      <section class="import-card"><h2>1. Upload CSV</h2><p>Files stay in this browser while you review them.</p><label class="import-field"><span>CSV file</span><input id="import-file" type="file" accept=".csv,text/csv" /></label><p class="import-message" id="import-file-message" role="status"></p><div class="import-preview" id="import-source-preview"></div></section>
-      <section class="import-card import-step" id="import-profile-step" hidden><h2>2. Choose a mapping profile</h2><p>Header matches are suggested, but are not applied until you confirm.</p>
-        <form id="import-profile-form"><div class="import-grid">
-          <label class="import-field wide"><span>Saved profile</span><select name="profileId"><option value="">Create a new profile</option></select></label>
-          <label class="import-field"><span>Target</span><select name="target"><option value="budget">Budget transactions</option><option value="investment">Investment months</option></select></label>
-          <label class="import-field"><span>Profile name</span><input name="name" maxlength="150" required /></label>
-          <label class="import-field wide" data-investment-account-field hidden><span>Investment account</span><select name="investmentAccountId"></select></label>
-        </div><div class="import-actions"><button class="primary-button" type="submit">Continue</button><button class="secondary-button" type="button" data-import-action="archive-profile" hidden>Archive profile</button></div></form>
-        <p class="import-message" id="import-profile-message" role="status"></p>
-      </section>
-      <section class="import-card import-step" id="import-mapping-step" hidden><h2>3. Map CSV columns</h2><p>Choose source columns and parsing rules, then verify the preview.</p><form id="import-mapping-form"></form><p class="import-message" id="import-mapping-message" role="status"></p></section>
-      <section class="import-card import-step" id="import-review-step" hidden>
-        <h2>4. Review staged rows</h2>
-        <p>Nothing is saved until you commit the import. Source descriptions are read-only; internal references and imported values remain editable.</p>
-        <div id="import-summary"></div>
-        <div class="import-filter-row" id="import-filters"></div>
-        <div class="import-review-wrap" id="import-budget-review">
-          <table class="import-table">
-            <thead id="import-review-head"></thead>
-            <tbody id="import-review-body"></tbody>
-          </table>
-        </div>
-        <div class="investment-import-review" id="import-investment-review" hidden></div>
-        <div class="import-actions">
-          <button class="secondary-button" type="button" data-import-action="back-to-mapping">Edit mapping</button>
-          <button class="primary-button" type="button" data-import-action="commit">Commit import</button>
-          <button class="secondary-button" type="button" data-import-action="load-more">Load more</button>
-        </div>
-        <p class="import-message" id="import-review-message" role="status"></p>
-      </section>
-      <section class="import-card import-step import-progress-view" id="import-progress-step" hidden><h2>Committing import</h2><p id="import-progress-summary">Keep this page open while each step is confirmed in Google Sheets.</p><ol class="import-commit-progress" id="import-commit-progress"></ol><div class="import-actions"><button class="primary-button" type="button" data-import-action="retry-commit" hidden>Retry failed step</button><button class="secondary-button" type="button" data-import-action="return-review" hidden>Return to review</button><button class="secondary-button" type="button" data-import-action="finish-import" hidden>Start another import</button><button class="secondary-button" type="button" data-import-action="open-sync" hidden>Open Sync</button></div><p class="import-message" id="import-progress-message" role="status"></p></section>`;
+    root.append(template.content.cloneNode(true));
 
-    const fileInput = root.querySelector("#import-file");
-    const profileStep = root.querySelector("#import-profile-step");
-    const mappingStep = root.querySelector("#import-mapping-step");
-    const reviewStep = root.querySelector("#import-review-step");
-    const progressStep = root.querySelector("#import-progress-step");
-    const profileForm = root.querySelector("#import-profile-form");
-    const mappingForm = root.querySelector("#import-mapping-form");
-    const profileMessage = root.querySelector("#import-profile-message");
-    const mappingMessage = root.querySelector("#import-mapping-message");
-    const reviewMessage = root.querySelector("#import-review-message");
-    const loadMoreButton = root.querySelector(
+    const fileInput = root.querySelector<HTMLInputElement>("#import-file")!;
+    const profileStep = root.querySelector<HTMLElement>("#import-profile-step")!;
+    const mappingStep = root.querySelector<HTMLElement>("#import-mapping-step")!;
+    const reviewStep = root.querySelector<HTMLElement>("#import-review-step")!;
+    const progressStep = root.querySelector<HTMLElement>("#import-progress-step")!;
+    const profileForm = root.querySelector<ImportProfileForm>("#import-profile-form")!;
+    const mappingForm = root.querySelector<ImportMappingForm>("#import-mapping-form")!;
+    const profileMessage = root.querySelector<HTMLElement>("#import-profile-message")!;
+    const mappingMessage = root.querySelector<HTMLElement>("#import-mapping-message")!;
+    const reviewMessage = root.querySelector<HTMLElement>("#import-review-message")!;
+    const loadMoreButton = root.querySelector<HTMLButtonElement>(
       '[data-import-action="load-more"]',
-    );
+    )!;
 
-    const message = (element, text, kind = "") => {
+    /** Displays a status message with an optional visual state. */
+    const message = (element: HTMLElement, text: string, kind = ""): void => {
       element.textContent = text || "";
       element.className = `import-message${kind ? ` ${kind}` : ""}`;
     };
 
-    function profileOptions() {
+    /** Renders the saved import profiles in the profile selector. */
+    function profileOptions(): void {
       const select = profileForm.elements.profileId;
       const current = select.value;
       select.innerHTML =
@@ -93,8 +191,9 @@
         select.value = current;
     }
 
-    function accountOptions() {
-      const accounts = window.InvestmentAPI.accounts().filter(
+    /** Renders active investment accounts in the target-account selector. */
+    function accountOptions(): void {
+      const accounts = APIs.investment.accounts().filter(
         (item) => item.active !== false,
       );
       profileForm.elements.investmentAccountId.innerHTML =
@@ -107,7 +206,8 @@
           .join("");
     }
 
-    function updateTargetFields() {
+    /** Updates target-specific profile fields and validation. */
+    function updateTargetFields(): void {
       const investment = profileForm.elements.target.value === "investment";
       root.querySelector("[data-investment-account-field]").hidden =
         !investment;
@@ -115,7 +215,8 @@
       state.target = investment ? "investment" : "budget";
     }
 
-    function chooseProfileCandidate() {
+    /** Applies the selected profile's values to the profile form. */
+    function chooseProfileCandidate(): void {
       const id = profileForm.elements.profileId.value;
       const profile = state.profiles.find((item) => item.id === id);
       root.querySelector('[data-import-action="archive-profile"]').hidden =
@@ -132,7 +233,8 @@
       updateTargetFields();
     }
 
-    function renderSourcePreview() {
+    /** Renders a short preview of the uploaded CSV. */
+    function renderSourcePreview(): void {
       const preview = root.querySelector("#import-source-preview");
       if (!state.parsed) {
         preview.innerHTML = "";
@@ -157,23 +259,25 @@
     ];
     const INVESTMENT_WIZARD_STEPS = ["Activity date", "Balance", "Cash flows"];
 
-    function createBudgetWizardState() {
+    /** Creates budget mapping-wizard state from saved and inferred mappings. */
+    function createBudgetWizardState(): MappingWizard {
       const profile = state.profile;
       const existing = profile.columnMapping || {};
-      const suggested = window.ImportUtils.suggestBudgetMapping(state.parsed);
-      const pick = (field) =>
-        window.ImportUtils.columnIndex(existing[field]) ??
-        suggested[field] ??
+      const suggested = importUtils.suggestBudgetMapping(state.parsed);
+      /** Chooses a saved or inferred budget column index. */
+      const pick = (field: WizardField): ImportColumnReference =>
+        importUtils.columnIndex(existing[field]) ??
+        importUtils.columnIndex(suggested[field]) ??
         null;
       const date = pick("date");
-      const formats = window.ImportUtils.validDateFormats(state.parsed, date);
+      const formats = importUtils.validDateFormats(state.parsed, date);
       const existingFormat = formats.includes(profile.dateFormat)
         ? profile.dateFormat
         : null;
       const hasExistingAmountMapping =
-        window.ImportUtils.columnIndex(existing.amount) !== null ||
-        window.ImportUtils.columnIndex(existing.debit) !== null ||
-        window.ImportUtils.columnIndex(existing.credit) !== null;
+        importUtils.columnIndex(existing.amount) !== null ||
+        importUtils.columnIndex(existing.debit) !== null ||
+        importUtils.columnIndex(existing.credit) !== null;
       const amountMode = hasExistingAmountMapping
         ? profile.amountMode === "debitCredit"
           ? "debitCredit"
@@ -206,45 +310,48 @@
           existing,
           "categoryDescription",
         )
-          ? window.ImportUtils.columnIndex(existing.categoryDescription) !==
+          ? importUtils.columnIndex(existing.categoryDescription) !==
             null
           : suggested.categoryDescription !== null,
         hasPerson: Object.prototype.hasOwnProperty.call(
           existing,
           "personDescription",
         )
-          ? window.ImportUtils.columnIndex(existing.personDescription) !== null
+          ? importUtils.columnIndex(existing.personDescription) !== null
           : suggested.personDescription !== null,
         hasNotes: Object.prototype.hasOwnProperty.call(existing, "notes")
-          ? window.ImportUtils.columnIndex(existing.notes) !== null
+          ? importUtils.columnIndex(existing.notes) !== null
           : suggested.notes !== null,
         autoPopulateVendor: existing.autoPopulateVendor === true,
         autoPopulateCategory: existing.autoPopulateCategory === true,
         autoPopulatePerson: existing.autoPopulatePerson === true,
-      };
+      } as MappingWizard;
     }
 
-    function createInvestmentWizardState() {
+    /** Creates investment mapping-wizard state from saved and inferred mappings. */
+    function createInvestmentWizardState(): MappingWizard {
       const profile = state.profile;
       const existing = profile.columnMapping || {};
-      const suggested = window.ImportUtils.suggestInvestmentMapping(
+      const suggested = importUtils.suggestInvestmentMapping(
         state.parsed,
       );
-      const pick = (field) =>
-        window.ImportUtils.columnIndex(existing[field]) ??
-        suggested[field] ??
+      /** Chooses a saved or inferred investment column index. */
+      const pick = (field: "month" | "balance"): ImportColumnReference =>
+        importUtils.columnIndex(existing[field]) ??
+        importUtils.columnIndex(suggested[field]) ??
         null;
       const hasSavedContributions = Object.prototype.hasOwnProperty.call(
         existing,
         "contributions",
       );
-      const contributions = (
-        hasSavedContributions ? existing.contributions : suggested.contributions
-      )
-        .map(window.ImportUtils.columnIndex)
-        .filter((value) => value !== null);
+      const contributionSource = hasSavedContributions
+        ? existing.contributions
+        : suggested.contributions;
+      const contributions = (Array.isArray(contributionSource) ? contributionSource : [])
+        .map(importUtils.columnIndex)
+        .filter((value): value is number => value !== null);
       const month = pick("month");
-      const formats = window.ImportUtils.validMonthFormats(state.parsed, month);
+      const formats = importUtils.validMonthFormats(state.parsed, month);
       return {
         profileId: profile.id,
         step: 0,
@@ -254,18 +361,20 @@
           ? profile.dateFormat
           : suggested.dateFormat,
         hasBalance: Object.prototype.hasOwnProperty.call(existing, "balance")
-          ? window.ImportUtils.columnIndex(existing.balance) !== null
+          ? importUtils.columnIndex(existing.balance) !== null
           : suggested.balance !== null,
-      };
+      } as MappingWizard;
     }
 
-    function wizardSteps() {
+    /** Returns the step labels for the current import target. */
+    function wizardSteps(): string[] {
       return state.profile?.target === "investment"
         ? INVESTMENT_WIZARD_STEPS
         : BUDGET_WIZARD_STEPS;
     }
 
-    function wizardFields() {
+    /** Returns the budget fields currently selected in the wizard. */
+    function wizardFields(): Record<WizardField, ImportColumnReference> {
       const map = state.mappingWizard.mapping;
       return {
         date: map.date,
@@ -279,10 +388,15 @@
       };
     }
 
-    function wizardHeaderOptions(field, predicate, empty = "Choose a column") {
+    /** Renders eligible CSV header options for a budget field. */
+    function wizardHeaderOptions(
+      field: WizardField,
+      predicate?: (index: number) => boolean,
+      empty = "Choose a column",
+    ): string {
       const fields = wizardFields();
-      const selected = window.ImportUtils.columnIndex(fields[field]);
-      const stepFor = {
+      const selected = importUtils.columnIndex(fields[field]);
+      const stepFor: Record<WizardField, number> = {
         date: 0,
         amount: 1,
         debit: 1,
@@ -304,15 +418,19 @@
       const used = new Set(
         Object.entries(fields)
           .filter(
-            ([name, value]) =>
+            ([rawName, value]) => {
+              const name = rawName as WizardField;
+              return (
               name !== field &&
               active.has(name) &&
-              window.ImportUtils.columnIndex(value) !== null &&
+              importUtils.columnIndex(value) !== null &&
               (stepFor[name] < stepFor[field] ||
                 (stepFor[name] === stepFor[field] &&
-                  ["debit", "credit"].includes(name))),
+                  ["debit", "credit"].includes(name)))
+              );
+            },
           )
-          .map(([, value]) => window.ImportUtils.columnIndex(value)),
+          .map(([, value]) => importUtils.columnIndex(value)),
       );
       return (
         `<option value="">${empty}</option>` +
@@ -325,7 +443,7 @@
           )
           .sort(
             (left, right) =>
-              window.ImportUtils.headerScore(
+              importUtils.headerScore(
                 right,
                 field === "vendorDescription"
                   ? "vendor"
@@ -335,7 +453,7 @@
                       ? "person"
                       : field,
               ) -
-                window.ImportUtils.headerScore(
+                importUtils.headerScore(
                   left,
                   field === "vendorDescription"
                     ? "vendor"
@@ -354,25 +472,32 @@
       );
     }
 
-    function wizardSamples(mapping, transform) {
-      const values = window.ImportUtils.columnValues(
+    /** Renders sample values for a mapped CSV column. */
+    function wizardSamples(
+      mapping: ImportColumnReference,
+      transform?: (value: string) => string | null | undefined,
+    ): string {
+      const values = importUtils.columnValues(
         state.parsed,
         mapping,
       ).slice(0, 5);
       return `<div class="import-wizard-samples"><strong>Sample values</strong>${values.length ? `<ul>${values.map((value) => `<li>${escapeHTML(transform ? `${value} → ${transform(value) || "invalid"}` : value)}</li>`).join("")}</ul>` : "<p>Choose a column to see examples.</p>"}</div>`;
     }
 
-    function wizardNavigation() {
+    /** Renders the mapping wizard's progress navigation. */
+    function wizardNavigation(): string {
       const wizard = state.mappingWizard;
       const steps = wizardSteps();
       return `<ol class="import-wizard-progress" style="--wizard-step-count: ${steps.length}" aria-label="Column mapping progress">${steps.map((label, index) => `<li><button type="button" data-wizard-step="${index}"${index > wizard.maxVisited ? " disabled" : ""}${index === wizard.step ? ' aria-current="step" class="active"' : ""}><span>${index + 1}</span>${label}</button></li>`).join("")}</ol>`;
     }
 
-    function wizardActions(final = false) {
+    /** Renders mapping wizard navigation actions. */
+    function wizardActions(final = false): string {
       return `<div class="import-actions">${state.mappingWizard.step > 0 ? '<button class="secondary-button" type="button" data-import-action="wizard-back">Back</button>' : ""}<button class="primary-button" type="submit">${final ? "Review staged rows" : "Continue"}</button></div>`;
     }
 
-    function renderBudgetWizard() {
+    /** Renders the active budget mapping step. */
+    function renderBudgetWizard(): void {
       if (
         !state.mappingWizard ||
         state.mappingWizard.profileId !== state.profile.id
@@ -382,7 +507,7 @@
       const map = wizard.mapping;
       let content = "";
       if (wizard.step === 0) {
-        const formats = window.ImportUtils.validDateFormats(
+        const formats = importUtils.validDateFormats(
           state.parsed,
           map.date,
         );
@@ -395,14 +520,15 @@
         const ambiguity = formats.length > 1;
         content = `<div class="import-wizard-question"><p class="eyebrow">Step 1 of 6 · Date</p><h3>Which column contains the transaction date?</h3><p>We will convert this value to the app’s standard date. Choose the date you want shown on each transaction.</p>
           <label class="import-field"><span>Date column</span><select name="date">${wizardHeaderOptions("date")}</select></label>
-          ${wizardSamples(map.date, (value) => window.ImportUtils.parseDate(value, wizard.dateFormat))}
+          ${wizardSamples(map.date, (value) => importUtils.parseDate(value, wizard.dateFormat))}
           ${map.date === null ? "" : formats.length ? `<div class="import-inference ${ambiguity ? "ambiguous" : ""}"><strong>${ambiguity ? "This date is ambiguous" : "Date format detected"}</strong><p>${ambiguity ? "All observed month and day values are 12 or lower, so more than one interpretation fits. We selected the US month-first format; confirm it below." : "Only one supported format fits every nonblank value in this column."}</p><label class="import-field"><span>Date format</span><select name="dateFormat">${formats.map((format) => `<option value="${format}"${format === wizard.dateFormat ? " selected" : ""}>${format}</option>`).join("")}</select></label><small>Two-digit years use 00–69 as 2000–2069 and 70–99 as 1970–1999.</small></div>` : '<div class="import-inference error"><strong>We could not read this column as dates</strong><p>Choose another column. Every nonblank value must use one supported date format.</p></div>'}
         </div>${wizardActions()}`;
       }
       if (wizard.step === 1) {
-        const numeric = (index) =>
-          window.ImportUtils.isNumericColumn(state.parsed, index);
-        const sign = window.ImportUtils.inferAmountSignConvention(
+        /** Checks whether a candidate budget column is numeric. */
+        const numeric = (index: number): boolean =>
+          importUtils.isNumericColumn(state.parsed, index);
+        const sign = importUtils.inferAmountSignConvention(
           state.parsed,
           map.amount,
         );
@@ -422,20 +548,21 @@
       mappingForm.innerHTML = `${wizardNavigation()}<div class="import-wizard-panel">${content}</div>`;
     }
 
+    /** Renders eligible CSV header options for an investment field. */
     function investmentHeaderOptions(
-      field,
-      predicate,
+      field: "month" | "balance",
+      predicate?: (index: number) => boolean,
       empty = "Choose a column",
-    ) {
+    ): string {
       const wizard = state.mappingWizard;
-      const selected = window.ImportUtils.columnIndex(wizard.mapping[field]);
+      const selected = importUtils.columnIndex(wizard.mapping[field]);
       const used = new Set(
         [
           wizard.mapping.month,
           wizard.mapping.balance,
           ...wizard.mapping.contributions,
         ]
-          .map(window.ImportUtils.columnIndex)
+          .map(importUtils.columnIndex)
           .filter((value) => value !== null && value !== selected),
       );
       const scoreKind = field === "month" ? "month" : field;
@@ -450,8 +577,8 @@
           )
           .sort(
             (left, right) =>
-              window.ImportUtils.headerScore(right, scoreKind) -
-                window.ImportUtils.headerScore(left, scoreKind) ||
+              importUtils.headerScore(right, scoreKind) -
+                importUtils.headerScore(left, scoreKind) ||
               left.index - right.index,
           )
           .map(
@@ -462,12 +589,13 @@
       );
     }
 
-    function investmentContributionOptions() {
+    /** Renders selectable contribution and withdrawal columns. */
+    function investmentContributionOptions(): string {
       const wizard = state.mappingWizard;
       const selected = new Set(wizard.mapping.contributions);
       const used = new Set(
         [wizard.mapping.month, wizard.mapping.balance]
-          .map(window.ImportUtils.columnIndex)
+          .map(importUtils.columnIndex)
           .filter((value) => value !== null),
       );
       const headers = state.parsed.headers
@@ -475,12 +603,12 @@
           (header) =>
             selected.has(header.index) ||
             (!used.has(header.index) &&
-              window.ImportUtils.isNumericColumn(state.parsed, header.index)),
+              importUtils.isNumericColumn(state.parsed, header.index)),
         )
         .sort(
           (left, right) =>
-            window.ImportUtils.headerScore(right, "contribution") -
-              window.ImportUtils.headerScore(left, "contribution") ||
+            importUtils.headerScore(right, "contribution") -
+              importUtils.headerScore(left, "contribution") ||
             left.index - right.index,
         );
       return headers.length
@@ -488,15 +616,16 @@
         : '<div class="import-inference error"><strong>No numeric columns are available</strong><p>Choose different activity-date or balance columns.</p></div>';
     }
 
-    function investmentContributionSamples() {
+    /** Renders samples from selected investment flow columns. */
+    function investmentContributionSamples(): string {
       const selected = state.mappingWizard.mapping.contributions;
       if (!selected.length)
         return '<div class="import-wizard-samples"><strong>Sample values</strong><p>Select one or more columns to see examples.</p></div>';
       return `<div class="import-wizard-samples"><strong>Sample values</strong><ul>${selected
         .flatMap((mapping) => {
           const header =
-            state.parsed.headers[window.ImportUtils.columnIndex(mapping)];
-          return window.ImportUtils.columnValues(state.parsed, mapping)
+            state.parsed.headers[importUtils.columnIndex(mapping) ?? -1];
+          return importUtils.columnValues(state.parsed, mapping)
             .slice(0, 3)
             .map(
               (value) =>
@@ -506,7 +635,8 @@
         .join("")}</ul></div>`;
     }
 
-    function renderInvestmentWizard() {
+    /** Renders the active investment mapping step. */
+    function renderInvestmentWizard(): void {
       if (
         !state.mappingWizard ||
         state.mappingWizard.profileId !== state.profile.id
@@ -516,7 +646,7 @@
       const map = wizard.mapping;
       let content = "";
       if (wizard.step === 0) {
-        const formats = window.ImportUtils.validMonthFormats(
+        const formats = importUtils.validMonthFormats(
           state.parsed,
           map.month,
         );
@@ -532,7 +662,7 @@
         content = `<div class="import-wizard-question"><p class="eyebrow">Step 1 of 3 · Activity date</p><h3>Which column dates each investment activity row?</h3><p>Every row must contain a supported full date or YYYY-MM value. We will group all activity into calendar months.</p>
           <label class="import-field"><span>Activity date column</span><select name="month">${investmentHeaderOptions("month")}</select></label>
           ${wizardSamples(map.month, (value) => {
-            const parsed = window.ImportUtils.parseDate(
+            const parsed = importUtils.parseDate(
               value,
               wizard.dateFormat,
             );
@@ -542,8 +672,9 @@
         </div>${wizardActions()}`;
       }
       if (wizard.step === 1) {
-        const numeric = (index) =>
-          window.ImportUtils.isNumericColumn(state.parsed, index);
+        /** Checks whether a candidate investment column is numeric. */
+        const numeric = (index: number): boolean =>
+          importUtils.isNumericColumn(state.parsed, index);
         content = `<div class="import-wizard-question"><p class="eyebrow">Step 2 of 3 · Ending balance</p><h3>Does this CSV include account balances?</h3><p>When mapped, the latest dated nonblank balance in each month is used. Otherwise, an existing balance is reused or you can enter one during review.</p>
           <fieldset class="import-choice-group"><legend>Balance information</legend><label><input type="radio" name="hasBalance" value="no"${!wizard.hasBalance ? " checked" : ""} /> No balance column</label><label><input type="radio" name="hasBalance" value="yes"${wizard.hasBalance ? " checked" : ""} /> Yes, choose a column</label></fieldset>
           ${wizard.hasBalance ? `<label class="import-field"><span>Ending balance column</span><select name="balance">${investmentHeaderOptions("balance", numeric)}</select></label>${wizardSamples(map.balance)}` : ""}
@@ -557,12 +688,14 @@
       mappingForm.innerHTML = `${wizardNavigation()}<div class="import-wizard-panel">${content}</div>`;
     }
 
-    function renderMapper() {
+    /** Renders the mapping workflow for the selected target. */
+    function renderMapper(): void {
       if (state.profile.target === "budget") renderBudgetWizard();
       else renderInvestmentWizard();
     }
 
-    function buildColumnMapping() {
+    /** Builds the persisted column mapping from wizard state. */
+    function buildColumnMapping(): Record<string, ImportColumnReference | number[] | boolean | string> {
       if (state.profile.target === "budget") {
         const wizard = state.mappingWizard;
         return {
@@ -597,19 +730,26 @@
       };
     }
 
-    function validateMapping(map, amountMode) {
+    /** Validates required and unique column mappings. */
+    function validateMapping(
+      map: ImportColumnMapping,
+      amountMode: AmountMode,
+    ): void {
       if (state.profile.target === "investment") {
-        if (map.month === null || !(map.contributions || []).length)
+        const contributions = Array.isArray(map.contributions)
+          ? map.contributions
+          : [];
+        if (map.month === null || !contributions.length)
           throw new Error(
             "Map an activity date and at least one cash-flow column.",
           );
         const mapped = [
           map.month,
           map.balance,
-          ...(map.contributions || []),
-        ].filter((value) => window.ImportUtils.columnIndex(value) !== null);
+          ...contributions,
+        ].filter((value) => importUtils.columnIndex(value) !== null);
         if (
-          new Set(mapped.map(window.ImportUtils.columnIndex)).size !==
+          new Set(mapped.map(importUtils.columnIndex)).size !==
           mapped.length
         )
           throw new Error(
@@ -644,14 +784,16 @@
         );
     }
 
-    function captureBudgetWizardControls(changedName = "") {
+    /** Copies budget wizard controls into state and removes conflicts. */
+    function captureBudgetWizardControls(changedName = ""): void {
       const wizard = state.mappingWizard;
       if (!wizard) return;
-      const numberValue = (name) => {
+      /** Reads a nullable numeric column index from a budget control. */
+      const numberValue = (name: WizardField): number | null => {
         const control = mappingForm.elements[name];
         return control && control.value !== "" ? Number(control.value) : null;
       };
-      [
+      ([
         "date",
         "amount",
         "debit",
@@ -660,35 +802,41 @@
         "categoryDescription",
         "personDescription",
         "notes",
-      ].forEach((field) => {
+      ] as WizardField[]).forEach((field) => {
         if (mappingForm.elements[field])
           wizard.mapping[field] = numberValue(field);
       });
       if (mappingForm.elements.dateFormat)
         wizard.dateFormat = mappingForm.elements.dateFormat.value;
-      const amountMode = mappingForm.querySelector(
+      const amountMode = mappingForm.querySelector<HTMLInputElement>(
         'input[name="amountMode"]:checked',
       );
-      if (amountMode) wizard.amountMode = amountMode.value;
-      const sign = mappingForm.querySelector(
+      if (amountMode)
+        wizard.amountMode =
+          amountMode.value === "debitCredit" ? "debitCredit" : "unified";
+      const sign = mappingForm.querySelector<HTMLInputElement>(
         'input[name="amountSignConvention"]:checked',
       );
-      if (sign) wizard.mapping.amountSignConvention = sign.value;
-      const category = mappingForm.querySelector(
+      if (sign)
+        wizard.mapping.amountSignConvention =
+          sign.value === "expensesPositive"
+            ? "expensesPositive"
+            : "expensesNegative";
+      const category = mappingForm.querySelector<HTMLInputElement>(
         'input[name="hasCategory"]:checked',
       );
       if (category) {
         wizard.hasCategory = category.value === "yes";
         if (!wizard.hasCategory) wizard.mapping.categoryDescription = null;
       }
-      const person = mappingForm.querySelector(
+      const person = mappingForm.querySelector<HTMLInputElement>(
         'input[name="hasPerson"]:checked',
       );
       if (person) {
         wizard.hasPerson = person.value === "yes";
         if (!wizard.hasPerson) wizard.mapping.personDescription = null;
       }
-      const notes = mappingForm.querySelector('input[name="hasNotes"]:checked');
+      const notes = mappingForm.querySelector<HTMLInputElement>('input[name="hasNotes"]:checked');
       if (notes) {
         wizard.hasNotes = notes.value === "yes";
         if (!wizard.hasNotes) wizard.mapping.notes = null;
@@ -703,7 +851,7 @@
         wizard.autoPopulatePerson =
           mappingForm.elements.autoPopulatePerson.checked;
 
-      const order = {
+      const order: Record<WizardField, number> = {
         date: 0,
         amount: 1,
         debit: 1,
@@ -714,15 +862,17 @@
         notes: 5,
       };
       if (changedName in order) {
-        const value = wizard.mapping[changedName];
+        const changedField = changedName as WizardField;
+        const value = wizard.mapping[changedField];
         if (value !== null)
           Object.entries(order).forEach(([field, step]) => {
-            if (step > order[changedName] && wizard.mapping[field] === value)
-              wizard.mapping[field] = null;
+            const wizardField = field as WizardField;
+            if (step > order[changedField] && wizard.mapping[wizardField] === value)
+              wizard.mapping[wizardField] = null;
           });
       }
       if (changedName === "date") {
-        const formats = window.ImportUtils.validDateFormats(
+        const formats = importUtils.validDateFormats(
           state.parsed,
           wizard.mapping.date,
         );
@@ -734,20 +884,23 @@
       }
     }
 
-    function captureInvestmentWizardControls(changedName = "") {
+    /** Copies investment wizard controls into state and removes conflicts. */
+    function captureInvestmentWizardControls(changedName = ""): void {
       const wizard = state.mappingWizard;
       if (!wizard) return;
-      const numberValue = (name) => {
+      /** Reads a nullable numeric column index from an investment control. */
+      const numberValue = (name: "month" | "balance"): number | null => {
         const control = mappingForm.elements[name];
         return control && control.value !== "" ? Number(control.value) : null;
       };
       ["month", "balance"].forEach((field) => {
+        const mappingField = field as "month" | "balance";
         if (mappingForm.elements[field])
-          wizard.mapping[field] = numberValue(field);
+          wizard.mapping[mappingField] = numberValue(mappingField);
       });
       if (mappingForm.elements.dateFormat)
         wizard.dateFormat = mappingForm.elements.dateFormat.value;
-      const balance = mappingForm.querySelector(
+      const balance = mappingForm.querySelector<HTMLInputElement>(
         'input[name="hasBalance"]:checked',
       );
       if (balance) {
@@ -756,13 +909,14 @@
       }
       if (mappingForm.elements.contributions) {
         wizard.mapping.contributions = [
-          ...mappingForm.querySelectorAll(
+          ...mappingForm.querySelectorAll<HTMLInputElement>(
             'input[name="contributions"]:checked',
           ),
         ].map((input) => Number(input.value));
       }
       if (["month", "balance"].includes(changedName)) {
-        const selected = wizard.mapping[changedName];
+        const changedField = changedName as "month" | "balance";
+        const selected = wizard.mapping[changedField];
         if (selected !== null) {
           if (changedName !== "month" && wizard.mapping.month === selected)
             wizard.mapping.month = null;
@@ -774,7 +928,7 @@
         }
       }
       if (changedName === "month") {
-        const formats = window.ImportUtils.validMonthFormats(
+        const formats = importUtils.validMonthFormats(
           state.parsed,
           wizard.mapping.month,
         );
@@ -788,19 +942,21 @@
       }
     }
 
-    function captureWizardControls(changedName = "") {
+    /** Captures controls for the active import target. */
+    function captureWizardControls(changedName = ""): void {
       if (state.profile?.target === "investment")
         captureInvestmentWizardControls(changedName);
       else captureBudgetWizardControls(changedName);
     }
 
-    function validateBudgetWizardStep() {
+    /** Validates the active budget mapping step. */
+    function validateBudgetWizardStep(): void {
       const wizard = state.mappingWizard,
         map = wizard.mapping;
       if (wizard.step === 0) {
         if (map.date === null)
           throw new Error("Choose the column containing transaction dates.");
-        const formats = window.ImportUtils.validDateFormats(
+        const formats = importUtils.validDateFormats(
           state.parsed,
           map.date,
         );
@@ -813,7 +969,7 @@
         if (wizard.amountMode === "unified") {
           if (
             map.amount === null ||
-            !window.ImportUtils.isNumericColumn(state.parsed, map.amount)
+            !importUtils.isNumericColumn(state.parsed, map.amount)
           )
             throw new Error("Choose a numeric amount column.");
           if (
@@ -828,8 +984,8 @@
           if (map.debit === map.credit)
             throw new Error("Debit and credit must use different columns.");
           if (
-            !window.ImportUtils.isNumericColumn(state.parsed, map.debit) ||
-            !window.ImportUtils.isNumericColumn(state.parsed, map.credit)
+            !importUtils.isNumericColumn(state.parsed, map.debit) ||
+            !importUtils.isNumericColumn(state.parsed, map.credit)
           )
             throw new Error("Choose numeric debit and credit columns.");
         }
@@ -852,7 +1008,8 @@
         throw new Error("Choose the notes column.");
     }
 
-    function validateInvestmentWizardStep() {
+    /** Validates the active investment mapping step. */
+    function validateInvestmentWizardStep(): void {
       const wizard = state.mappingWizard,
         map = wizard.mapping;
       if (wizard.step === 0) {
@@ -860,7 +1017,7 @@
           throw new Error(
             "Choose the column containing reporting months or dates.",
           );
-        const formats = window.ImportUtils.validMonthFormats(
+        const formats = importUtils.validMonthFormats(
           state.parsed,
           map.month,
         );
@@ -871,8 +1028,8 @@
         if (
           !state.parsed.rows.every((row) =>
             Boolean(
-              window.ImportUtils.parseDate(
-                window.ImportUtils.valueAt(row, map.month),
+              importUtils.parseDate(
+                importUtils.valueAt(row, map.month),
                 wizard.dateFormat,
               ),
             ),
@@ -887,7 +1044,7 @@
         if (
           wizard.hasBalance &&
           (map.balance === null ||
-            !window.ImportUtils.isNumericColumn(state.parsed, map.balance))
+            !importUtils.isNumericColumn(state.parsed, map.balance))
         )
           throw new Error("Choose a numeric ending balance column.");
         if (wizard.hasBalance && map.balance === map.month)
@@ -901,7 +1058,7 @@
         if (
           map.contributions.some(
             (column) =>
-              !window.ImportUtils.isNumericColumn(state.parsed, column),
+              !importUtils.isNumericColumn(state.parsed, column),
           )
         )
           throw new Error(
@@ -912,9 +1069,9 @@
         map.month,
         wizard.hasBalance ? map.balance : null,
         ...map.contributions,
-      ].filter((value) => window.ImportUtils.columnIndex(value) !== null);
+      ].filter((value) => importUtils.columnIndex(value) !== null);
       if (
-        new Set(mapped.map(window.ImportUtils.columnIndex)).size !==
+        new Set(mapped.map(importUtils.columnIndex)).size !==
         mapped.length
       )
         throw new Error(
@@ -922,37 +1079,53 @@
         );
     }
 
-    function validateWizardStep() {
+    /** Validates the active target's mapping step. */
+    function validateWizardStep(): void {
       if (state.profile?.target === "investment")
         validateInvestmentWizardStep();
       else validateBudgetWizardStep();
     }
 
-    function references() {
-      const provisional = (kind) => [...state.draftEntities[kind].values()];
+    /** Collects persisted and provisional entities used during staging. */
+    function references(): ImportReferences {
+      /** Returns provisional entities of a requested kind. */
+      const provisional = (kind: EntityKind): BudgetEntity[] => [
+        ...state.draftEntities[kind].values(),
+      ];
       return {
-        categories: window.BudgetAPI.listCategories().concat(
+        categories: APIs.budget.listCategories().concat(
           provisional("category"),
         ),
-        vendors: window.BudgetAPI.listVendors().concat(provisional("vendor")),
-        people: window.BudgetAPI.listPeople().concat(provisional("assignment")),
-        accounts: window.InvestmentAPI.accounts(),
-        sharedAssignmentId: window.BudgetAPI.SHARED_ASSIGNMENT_ID,
+        vendors: APIs.budget.listVendors().concat(provisional("vendor")),
+        people: APIs.budget.listPeople().concat(provisional("assignment")),
+        accounts: APIs.investment.accounts(),
+        sharedAssignmentId: APIs.budget.SHARED_ASSIGNMENT_ID,
       };
     }
 
-    function draftEntityKey(kind, name, type = "") {
-      return `${kind === "category" ? `${type}|` : ""}${window.ImportUtils.normalizeDescription(name)}`;
+    /** Builds a stable key for a provisional imported entity. */
+    function draftEntityKey(
+      kind: EntityKind,
+      name: string,
+      type: TransactionType | "" = "",
+    ): string {
+      return `${kind === "category" ? `${type}|` : ""}${importUtils.normalizeDescription(name)}`;
     }
 
-    function stageEntity(kind, name, type = "expense", refs = null) {
-      const normalized = window.ImportUtils.normalizeDescription(name);
+    /** Creates or reuses a provisional entity during CSV review. */
+    function stageEntity(
+      kind: EntityKind,
+      name: string,
+      type: TransactionType = "expense",
+      refs: ImportReferences | null = null,
+    ): BudgetEntity {
+      const normalized = importUtils.normalizeDescription(name);
       if (!normalized) throw new Error("Enter a name before adding this item.");
       const key = draftEntityKey(kind, name, type);
       const existing = state.draftEntities[kind].get(key);
       if (existing) return existing;
       const record = {
-        ...window.BudgetAPI.createImportedEntityDraft(kind, {
+        ...APIs.budget.createImportedEntityDraft(kind, {
           name: String(name).trim().replace(/\s+/g, " "),
           type,
         }),
@@ -971,7 +1144,8 @@
       return record;
     }
 
-    function resetDraftEntities() {
+    /** Clears all provisional entities from import state. */
+    function resetDraftEntities(): void {
       state.draftEntities = {
         vendor: new Map(),
         category: new Map(),
@@ -979,17 +1153,18 @@
       };
     }
 
-    function stageRows() {
+    /** Converts parsed CSV data into editable staged rows. */
+    function stageRows(): void {
       resetDraftEntities();
       state.pendingVendors.clear();
       state.pendingPeople.clear();
       const refs = references();
       if (state.profile.target === "budget") {
         // Returns an array of data for each individual row, including the original CSV data, any pre-associated vendor or person ids, and a staging id
-        state.rows = window.ImportUtils.createBudgetRows(
+        state.rows = importUtils.createBudgetRows(
           state.parsed,
           state.profile,
-          state.bundle,
+          { ...state.bundle, profile: state.profile },
           refs,
           (kind, name, type) => stageEntity(kind, name, type, refs),
         );
@@ -997,13 +1172,13 @@
         //
         state.rows.forEach((row) => {
           if (row.vendorResolution === "pending" && row.vendorId)
-            state.pendingVendors.set(row.normalizedVendorDescription, {
-              sourceDescription: row.vendorDescription,
+            state.pendingVendors.set(row.normalizedVendorDescription ?? "", {
+              sourceDescription: row.vendorDescription ?? "",
               vendorId: row.vendorId,
             });
           if (row.personResolution === "pending" && row.personId)
-            state.pendingPeople.set(row.normalizedPersonDescription, {
-              sourceDescription: row.personDescription,
+            state.pendingPeople.set(row.normalizedPersonDescription ?? "", {
+              sourceDescription: row.personDescription ?? "",
               assignmentId: row.personId,
             });
         });
@@ -1017,17 +1192,16 @@
                 row.normalizedCategoryDescription ||
                 row.normalizedVendorDescription,
             )
-            .filter(Boolean),
+            .filter((value): value is string => Boolean(value)),
         );
       } else {
-        const existing = window.InvestmentAPI.balances()
+        const existing = APIs.investment.balances()
           .filter(
             (item) => item.accountId === state.profile.investmentAccountId,
           )
-          .map((balance) =>
-            window.InvestmentAPI.monthData(balance.accountId, balance.month),
-          );
-        state.rows = window.ImportUtils.createInvestmentMonths(
+          .map((balance) => APIs.investment.monthData(balance.accountId, balance.month))
+          .filter((month): month is NonNullable<typeof month> => month !== null);
+        state.rows = importUtils.createInvestmentMonths(
           state.parsed,
           state.profile,
           existing,
@@ -1046,10 +1220,11 @@
       }
     }
 
-    function validateRows() {
+    /** Revalidates every staged row against current mappings and entities. */
+    function validateRows(): void {
       const refs = references();
       if (state.profile.target === "investment") {
-        const months = new Map();
+        const months = new Map<string, StagedImportRow[]>();
         state.rows.forEach((row) => {
           row.errors = row.errors.filter(
             (error) => !error.includes("more than once"),
@@ -1057,7 +1232,7 @@
           if (row.month)
             months.set(row.month, [...(months.get(row.month) || []), row]);
         });
-        months.forEach((rows) => {
+        months.forEach((rows: StagedImportRow[]) => {
           if (rows.length > 1)
             rows.forEach((row) =>
               row.errors.push(
@@ -1067,24 +1242,28 @@
         });
       }
       state.rows.forEach((row) => {
-        const result =
-          state.profile.target === "budget"
-            ? window.ImportUtils.validateBudgetRow(row, refs, state.profile)
-            : window.ImportUtils.validateInvestmentMonth(
-                row,
-                refs,
-                state.profile,
-              );
-        row.errors = result.errors;
-        row.warnings = result.warnings;
-        if ("type" in result) row.type = result.type;
-        if ("amount" in result && !row.amountEdited) row.amount = result.amount;
-        if (!window.BudgetAPI.getActiveUser())
+        if (state.profile.target === "budget") {
+          const result = importUtils.validateBudgetRow(row, refs, state.profile);
+          row.errors = result.errors;
+          row.warnings = result.warnings;
+          row.type = result.type;
+          if (!row.amountEdited) row.amount = result.amount;
+        } else {
+          const result = importUtils.validateInvestmentMonth(row, refs, state.profile);
+          row.errors = result.errors;
+          row.warnings = result.warnings;
+        }
+        if (!APIs.budget.getActiveUser())
           row.errors.push("Choose an app user in Settings.");
       });
     }
 
-    function optionList(items, value, emptyLabel) {
+    /** Renders entity options for a native select control. */
+    function optionList(
+      items: BudgetEntity[],
+      value: string | undefined,
+      emptyLabel: string,
+    ): string {
       return (
         `<option value="">${emptyLabel}</option>` +
         items
@@ -1096,12 +1275,14 @@
       );
     }
 
-    function numericInputValue(value) {
+    /** Formats an unknown numeric value for a money input. */
+    function numericInputValue(value: unknown): string {
       const number = Number(value);
       return Number.isFinite(number) ? number.toFixed(2) : "";
     }
 
-    function statusMarkup(row) {
+    /** Renders validation and queue status for a staged row. */
+    function statusMarkup(row: StagedImportRow): string {
       if (row.queued) return "Queued for sync";
       const items = [
         ...row.errors.map(
@@ -1114,7 +1295,8 @@
       return items.join("") || "Ready";
     }
 
-    function filteredRows() {
+    /** Returns staged rows matching the active review filter. */
+    function filteredRows(): StagedImportRow[] {
       return state.rows.filter((row) => {
         if (state.filter === "errors") return row.errors.length;
         if (state.filter === "excluded") return !row.include;
@@ -1130,7 +1312,8 @@
       });
     }
 
-    function visibleRows(items) {
+    /** Limits staged rows to the current incremental page size. */
+    function visibleRows(items: StagedImportRow[]): StagedImportRow[] {
       const total = items.length;
       state.visibleLimit = Math.min(
         Math.max(state.visibleLimit, PAGE_SIZE),
@@ -1139,7 +1322,8 @@
       return items.slice(0, state.visibleLimit);
     }
 
-    function renderSummary() {
+    /** Renders aggregate counts and amounts for the staged import. */
+    function renderSummary(): void {
       const included = state.rows.filter((row) => row.include && !row.queued);
       const ready = included.filter((row) => !row.errors.length);
       let stats = [
@@ -1183,7 +1367,8 @@
         stats.splice(1, 0, [state.rows.length, "Grouped months"]);
         const flows = included
           .flatMap((row) => row.flows.map((flow) => flow.amount))
-          .filter((value) => Number.isFinite(Number(value)));
+          .map(Number)
+          .filter(Number.isFinite);
         stats.push(
           [included.filter((row) => row.existing).length, "Existing months"],
           [
@@ -1210,7 +1395,8 @@
         `<div class="import-summary">${stats.map(([value, label]) => `<div class="import-stat"><strong>${escapeHTML(String(value))}</strong><span>${escapeHTML(label)}</span></div>`).join("")}</div>`;
     }
 
-    function renderFilters() {
+    /** Renders the review filter controls for the current target. */
+    function renderFilters(): void {
       const filters = [
         ["all", "All"],
         ["ready", "Ready"],
@@ -1233,11 +1419,12 @@
         .join("");
     }
 
-    function renderBudgetRows() {
+    /** Renders editable staged budget transactions. */
+    function renderBudgetRows(): void {
       const filtered = filteredRows();
       const visible = visibleRows(filtered);
 
-      loadMoreButton.visible = state.visibleLimit >= visible.length;
+      loadMoreButton.hidden = state.visibleLimit >= filtered.length;
 
       // const visibleRows = filteredRows();
       root.querySelector(".import-table").classList.add("budget-review-table");
@@ -1252,7 +1439,7 @@
         <td class="include-column"><input type="checkbox" aria-label="Include CSV row ${row.sourceRowNumber}" data-row-field="include"${row.include ? " checked" : ""}${row.queued ? " disabled" : ""} /></td>
         <td class="date-column"><date-picker allow-empty aria-label="Transaction date" data-row-field="date" value="${escapeHTML(row.date || "")}"${row.queued ? " inert" : ""}></date-picker></td>
         <td class="vendor-column"><vendor-input data-row-field="vendorId" value="${escapeHTML(row.vendorId)}"${row.queued ? " inert" : ""}></vendor-input><span class="import-source-description">${escapeHTML(row.vendorDescription || "No source vendor")}</span></td>
-        <td class="category-column"><category-select data-row-field="categoryId" type="all" create-type="${window.ImportUtils.suggestBudgetType(row)}" value="${escapeHTML(row.categoryId)}"${row.queued ? " inert" : ""}></category-select>${row.categoryDescription ? `<span class="import-source-description">${escapeHTML(row.categoryDescription)}</span>` : ""}</td>
+        <td class="category-column"><category-select data-row-field="categoryId" type="all" create-type="${importUtils.suggestBudgetType(row)}" value="${escapeHTML(row.categoryId)}"${row.queued ? " inert" : ""}></category-select>${row.categoryDescription ? `<span class="import-source-description">${escapeHTML(row.categoryDescription)}</span>` : ""}</td>
         <td class="person-column"><people-select data-row-field="personId" allow-empty value="${escapeHTML(row.personId)}"${row.queued ? " inert" : ""}></people-select><span class="import-source-description">${escapeHTML(row.personDescription || "Shared")}</span></td>
         <td class="amount-column"><input type="number" aria-label="Transaction amount" step="0.01" data-row-field="amount" value="${numericInputValue(row.amount)}"${row.queued ? " disabled" : ""} /></td>
         <td class="notes-column"><input type="text" aria-label="Transaction notes" maxlength="1000" data-row-field="notes" value="${escapeHTML(row.notes)}"${row.queued ? " disabled" : ""} /></td><td class="import-status status-column">${statusMarkup(row)}</td></tr>`,
@@ -1264,9 +1451,9 @@
           `[data-staging-id="${row.stagingId}"]`,
         );
 
-        const vendorControl = element.querySelector("vendor-input");
-        const categoryControl = element.querySelector("category-select");
-        const personControl = element.querySelector("people-select");
+        const vendorControl = element.querySelector<ImportSelectControl>("vendor-input")!;
+        const categoryControl = element.querySelector<ImportSelectControl>("category-select")!;
+        const personControl = element.querySelector<ImportSelectControl>("people-select")!;
 
         vendorControl.configureOptions({
           getOptions: () => references().vendors,
@@ -1279,7 +1466,7 @@
             stageEntity(
               "category",
               name,
-              window.ImportUtils.suggestBudgetType(row),
+              importUtils.suggestBudgetType(row),
             ),
           onCreate: () => {},
         });
@@ -1288,14 +1475,15 @@
           createOption: (name) => stageEntity("assignment", name),
           onCreate: () => {},
         });
-        vendorControl.value = row.vendorId;
-        categoryControl.value = row.categoryId;
-        personControl.value = row.personId;
+        vendorControl.value = row.vendorId ?? "";
+        categoryControl.value = row.categoryId ?? "";
+        personControl.value = row.personId ?? "";
       });
     }
 
-    function renderInvestmentRows() {
-      const account = window.InvestmentAPI.accounts().find(
+    /** Renders editable staged investment months and flows. */
+    function renderInvestmentRows(): void {
+      const account = APIs.investment.accounts().find(
         (item) => item.id === state.profile.investmentAccountId,
       );
       const cards = filteredRows()
@@ -1351,7 +1539,8 @@
         `<div class="investment-import-account"><span>Importing to</span><strong>${escapeHTML(account?.name || "Unknown account")}</strong></div><div class="investment-import-month-list">${cards || '<p class="investment-import-empty">No months match this filter.</p>'}</div>`;
     }
 
-    function renderReview() {
+    /** Revalidates and renders the complete review step. */
+    function renderReview(): void {
       validateRows();
       renderSummary();
       renderFilters();
@@ -1361,8 +1550,8 @@
       if (budget) renderBudgetRows();
       else renderInvestmentRows();
       const included = state.rows.filter((row) => row.include && !row.queued);
-      const commitButton = root.querySelector('[data-import-action="commit"]');
-      const connected = Boolean(window.BudgetAPI.getConfig().endpoint);
+      const commitButton = root.querySelector<HTMLButtonElement>('[data-import-action="commit"]');
+      const connected = Boolean(APIs.budget.getConfig().endpoint);
       const online =
         typeof navigator === "undefined" || navigator.onLine !== false;
       commitButton.disabled =
@@ -1377,23 +1566,24 @@
           : "";
     }
 
-    async function handleFileChange() {
+    /** Parses a selected CSV and prepares profile selection. */
+    async function handleFileChange(): Promise<void> {
       const file = fileInput.files?.[0];
       if (!file) return;
       message(root.querySelector("#import-file-message"), "Reading CSV…");
       try {
-        state.parsed = window.ImportUtils.parseCSV(await file.text());
-        state.profile = null;
+        state.parsed = importUtils.parseCSV(await file.text());
+        state.profile = null as unknown as ImportProfile;
         state.rows = [];
-        state.mappingWizard = null;
-        state.commit = null;
+        state.mappingWizard = null as unknown as MappingWizard;
+        state.commit = null as unknown as ImportCommit;
         state.expandedInvestmentMonths.clear();
         resetDraftEntities();
         mappingStep.hidden = true;
         reviewStep.hidden = true;
         progressStep.hidden = true;
         profileStep.hidden = false;
-        window.AppRouter.setNavigationGuard(null);
+        appRouter().setNavigationGuard(null);
         window.removeEventListener("beforeunload", handleBeforeUnload);
         renderSourcePreview();
         profileOptions();
@@ -1429,19 +1619,24 @@
       } catch (error) {
         message(
           root.querySelector("#import-file-message"),
-          error.message,
+          messageFromError(error),
           "error",
         );
       }
     }
 
-    function profileMappingIsUsable(profile) {
+    /** Checks whether a saved profile can map the uploaded CSV unchanged. */
+    function profileMappingIsUsable(profile: ImportProfile): boolean {
       if (!profile || profile.headerSignature !== state.parsed.signature)
         return false;
       const map = profile.columnMapping || {};
       const indexes =
         profile.target === "investment"
-          ? [map.month, map.balance, ...(map.contributions || [])]
+          ? [
+              map.month,
+              map.balance,
+              ...(Array.isArray(map.contributions) ? map.contributions : []),
+            ]
           : [
               map.date,
               map.vendorDescription,
@@ -1453,33 +1648,32 @@
             ];
       if (
         indexes
-          .filter((value) => window.ImportUtils.columnIndex(value) !== null)
-          .some(
-            (value) =>
-              window.ImportUtils.columnIndex(value) >=
-              state.parsed.headers.length,
-          )
+          .filter((value) => importUtils.columnIndex(value) !== null)
+          .some((value) => {
+            const index = importUtils.columnIndex(value);
+            return index !== null && index >= state.parsed.headers.length;
+          })
       )
         return false;
       try {
         validateMapping(map, profile.amountMode);
         if (
           profile.target === "budget" &&
-          !window.ImportUtils.validDateFormats(state.parsed, map.date).includes(
+          !importUtils.validDateFormats(state.parsed, map.date).includes(
             profile.dateFormat,
           )
         )
           return false;
         if (
           profile.target === "investment" &&
-          (!window.ImportUtils.validMonthFormats(
+          (!importUtils.validMonthFormats(
             state.parsed,
             map.month,
           ).includes(profile.dateFormat) ||
             !state.parsed.rows.every((row) =>
               Boolean(
-                window.ImportUtils.parseDate(
-                  window.ImportUtils.valueAt(row, map.month),
+                importUtils.parseDate(
+                  importUtils.valueAt(row, map.month),
                   profile.dateFormat,
                 ),
               ),
@@ -1492,7 +1686,8 @@
       }
     }
 
-    async function handleProfileSubmit(event) {
+    /** Applies or creates the profile selected by the user. */
+    async function handleProfileSubmit(event: SubmitEvent): Promise<void> {
       event.preventDefault();
       message(profileMessage, "");
       try {
@@ -1500,7 +1695,10 @@
         const selected = state.profiles.find(
           (item) => item.id === profileForm.elements.profileId.value,
         );
-        const target = profileForm.elements.target.value;
+        const target: ImportTarget =
+          profileForm.elements.target.value === "investment"
+            ? "investment"
+            : "budget";
         const input = {
           ...(selected || {}),
           name: profileForm.elements.name.value,
@@ -1520,17 +1718,18 @@
           amountMultiplier: selected?.amountMultiplier || 1,
         };
         if (selected) {
-          state.bundle = await window.ImportAPI.loadProfileBundle(selected.id, {
+          const bundle = await APIs.imports.loadProfileBundle(selected.id, {
             refresh: true,
           });
+          state.bundle = bundle;
           state.profile = {
-            ...state.bundle.profile,
+            ...bundle.profile,
             name: input.name,
             target,
             investmentAccountId: input.investmentAccountId,
           };
           if (profileMappingIsUsable(state.profile)) {
-            state.mappingWizard = null;
+            state.mappingWizard = null as unknown as MappingWizard;
             stageRows();
             reviewStep.scrollIntoView({ behavior: "smooth", block: "start" });
             message(
@@ -1546,7 +1745,7 @@
             "error",
           );
         } else {
-          state.profile = window.ImportAPI.createProfileDraft({
+          state.profile = APIs.imports.createProfileDraft({
             ...input,
             headerSignature: state.parsed.signature,
           });
@@ -1556,17 +1755,18 @@
             personMappings: [],
           };
         }
-        state.mappingWizard = null;
+        state.mappingWizard = null as unknown as MappingWizard;
         renderMapper();
         mappingStep.hidden = false;
         reviewStep.hidden = true;
         mappingStep.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (error) {
-        message(profileMessage, error.message, "error");
+        message(profileMessage, messageFromError(error), "error");
       }
     }
 
-    async function handleMappingSubmit(event) {
+    /** Advances or completes the column-mapping wizard. */
+    async function handleMappingSubmit(event: SubmitEvent): Promise<void> {
       event.preventDefault();
       message(mappingMessage, "");
       try {
@@ -1587,7 +1787,7 @@
             ? state.mappingWizard.amountMode
             : "monthly";
         validateMapping(columnMapping, amountMode);
-        state.profile = window.ImportAPI.createProfileDraft({
+        state.profile = APIs.imports.createProfileDraft({
           ...state.profile,
           headerSignature: state.parsed.signature,
           columnMapping,
@@ -1605,19 +1805,25 @@
         stageRows();
         reviewStep.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (error) {
-        message(mappingMessage, error.message, "error");
+        message(mappingMessage, messageFromError(error), "error");
       }
     }
 
-    function rowFromElement(element) {
+    /** Resolves the staged row associated with a review element. */
+    function rowFromElement(element: Element): StagedImportRow | undefined {
       return state.rows.find(
         (row) =>
           row.stagingId ===
-          element.closest("[data-staging-id]")?.dataset.stagingId,
+          (element.closest("[data-staging-id]") as HTMLElement | null)?.dataset.stagingId,
       );
     }
 
-    function applyReference(row, field, value) {
+    /** Applies a vendor or person selection and learns matching associations. */
+    function applyReference(
+      row: StagedImportRow,
+      field: "vendorId" | "personId",
+      value: string,
+    ): void {
       const vendor = field === "vendorId";
       const normalized = vendor
         ? row.normalizedVendorDescription
@@ -1632,8 +1838,8 @@
       );
       row[field] = value;
       row[resolutionField] = "custom";
-      if (!firstResolution) return;
-      window.ImportUtils.fillBlankMatches(
+      if (!firstResolution || !normalized) return;
+      importUtils.fillBlankMatches(
         state.rows,
         field,
         normalized,
@@ -1649,12 +1855,13 @@
       target.set(
         normalized,
         vendor
-          ? { sourceDescription: row.vendorDescription, vendorId: value }
-          : { sourceDescription: row.personDescription, assignmentId: value },
+          ? { sourceDescription: row.vendorDescription ?? "", vendorId: value }
+          : { sourceDescription: row.personDescription ?? "", assignmentId: value },
       );
     }
 
-    function applyCategory(row, value) {
+    /** Applies a category selection to matching staged rows. */
+    function applyCategory(row: StagedImportRow, value: string): void {
       row.categoryId = value;
       const category = references().categories.find(
         (item) => item.id === value,
@@ -1664,7 +1871,7 @@
         row.normalizedCategoryDescription || row.normalizedVendorDescription;
       if (!value || !key || state.resolvedCategoryMatches.has(key)) return;
       state.resolvedCategoryMatches.add(key);
-      window.ImportUtils.fillBlankMatches(
+      importUtils.fillBlankMatches(
         state.rows,
         "categoryId",
         key,
@@ -1678,7 +1885,8 @@
       );
     }
 
-    function handleReviewChange(event) {
+    /** Applies edits made to staged review controls. */
+    function handleReviewChange(event: ImportControlEvent): void {
       const row = rowFromElement(event.target);
       if (!row || row.queued) return;
       const field = event.target.dataset.rowField;
@@ -1702,9 +1910,9 @@
         const priorMonth = field === "month" ? row.month : "";
         row[field] = event.target.value;
         if (field === "month" && priorMonth !== row.month) {
-          row.existing = window.InvestmentAPI.monthData(
-            row.accountId,
-            row.month,
+          row.existing = APIs.investment.monthData(
+            row.accountId ?? "",
+            row.month ?? "",
           );
           if (!row.existing?.balance && !row.existing?.contributions?.length)
             row.existing = null;
@@ -1725,14 +1933,16 @@
       renderReview();
     }
 
-    function handleReviewDateChange(event) {
+    /** Applies a custom date-picker change to a staged transaction. */
+    function handleReviewDateChange(event: ImportDateEvent): void {
       const row = rowFromElement(event.target);
       if (!row || row.queued || state.profile?.target !== "budget") return;
       row.date = event.detail?.value || "";
       renderReview();
     }
 
-    function handleReviewSelection(event) {
+    /** Applies custom vendor, person, or category selection events. */
+    function handleReviewSelection(event: ImportControlEvent): void {
       const row = rowFromElement(event.target);
       if (!row || row.queued) return;
       if (event.type === "vendor-selected")
@@ -1744,7 +1954,8 @@
       queueMicrotask(renderReview);
     }
 
-    function handleMappingChange(event) {
+    /** Captures mapping changes and rerenders dependent wizard fields. */
+    function handleMappingChange(event: ImportControlEvent): void {
       captureWizardControls(event.target.name);
       const rerender =
         state.profile?.target === "investment"
@@ -1764,8 +1975,9 @@
       if (rerender) renderMapper();
     }
 
-    function handleWizardNavigation(event) {
-      const control = event.target.closest("[data-wizard-step]");
+    /** Navigates to an already visited mapping-wizard step. */
+    function handleWizardNavigation(event: ImportControlEvent): void {
+      const control = event.target.closest<HTMLButtonElement>("[data-wizard-step]");
       if (!control || !state.mappingWizard || control.disabled) return;
       captureWizardControls();
       state.mappingWizard.step = Number(control.dataset.wizardStep);
@@ -1783,7 +1995,8 @@
       ["records", "Saving imported records"],
     ];
 
-    function renderCommitProgress() {
+    /** Renders the current multi-step commit progress. */
+    function renderCommitProgress(): void {
       if (!state.commit) return;
       root.querySelector("#import-commit-progress").innerHTML =
         state.commit.steps
@@ -1811,13 +2024,23 @@
           : "Keep this page open while each step is confirmed in Google Sheets.";
     }
 
-    function updateCommitStep(key, status, detail = "") {
+    /** Updates one commit step and refreshes its progress display. */
+    function updateCommitStep(
+      key: string,
+      status: CommitStatus,
+      detail = "",
+    ): void {
       const step = state.commit.steps.find((item) => item.key === key);
       if (step) Object.assign(step, { status, detail });
       renderCommitProgress();
     }
 
-    function remapEntity(kind, requestedId, record) {
+    /** Replaces a provisional entity ID with its persisted ID. */
+    function remapEntity(
+      kind: EntityKind,
+      requestedId: string,
+      record: BudgetEntity,
+    ): void {
       const field =
         kind === "vendor"
           ? "vendorId"
@@ -1841,7 +2064,8 @@
       }
     }
 
-    function usedDraftEntities(kind) {
+    /** Returns provisional entities referenced by included rows. */
+    function usedDraftEntities(kind: EntityKind): BudgetEntity[] {
       const field =
         kind === "vendor"
           ? "vendorId"
@@ -1856,7 +2080,8 @@
       );
     }
 
-    async function commitEntityKind(kind) {
+    /** Persists referenced provisional entities of one kind. */
+    async function commitEntityKind(kind: EntityKind): Promise<void> {
       const items = usedDraftEntities(kind);
       if (!items.length) {
         updateCommitStep(kind, "skipped", "No new items needed");
@@ -1864,7 +2089,7 @@
       }
       updateCommitStep(kind, "running", `0 of ${items.length}`);
       try {
-        const resolved = await window.BudgetAPI.commitImportedEntities(
+        const resolved = await APIs.budget.commitImportedEntities(
           items.map((record) => ({ kind, record })),
           ({ completed, total }) =>
             updateCommitStep(kind, "running", `${completed} of ${total}`),
@@ -1874,14 +2099,18 @@
         );
         updateCommitStep(kind, "complete", `${items.length} confirmed`);
       } catch (error) {
-        (error.partialResults || []).forEach((item) =>
+        partialEntityResults(error).forEach((item) =>
           remapEntity(item.kind, item.requestedId, item.record),
         );
         throw error;
       }
     }
 
-    function relevantMappings() {
+    /** Returns learned associations used by included rows. */
+    function relevantMappings(): {
+      vendorMappings: ImportMapping[];
+      personMappings: ImportMapping[];
+    } {
       const vendorKeys = new Set(
         state.commit.included
           .map((row) => row.normalizedVendorDescription)
@@ -1902,33 +2131,34 @@
       };
     }
 
-    async function commitRecords() {
+    /** Queues and awaits imported budget or investment records. */
+    async function commitRecords(): Promise<void> {
       const checkpoint = state.commit.checkpoint;
       if (state.profile.target === "budget") {
         if (!checkpoint.recordIds) {
-          const queued = window.BudgetAPI.queueImportedTransactions(
+          const queued = APIs.budget.queueImportedTransactions(
             state.commit.included.map((row) => ({
-              date: row.date,
-              amount: row.amount,
-              type: row.type,
-              categoryId: row.categoryId,
-              vendorId: row.type === "income" ? "" : row.vendorId,
-              assignmentId: row.personId,
+              date: row.date ?? "",
+              amount: row.amount ?? 0,
+              type: row.type === "income" ? "income" : "expense",
+              categoryId: row.categoryId ?? "",
+              vendorId: row.type === "income" ? "" : (row.vendorId ?? ""),
+              assignmentId: row.personId ?? "",
               notes: row.notes,
             })),
           );
           checkpoint.recordIds = queued.map((item) => item.id);
         } else {
           checkpoint.recordIds.forEach((id) => {
-            const item = window.BudgetAPI.getTransactionOutboxItem(id);
+            const item = APIs.budget.getTransactionOutboxItem(id);
             if (
               item?.status === "failed" ||
-              (item?.status === "pending" && item.attempts > 0)
+              (item?.status === "pending" && Number(item.attempts) > 0)
             )
-              window.BudgetAPI.retryTransaction(id);
+              APIs.budget.retryTransaction(id);
           });
         }
-        await window.BudgetAPI.awaitImportedTransactions(
+        await APIs.budget.awaitImportedTransactions(
           checkpoint.recordIds,
           ({ completed, total }) =>
             updateCommitStep(
@@ -1939,11 +2169,11 @@
         );
       } else {
         if (!checkpoint.recordIds) {
-          const queued = window.InvestmentAPI.queueImportedMonths(
+          const queued = APIs.investment.queueImportedMonths(
             state.commit.included.map((row) => ({
-              accountId: row.accountId,
-              month: row.month,
-              balance: row.balance,
+              accountId: row.accountId ?? "",
+              month: row.month ?? "",
+              balance: row.balance ?? 0,
               balanceId: row.existing?.balance?.id || "",
               existingContributions: row.existing?.contributions || [],
               contributions: row.flows
@@ -1956,14 +2186,16 @@
               notes: row.existing?.balance?.notes || "",
             })),
           );
-          checkpoint.recordIds = queued.map((item) => item.syncOperationId);
+          checkpoint.recordIds = queued
+            .map((item) => item.syncOperationId)
+            .filter((id): id is string => Boolean(id));
         } else {
           checkpoint.recordIds.forEach((id) =>
-            window.InvestmentAPI.retry("investmentMonth", id),
+            APIs.investment.retry("investmentMonth", id),
           );
         }
-        await window.InvestmentAPI.awaitImportedMonths(
-          checkpoint.recordIds,
+        await APIs.investment.awaitImportedMonths(
+          checkpoint.recordIds ?? [],
           ({ completed, total }) =>
             updateCommitStep(
               "records",
@@ -1974,7 +2206,8 @@
       }
     }
 
-    function guardNavigation() {
+    /** Confirms navigation while an import commit remains unfinished. */
+    function guardNavigation(): boolean {
       return (
         !state.commit ||
         state.commit.status === "complete" ||
@@ -1984,14 +2217,16 @@
       );
     }
 
-    function handleBeforeUnload(event) {
+    /** Warns before closing the page during an unfinished commit. */
+    function handleBeforeUnload(event: BeforeUnloadEvent): void {
       if (!state.commit || state.commit.status === "complete") return;
       event.preventDefault();
       event.returnValue = "";
     }
 
-    async function commitImport(retry = false) {
-      if (!window.BudgetAPI.getConfig().endpoint)
+    /** Executes or retries the complete remote import transaction. */
+    async function commitImport(retry = false): Promise<void> {
+      if (!APIs.budget.getConfig().endpoint)
         throw new Error("Connect a Google Sheet in Settings before importing.");
       if (typeof navigator !== "undefined" && navigator.onLine === false)
         throw new Error("Reconnect to the internet before importing.");
@@ -2024,7 +2259,7 @@
       }
       reviewStep.hidden = true;
       progressStep.hidden = false;
-      window.AppRouter.setNavigationGuard(guardNavigation);
+      appRouter().setNavigationGuard(guardNavigation);
       window.addEventListener("beforeunload", handleBeforeUnload);
       renderCommitProgress();
       message(root.querySelector("#import-progress-message"), "");
@@ -2032,7 +2267,7 @@
       try {
         if (!state.commit.checkpoint.profile) {
           updateCommitStep("profile", "running");
-          state.profile = await window.ImportAPI.saveProfile(state.profile);
+          state.profile = await APIs.imports.saveProfile(state.profile);
           state.commit.checkpoint.profile = true;
           updateCommitStep("profile", "complete", state.profile.name);
           updateCommitStep(
@@ -2049,7 +2284,7 @@
           );
         }
 
-        for (const kind of ["vendor", "category", "assignment"]) {
+        for (const kind of ["vendor", "category", "assignment"] as EntityKind[]) {
           if (state.profile.target === "investment")
             updateCommitStep(
               kind,
@@ -2083,7 +2318,7 @@
             );
             state.bundle = {
               ...state.bundle,
-              ...(await window.ImportAPI.saveMappings(
+              ...(await APIs.imports.saveMappings(
                 state.profile.id,
                 mappings,
               )),
@@ -2104,14 +2339,14 @@
           row.queued = true;
         });
         state.commit.status = "complete";
-        state.profiles = await window.ImportAPI.listProfiles();
+        state.profiles = await APIs.imports.listProfiles();
         renderCommitProgress();
         message(
           root.querySelector("#import-progress-message"),
           "Import complete. Every selected row was confirmed in Google Sheets.",
           "success",
         );
-        window.AppRouter.setNavigationGuard(null);
+        appRouter().setNavigationGuard(null);
         window.removeEventListener("beforeunload", handleBeforeUnload);
       } catch (error) {
         state.commit.status = "failed";
@@ -2119,23 +2354,25 @@
           (step) => step.status === "running",
         );
         if (active)
-          Object.assign(active, { status: "failed", detail: error.message });
+          Object.assign(active, { status: "failed", detail: messageFromError(error) });
         renderCommitProgress();
         message(
           root.querySelector("#import-progress-message"),
-          error.message,
+          messageFromError(error),
           "error",
         );
       }
     }
 
-    function handleLoadMore(event) {
+    /** Extends the visible budget-row page. */
+    function handleLoadMore(_event: Event): void {
       state.visibleLimit += PAGE_SIZE;
       renderBudgetRows();
     }
 
-    async function handleAction(event) {
-      const action = event.target.closest("[data-import-action]")?.dataset
+    /** Handles click actions across the import workflow. */
+    async function handleAction(event: ImportControlEvent): Promise<void> {
+      const action = (event.target.closest("[data-import-action]") as HTMLElement | null)?.dataset
         .importAction;
       if (!action) return;
 
@@ -2143,11 +2380,11 @@
         if (action === "clear") {
           if (!guardNavigation()) return;
           fileInput.value = "";
-          state.parsed = null;
-          state.profile = null;
+          state.parsed = null as unknown as ParsedImport;
+          state.profile = null as unknown as ImportProfile;
           state.rows = [];
-          state.mappingWizard = null;
-          state.commit = null;
+          state.mappingWizard = null as unknown as MappingWizard;
+          state.commit = null as unknown as ImportCommit;
           state.expandedInvestmentMonths.clear();
           resetDraftEntities();
           profileStep.hidden = true;
@@ -2155,7 +2392,7 @@
           reviewStep.hidden = true;
           progressStep.hidden = true;
           renderSourcePreview();
-          window.AppRouter.setNavigationGuard(null);
+          appRouter().setNavigationGuard(null);
           window.removeEventListener("beforeunload", handleBeforeUnload);
           message(
             root.querySelector("#import-file-message"),
@@ -2175,10 +2412,10 @@
             )
           )
             return;
-          await window.ImportAPI.archiveProfile(
+          await APIs.imports.archiveProfile(
             profileForm.elements.profileId.value,
           );
-          state.profiles = await window.ImportAPI.listProfiles();
+          state.profiles = await APIs.imports.listProfiles();
           profileOptions();
           profileForm.elements.profileId.value = "";
           chooseProfileCandidate();
@@ -2200,7 +2437,7 @@
         }
         if (action === "remove-investment-flow") {
           const row = rowFromElement(event.target);
-          const flowId = event.target.closest("[data-flow-id]")?.dataset.flowId;
+          const flowId = (event.target.closest("[data-flow-id]") as HTMLElement | null)?.dataset.flowId;
           if (!row || row.queued || !flowId) return;
           row.flows = row.flows.filter((flow) => flow.id !== flowId);
           renderReview();
@@ -2208,21 +2445,21 @@
         if (action === "commit") await commitImport(false);
         if (action === "retry-commit") await commitImport(true);
         if (action === "return-review") {
-          state.commit = null;
+          state.commit = null as unknown as ImportCommit;
           progressStep.hidden = true;
           reviewStep.hidden = false;
-          window.AppRouter.setNavigationGuard(null);
+          appRouter().setNavigationGuard(null);
           window.removeEventListener("beforeunload", handleBeforeUnload);
           renderReview();
         }
         if (action === "finish-import") {
-          state.commit = null;
+          state.commit = null as unknown as ImportCommit;
           progressStep.hidden = true;
           fileInput.value = "";
-          state.parsed = null;
-          state.profile = null;
+          state.parsed = null as unknown as ParsedImport;
+          state.profile = null as unknown as ImportProfile;
           state.rows = [];
-          state.mappingWizard = null;
+          state.mappingWizard = null as unknown as MappingWizard;
           state.expandedInvestmentMonths.clear();
           resetDraftEntities();
           profileStep.hidden = true;
@@ -2234,25 +2471,27 @@
             "Ready for another CSV.",
           );
         }
-        if (action === "open-sync") window.AppRouter.navigate("sync");
+        if (action === "open-sync") appRouter().navigate("sync");
         if (action === "load-more") {
           handleLoadMore(event);
         }
       } catch (error) {
-        message(reviewMessage, error.message, "error");
+        message(reviewMessage, messageFromError(error), "error");
       }
     }
 
-    function handleFilter(event) {
-      const filter = event.target.closest("[data-import-filter]")?.dataset
+    /** Applies a selected review filter. */
+    function handleFilter(event: ImportControlEvent): void {
+      const filter = (event.target.closest("[data-import-filter]") as HTMLElement | null)?.dataset
         .importFilter;
-      if (!filter) return;
-      state.filter = filter;
+      if (!filter || !["all", "errors", "excluded", "ready", "vendors", "people", "categories"].includes(filter)) return;
+      state.filter = filter as ImportFilter;
       renderReview();
     }
 
-    function refreshProfiles() {
-      window.ImportAPI.listProfiles()
+    /** Reloads cached profiles and refreshes the profile selector. */
+    function refreshProfiles(): void {
+      APIs.imports.listProfiles()
         .then((profiles) => {
           state.profiles = profiles;
           profileOptions();
@@ -2260,11 +2499,33 @@
         .catch((error) =>
           message(
             root.querySelector("#import-file-message"),
-            `Profiles could not be loaded: ${error.message}`,
+            `Profiles could not be loaded: ${messageFromError(error)}`,
             "error",
           ),
         );
     }
+
+    /** Adapts native change events to typed mapping-control events. */
+    const onMappingChange: EventListener = (event) =>
+      handleMappingChange(event as ImportControlEvent);
+    /** Adapts native change events to typed row-control events. */
+    const onReviewChange: EventListener = (event) =>
+      handleReviewChange(event as ImportControlEvent);
+    /** Adapts date-picker events to typed date events. */
+    const onReviewDateChange: EventListener = (event) =>
+      handleReviewDateChange(event as ImportDateEvent);
+    /** Adapts selection events to typed selection-control events. */
+    const onReviewSelection: EventListener = (event) =>
+      handleReviewSelection(event as ImportControlEvent);
+    /** Adapts click events to typed import-action events. */
+    const onAction: EventListener = (event) =>
+      void handleAction(event as ImportControlEvent);
+    /** Adapts click events to typed filter events. */
+    const onFilter: EventListener = (event) =>
+      handleFilter(event as ImportControlEvent);
+    /** Adapts click events to typed wizard navigation events. */
+    const onWizardNavigation: EventListener = (event) =>
+      handleWizardNavigation(event as ImportControlEvent);
 
     fileInput.addEventListener("change", handleFileChange);
     profileForm.addEventListener("submit", handleProfileSubmit);
@@ -2274,15 +2535,15 @@
     );
     profileForm.elements.target.addEventListener("change", updateTargetFields);
     mappingForm.addEventListener("submit", handleMappingSubmit);
-    mappingForm.addEventListener("change", handleMappingChange);
-    root.addEventListener("change", handleReviewChange);
-    root.addEventListener("date-change", handleReviewDateChange);
-    root.addEventListener("vendor-selected", handleReviewSelection);
-    root.addEventListener("person-selected", handleReviewSelection);
-    root.addEventListener("category-selected", handleReviewSelection);
-    root.addEventListener("click", handleAction);
-    root.addEventListener("click", handleFilter);
-    root.addEventListener("click", handleWizardNavigation);
+    mappingForm.addEventListener("change", onMappingChange);
+    root.addEventListener("change", onReviewChange);
+    root.addEventListener("date-change", onReviewDateChange);
+    root.addEventListener("vendor-selected", onReviewSelection);
+    root.addEventListener("person-selected", onReviewSelection);
+    root.addEventListener("category-selected", onReviewSelection);
+    root.addEventListener("click", onAction);
+    root.addEventListener("click", onFilter);
+    root.addEventListener("click", onWizardNavigation);
     window.addEventListener("budget:import-profiles-changed", refreshProfiles);
 
     accountOptions();
@@ -2301,27 +2562,46 @@
         updateTargetFields,
       );
       mappingForm.removeEventListener("submit", handleMappingSubmit);
-      mappingForm.removeEventListener("change", handleMappingChange);
-      root.removeEventListener("change", handleReviewChange);
-      root.removeEventListener("date-change", handleReviewDateChange);
-      root.removeEventListener("vendor-selected", handleReviewSelection);
-      root.removeEventListener("person-selected", handleReviewSelection);
-      root.removeEventListener("category-selected", handleReviewSelection);
-      root.removeEventListener("click", handleAction);
-      root.removeEventListener("click", handleFilter);
-      root.removeEventListener("click", handleWizardNavigation);
+      mappingForm.removeEventListener("change", onMappingChange);
+      root.removeEventListener("change", onReviewChange);
+      root.removeEventListener("date-change", onReviewDateChange);
+      root.removeEventListener("vendor-selected", onReviewSelection);
+      root.removeEventListener("person-selected", onReviewSelection);
+      root.removeEventListener("category-selected", onReviewSelection);
+      root.removeEventListener("click", onAction);
+      root.removeEventListener("click", onFilter);
+      root.removeEventListener("click", onWizardNavigation);
       window.removeEventListener(
         "budget:import-profiles-changed",
         refreshProfiles,
       );
-      window.AppRouter.setNavigationGuard(null);
+      appRouter().setNavigationGuard(null);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }
 
-  function unmount() {
+  /** Removes all listeners and navigation guards owned by the import workflow. */
+  function unmount(): void {
     cleanup?.();
     cleanup = null;
   }
-  window.ImportRoute = { mount, unmount };
-})();
+
+/** Hosts the complete CSV import workflow as a routed web component. */
+export class ImportScreen extends HTMLElement {
+  /** Mounts the import workflow when the router connects the screen. */
+  connectedCallback(): void {
+    if (this.dataset.initialized) return;
+    this.dataset.initialized = "true";
+    this.classList.add("screen", "import-screen");
+    this.dataset.screen = "import";
+    mount(this);
+  }
+
+  /** Unmounts the import workflow when the router removes the screen. */
+  disconnectedCallback(): void {
+    unmount();
+  }
+}
+
+if (!customElements.get("import-screen")) customElements.define("import-screen", ImportScreen);
+registerLegacyRouteAdapter("ImportRoute");

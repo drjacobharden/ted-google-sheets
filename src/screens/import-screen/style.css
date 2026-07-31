@@ -1,4 +1,4 @@
-.import-screen { display: grid; min-width: 0; gap: 20px; }
+import-screen { display: grid; min-width: 0; gap: 20px; }
 .import-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .import-heading h1 { margin: 0; font-size: clamp(28px, 3vw, 42px); }
 .import-heading p { margin: 6px 0 0; color: var(--muted); }
