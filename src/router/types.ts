@@ -1,5 +1,7 @@
 // src/router/router-types.ts
 
+import { AppAPIs } from "../api/api";
+
 export type RouteName =
   | "dashboard"
   | "transactions"
@@ -20,6 +22,7 @@ export type RouteParams = Record<string, string>;
 export interface RouteContext {
   route: RouteName;
   params: RouteParams;
+  api: AppAPIs;
 }
 
 export interface RouteModule {
@@ -49,7 +52,7 @@ export type RouterConfig = Record<
   {
     section: string;
     template: string;
-    script: string;
-    module: () => RouteModule;
+    script?: string;
+    module?: () => RouteModule;
   }
 >;
