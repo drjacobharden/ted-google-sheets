@@ -97,6 +97,17 @@
   --secondary-button-hover: hsl(240, 20%, 93%);
   --secondary-button-active: hsl(240, 20%, 90%);
 
+  /* 
+  
+  The color of active tabs in the tables
+
+  */
+
+  --surface-base: hsl(240, 8%, 100%);
+  --surface-highlight: hsl(240, 8%, 95%);
+  --surface-highlight-subtle: hsl(240, 8%, 98%);
+  --surface-highlight-strong: hsl(240, 8%, 90%);
+
   /* Available fonts for text */
   font-family:
     Inter,
