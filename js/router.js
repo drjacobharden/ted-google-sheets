@@ -38,32 +38,22 @@
   const routeConfig = {
     dashboard: {
       template: "route-dashboard",
-      script: "js/routes/dashboard.js",
-      module: () => window.DashboardRoute,
     },
 
     categories: {
       template: "route-categories",
-      script: "js/routes/categories.js",
-      module: () => window.CategoryRoute,
     },
 
     vendors: {
       template: "route-vendors",
-      script: "js/routes/vendors.js",
-      module: () => window.VendorRoute,
     },
 
     people: {
       template: "route-people",
-      script: "js/routes/people.js",
-      module: () => window.PeopleRoute,
     },
 
     import: {
       template: "route-import",
-      script: "js/routes/import.js",
-      module: () => window.ImportRoute,
     },
 
     transactions: {
@@ -74,38 +64,30 @@
 
     "entity-detail": {
       template: "route-entity-detail",
-      script: "js/routes/entity-detail.js",
-      module: () => window.EntityRoute,
     },
 
     "entity-archive": {
       template: "route-entity-archive",
-      script: "js/routes/entity-archive.js",
-      module: () => window.EntityArchiveRoute,
     },
 
     settings: {
       template: "route-settings",
-      script: "js/routes/settings.js",
-      module: () => window.SettingsRoute,
     },
 
     "investment-overview": {
       template: "route-investment-overview",
-      script: "js/routes/investment-overview.js",
-      module: () => window.InvestmentOverviewRoute,
     },
 
     "investment-accounts": {
       template: "route-investment-accounts",
-      script: "js/routes/investment-accounts.js",
-      module: () => window.InvestmentAccountsRoute,
     },
 
     "investment-account-detail": {
       template: "route-investment-account-detail",
-      script: "js/routes/investment-account-detail.js",
-      module: () => window.InvestmentAccountDetailRoute,
+    },
+
+    sync: {
+      template: "route-sync",
     },
   };
 
