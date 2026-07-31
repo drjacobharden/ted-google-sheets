@@ -5,7 +5,7 @@
     "build": "bun run build.ts",
     "types": "bun x tsc --watch --noEmit",
     "dev": "bun run build & bun run types",
-    "css": "cat src/main.css src/components/**/*.css src/templates/**/*.css > dist/bundle.css"
+    "css": "cat src/main.css src/components/**/*.css src/elements/**/*.css src/screens/**/*.css > dist/bundle.css"
   },
   "module": "index.ts",
   "type": "module",
