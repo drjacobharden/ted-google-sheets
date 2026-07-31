@@ -36,29 +36,63 @@ p strong {
   font-weight: 500;
 }
 
-.workspace {
+/* 
+
+APP HIERARCHY
+- .app-shell is the outer grid which separates the nav bar and the workspace
+- .route-outlet is the main content area on the right side where the routes get rendered
+- .screen is the wrapper around individual screens
+- .content is the scrollable area for a screen. Any non-scrollable content needs to go above or below.
+
+*/
+
+.app-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--sidebar-background);
+}
+
+#route-outlet {
   position: relative;
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   margin: 0;
-  flex-direction: column;
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
 
-.content {
-  min-height: 0;
+.screen {
+  display: flex;
+  flex-direction: column;
   flex: 1;
-  padding: 0px 36px 34px;
+  min-height: 0;
+  max-width: none;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 
-.screen {
-  width: 100%;
-  max-width: none;
+.push-right {
+  margin-left: auto;
+}
+
+.push-left {
+  margin-right: auto;
 }
