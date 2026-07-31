@@ -2,7 +2,7 @@ breadcrumbs-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr);
-  padding: 12px 28px;
+  padding: 12px 32px;
   width: 100%;
   border-bottom: 1px solid var(--border);
 }
