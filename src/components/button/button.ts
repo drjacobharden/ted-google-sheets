@@ -1,6 +1,8 @@
 import { getIcon, IconKeys } from "../../icons";
 
 export class CustomButton extends HTMLElement {
+  #label!: HTMLElement;
+
   connectedCallback(): void {
     this.setAttribute("role", "button");
     this.classList.add("custom-button");
@@ -14,6 +16,7 @@ export class CustomButton extends HTMLElement {
       const span = document.createElement("span");
       span.textContent = label;
       span.setAttribute("class", "custom-button-label");
+      this.#label = span;
       this.append(span);
     }
 
@@ -28,6 +31,10 @@ export class CustomButton extends HTMLElement {
       icon.setAttribute("class", "custom-button-icon");
       this.append(icon);
     }
+  }
+
+  set label(value: string) {
+    this.#label.textContent = value;
   }
 }
 
