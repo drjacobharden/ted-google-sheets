@@ -1,0 +1,17 @@
+<div class="page-heading">
+  <p class="eyebrow">Household overview</p>
+  <h1>Dashboard</h1>
+  <p class="heading-copy">Budget surplus and paycheck investing without double-counting manual transfers.</p>
+</div>
+<date-range-picker preset="month"></date-range-picker>
+<div class="summary-grid dashboard-screen__summary" id="dashboard-summary" aria-label="Savings summary"></div>
+<div class="dashboard-screen__layout">
+  <section class="ledger-card dashboard-screen__chart-card">
+    <div class="table-header"><div><h2>Investment balance</h2><p>Latest reported balances over time</p></div></div>
+    <div id="dashboard-trend" class="dashboard-screen__chart"></div>
+  </section>
+  <section class="ledger-card dashboard-screen__history-card">
+    <div class="table-header"><div><h2>Savings breakdown</h2><p>Manual transfers are shown but not added twice.</p></div></div>
+    <div id="dashboard-breakdown" class="dashboard-screen__breakdown"></div>
+  </section>
+</div>
