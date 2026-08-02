@@ -2,8 +2,16 @@ import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction } from "../../api/budget-api";
 import { Breadcrumbs } from "../../components/breadcrumbs/breadcrumbs";
 import { CustomButton } from "../../components/button/button";
+import { Checkbox } from "../../components/checkbox/checkbox";
+import {
+  DatePicker,
+  DatePickerStep,
+  DateRangeChangedEvent,
+} from "../../components/date-range-picker/date-range-picker";
+import { DateRange, DateUtils } from "../../utilities/date-utilities";
 import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { appRouter, budgetUI } from "../../utilities/legacy-runtime";
+import { money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -13,17 +21,22 @@ type CategoryScreenTabs = "expense" | "income" | "archived";
 
 /** Displays and manages the expense-category screen. */
 export class CategoryScreen extends HTMLElement implements EventListenerObject {
-  // #form!: HTMLFormElement;
   #list!: HTMLElement;
-  #count!: HTMLElement;
-  // #formMessage!: HTMLElement;
-  // #nameInput!: HTMLInputElement;
   #breadcrumbs!: Breadcrumbs;
-  #usage = new Map<string, number>();
+  #usage = new Map<string, { count: number; total: number }>();
   #listening = false;
   #tableView: CategoryScreenTabs = "expense";
   #actionRow!: HTMLElement;
   #tableViewButtons!: NodeListOf<CustomButton>;
+  #range: DateRange = DateUtils.defaultRange;
+  #dateRangeStep: DatePickerStep = "year";
+  #datePicker!: DatePicker;
+  #totalCount!: HTMLElement;
+  #totalSum!: HTMLElement;
+  #avgSum!: HTMLElement;
+
+  #selected: string[] = [];
+  #clearSelectionButton!: CustomButton;
 
   /** Initializes the screen and subscribes to UI and budget events. */
   connectedCallback(): void {
@@ -37,15 +50,18 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
     if (this.#listening) return;
     this.#listening = true;
-    // this.#form.addEventListener("submit", this);
     this.#list.addEventListener("click", this);
     this.#list.addEventListener("keydown", this);
     this.#actionRow.addEventListener("click", this);
+    this.#datePicker.addEventListener("date-range-changed", this);
+    this.#clearSelectionButton.addEventListener("click", this);
+
     window.addEventListener("budget:categories-changed", this);
     window.addEventListener("budget:entity-sync-changed", this);
     window.addEventListener("budget:transaction-sync-changed", this);
     window.addEventListener("budget:transaction-saved", this);
     this.#loadUsage();
+    this.#render();
     this.#setBreadcrumbs();
   }
 
@@ -53,10 +69,11 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    // this.#form.removeEventListener("submit", this);
     this.#list.removeEventListener("click", this);
     this.#list.removeEventListener("keydown", this);
     this.#actionRow.removeEventListener("click", this);
+    this.#datePicker.removeEventListener("date-range-changed", this);
+    this.#clearSelectionButton.removeEventListener("click", this);
     window.removeEventListener("budget:categories-changed", this);
     window.removeEventListener("budget:entity-sync-changed", this);
     window.removeEventListener("budget:transaction-sync-changed", this);
@@ -66,22 +83,27 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   /** Routes subscribed events to the appropriate screen behavior. */
   handleEvent(event: Event): void {
     switch (event.type) {
-      // case "submit":
-      //   void this.#handleSubmit(event);
-      //   break;
       case "click":
         this.#handleClick(event);
         break;
+
       case "keydown":
         this.#handleKeydown(event);
         break;
+
+      case "date-range-changed":
+        this.#handleDateRangeChanged(event as CustomEvent);
+        break;
+
       case "budget:categories-changed":
       case "budget:entity-sync-changed":
         this.#render();
         break;
+
       case "budget:transaction-sync-changed":
       case "budget:transaction-saved":
         this.#loadUsage();
+        this.#render();
         break;
     }
   }
@@ -90,17 +112,17 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   #captureElements(): void {
     // this.#form = this.querySelector<HTMLFormElement>("#category-form")!;
     this.#list = this.querySelector<HTMLElement>("#category-list")!;
-    this.#count = this.querySelector<CustomButton>("#category-count")!;
     this.#actionRow = this.querySelector<HTMLElement>(".table-action-row")!;
     this.#tableViewButtons =
       this.querySelectorAll<CustomButton>("[data-table-view]");
-    // this.#formMessage = this.querySelector<HTMLElement>(
-    //   "#category-form-message",
-    // )!;
-    // this.#nameInput = this.#form.elements.namedItem(
-    //   "categoryName",
-    // ) as HTMLInputElement;
+    this.#datePicker = this.querySelector<DatePicker>("date-range-picker-2")!;
     this.#breadcrumbs = this.querySelector<Breadcrumbs>("breadcrumbs-header")!;
+    this.#totalCount = this.querySelector(".total-count")!;
+    this.#totalSum = this.querySelector(".total-sum")!;
+    this.#avgSum = this.querySelector(".avg-sum")!;
+    this.#clearSelectionButton = this.querySelector(
+      '[data-action="clear-selection"]',
+    )!;
   }
 
   /** Sets the breadcrumbs at the top of the page */
@@ -113,27 +135,57 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
   /** Recalculates transaction usage counts before rendering categories. */
   #loadUsage(): void {
-    this.#usage = new Map<string, number>();
-    this.#transactions()
-      .filter((transaction) => transaction.type !== "income")
-      .forEach((transaction) => {
-        const count = this.#usage.get(transaction.categoryId) ?? 0;
-        this.#usage.set(transaction.categoryId, count + 1);
-      });
-    this.#render();
+    this.#usage = new Map<string, { count: number; total: number }>();
+
+    const transactions = this.#transactions();
+
+    for (let i = 0, l = transactions.length; i < l; i++) {
+      const transaction = transactions[i];
+
+      if (!DateUtils.isInRange(transaction.date, this.#range)) {
+        continue;
+      }
+
+      const item = this.#usage.get(transaction.categoryId);
+      const count = (item?.count ?? 0) + 1;
+      const total = (item?.total ?? 0) + transaction.amount;
+
+      this.#usage.set(transaction.categoryId, { count, total });
+    }
+  }
+
+  #updateUsage() {
+    const rows = this.#list.children;
+
+    for (let i = 0, l = rows.length; i < l; i++) {
+      const row = rows[i] as HTMLElement;
+      const countElement = row.querySelector('[data-data="count"]')!;
+      const sumElement = row.querySelector('[data-data="sum"]')!;
+
+      const { count, total } = this.#usage.get(row.dataset.entityId!) ?? {
+        count: 0,
+        total: 0,
+      };
+
+      countElement.textContent = count.toString();
+      sumElement.textContent = money(total);
+    }
+
+    this.#getSum();
   }
 
   /** Returns the current application transaction collection. */
   #transactions(): BudgetTransaction[] {
     return (
-      budgetUI()?.getTransactions() ??
-      APIs.budget.getCachedTransactions() ??
-      []
+      budgetUI()?.getTransactions() ?? APIs.budget.getCachedTransactions() ?? []
     );
   }
 
   /** Renders the current expense categories and their sync state. */
   #render(): void {
+    this.#selected = [];
+    this.#list.toggleAttribute("selection-active", false);
+
     for (let i = 0, l = this.#tableViewButtons.length; i < l; i++) {
       const button = this.#tableViewButtons[i];
 
@@ -145,87 +197,160 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     }
 
     const categories = APIs.budget.listAllCategories();
+    const filtered = categories.filter((item) => item.type === this.#tableView);
+    this.#list.replaceChildren(
+      ...filtered.map((item) => this.#createCategoryRow(item)),
+    );
+    this.#getSum();
+  }
 
-    const filtered = categories.filter((item) => {
-      if (this.#tableView === "archived") {
-        return item.active === false;
+  #getSum() {
+    let totalCount = 0;
+    let totalSum = 0;
+
+    const selection = this.#selected;
+    const rows = this.#list.children;
+    const array = selection.length === 0 ? rows : selection;
+
+    // Loop over all categories
+    if (selection.length === 0) {
+      for (let i = 0, l = rows.length; i < l; i++) {
+        const row = rows[i] as HTMLElement;
+        const id = row.dataset.entityId!;
+        const { count, total } = this.#usage.get(id) ?? {
+          count: 0,
+          total: 0,
+        };
+
+        totalCount += count;
+        totalSum += total;
       }
+    }
 
-      return item.type === this.#tableView;
+    // Loop over just the selected categories
+    else {
+      for (let i = 0, l = selection.length; i < l; i++) {
+        const id = selection[i];
+        const { count, total } = this.#usage.get(id) ?? {
+          count: 0,
+          total: 0,
+        };
+
+        totalCount += count;
+        totalSum += total;
+      }
+    }
+
+    this.#createSumLabels(totalCount, array.length, totalSum);
+  }
+
+  #createSumLabels(
+    transactionCount: number,
+    categoryCount: number,
+    totalSum: number,
+  ) {
+    const range = this.#range;
+    const step = this.#dateRangeStep;
+
+    const transactionLabel =
+      transactionCount === 1 ? "transaction" : "transactions";
+    const categoryLabel = categoryCount === 1 ? "category" : "categories";
+    const dateLabel = DateUtils.formatDateRange(range.start, range.end, {
+      showDays: step === "week",
+      showMonth: step !== "year",
+      monthFormat: "long",
     });
 
-    const label = filtered.length === 1 ? "category" : "categories";
-    this.#count.textContent = `Showing ${filtered.length} ${label}`;
-    this.#list.replaceChildren(
-      ...filtered.map((category) => this.#createCategoryRow(category)),
-    );
+    let countLabel = `Total of ${transactionCount} ${transactionLabel} across ${categoryCount} ${categoryLabel}`;
+
+    if (step === "week") {
+      countLabel += ` from ${dateLabel}`;
+    } else {
+      countLabel += ` during ${dateLabel}`;
+    }
+
+    const sumLabel = money(totalSum);
+
+    this.#totalSum.textContent = sumLabel;
+    this.#totalCount.textContent = countLabel;
+    this.#avgSum.textContent = money(totalSum / transactionCount);
   }
 
   /** Creates one accessible category row without interpolating unsafe markup. */
   #createCategoryRow(category: BudgetEntity): HTMLElement {
-    const transactionCount = this.#usage.get(category.id) ?? 0;
+    const { count, total } = this.#usage.get(category.id) ?? {
+      count: 0,
+      total: 0,
+    };
+
     const row = document.createElement("article");
-    row.className = "category-screen__item";
+    row.className = "table-grid table-row";
     row.dataset.entityKind = "category";
     row.dataset.entityId = category.id;
     row.tabIndex = 0;
     row.setAttribute("role", "button");
     row.setAttribute("aria-label", `View ${category.name} category`);
 
-    const avatar = document.createElement("span");
-    avatar.className = "category-screen__avatar";
-    avatar.ariaHidden = "true";
-    avatar.textContent = category.name.charAt(0).toUpperCase();
+    // Checkbox element to select items
+    const checkbox = document.createElement("check-box");
+    checkbox.className = "col-1";
 
-    // const details = document.createElement("div");
-    // details.className = "category-screen__details";
-    const name = document.createElement("strong");
+    // Name of the category
+    const name = document.createElement("span");
     name.textContent = category.name;
-    const usage = document.createElement("span");
-    usage.textContent = `${transactionCount} ${
-      transactionCount === 1 ? "transaction" : "transactions"
-    }`;
-    // details.append(name, usage);
-    row.append(avatar, name, usage);
+    name.dataset.data = "name";
+    name.classList.add("col-2");
+
+    // Total transaction count for the category in the time range
+    const quantity = document.createElement("span");
+    quantity.dataset.data = "count";
+    quantity.textContent = count.toString();
+    quantity.classList.add("col-4");
+
+    // Total transaction sum for the category in the time range
+    const sum = document.createElement("span");
+    sum.dataset.data = "sum";
+    sum.textContent = money(total);
+    sum.classList.add("col-5");
+
+    // Option button to show popover to delete or edit
+    const optionButton = document.createElement("custom-button");
+    optionButton.classList.add("ghost-button");
+    optionButton.setAttribute("leading-icon", "dotsHorizontal");
+    optionButton.classList.add("option-button");
+    optionButton.classList.add("col-6");
+
+    // Current status of the item: syncing, active, archived
+    const status = document.createElement("span");
+    status.className = "status col-3";
 
     const syncStatus = APIs.budget.getEntitySyncStatus("category", category.id);
-    if (syncStatus) row.append(this.#createSyncControls(category, syncStatus));
-    return row;
-  }
 
-  /** Creates retry and removal controls for a category awaiting synchronization. */
-  #createSyncControls(
-    category: BudgetEntity,
-    syncStatus: NonNullable<ReturnType<typeof APIs.budget.getEntitySyncStatus>>,
-  ): HTMLElement {
-    const controls = document.createElement("div");
-    controls.className = `category-screen__sync-state ${syncStatus.status}`;
-    const label = document.createElement("span");
-    label.textContent =
-      syncStatus.status === "failed" ? "Needs attention" : "Pending";
-    controls.append(label);
-
-    if (syncStatus.status === "failed") {
-      controls.append(
-        this.#createSyncButton("retry", "Retry", category.id),
-        this.#createSyncButton("remove", "Remove", category.id),
-      );
+    if (syncStatus) {
+      status.textContent = "Syncing";
+      status.setAttribute("status", "syncing");
+    } else if (!category.active) {
+      status.textContent = "Archived";
+      status.setAttribute("status", "archived");
+    } else {
+      status.textContent = "Active";
+      status.setAttribute("status", "active");
     }
-    return controls;
-  }
 
-  /** Creates a typed category synchronization action button. */
-  #createSyncButton(
-    action: "retry" | "remove",
-    label: string,
-    categoryId: string,
-  ): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.entityAction = action;
-    button.dataset.entityId = categoryId;
-    button.textContent = label;
-    return button;
+    const selectionBackdrop = document.createElement("div");
+    selectionBackdrop.className = "selection-backdrop";
+
+    row.append(
+      selectionBackdrop,
+      checkbox,
+      name,
+      status,
+      quantity,
+      sum,
+      optionButton,
+    );
+
+    return row;
   }
 
   /** Validates and submits a new expense category. */
@@ -256,6 +381,53 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   //   }
   // }
 
+  #handleSelection(selectedRow: HTMLElement | null) {
+    // Clear the selection
+    if (selectedRow === null) {
+      this.#selected = [];
+    }
+
+    // Select or deselect the row
+    else {
+      const id = selectedRow.dataset.entityId!;
+
+      if (this.#selected.includes(id)) {
+        this.#selected = this.#selected.filter((item) => item !== id);
+      } else {
+        this.#selected.push(id);
+      }
+    }
+
+    const isEmpty = this.#selected.length === 0;
+
+    for (let i = 0, l = this.#list.children.length; i < l; i++) {
+      const row = this.#list.children[i] as HTMLElement;
+      const rowId = row.dataset.entityId!;
+      const checkbox = row.querySelector<Checkbox>("check-box")!;
+
+      // No selection made
+      if (isEmpty) {
+        row.setAttribute("selection-state", "empty");
+        checkbox.isOn = false;
+        this.#clearSelectionButton.toggleAttribute("hidden", true);
+      }
+      // Mark item selected
+      else if (this.#selected.includes(rowId)) {
+        row.setAttribute("selection-state", "selected");
+        checkbox.isOn = true;
+        this.#clearSelectionButton.toggleAttribute("hidden", false);
+      }
+      // Mark item deselected
+      else {
+        row.setAttribute("selection-state", "unselected");
+        checkbox.isOn = false;
+        this.#clearSelectionButton.toggleAttribute("hidden", false);
+      }
+    }
+
+    this.#getSum();
+  }
+
   /** Handles category navigation and synchronization button actions. */
   #handleClick(event: Event): void {
     if (!(event.target instanceof Element)) return;
@@ -271,13 +443,33 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     const actionButton = event.target.closest<HTMLButtonElement>(
       "[data-entity-action]",
     );
+
     if (actionButton) {
       this.#handleEntityAction(actionButton);
       return;
     }
 
+    const clearButton = event.target.closest<CustomButton>(
+      '[data-action="clear-selection"]',
+    );
+
+    if (clearButton) {
+      this.#handleSelection(null);
+      return;
+    }
+
     const row = event.target.closest<HTMLElement>("[data-entity-id]");
-    if (row?.dataset.entityId) this.#navigateToCategory(row.dataset.entityId);
+    const checkbox = event.target.closest<Checkbox>("check-box");
+
+    if (row && checkbox) {
+      checkbox.isOn = !checkbox.isOn;
+      this.#handleSelection(row);
+      return;
+    }
+
+    if (row?.dataset.entityId) {
+      this.#navigateToCategory(row.dataset.entityId);
+    }
   }
 
   /** Handles keyboard activation for category rows. */
@@ -317,6 +509,13 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     const view = target.dataset.tableView as CategoryScreenTabs;
     this.#tableView = view;
     this.#render();
+  }
+
+  #handleDateRangeChanged(event: DateRangeChangedEvent) {
+    this.#range = event.detail.range;
+    this.#dateRangeStep = event.detail.step;
+    this.#loadUsage();
+    this.#updateUsage();
   }
 
   /** Navigates to the selected category's entity detail route. */
