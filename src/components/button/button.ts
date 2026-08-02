@@ -5,7 +5,6 @@ export class CustomButton extends HTMLElement {
 
   connectedCallback(): void {
     this.setAttribute("role", "button");
-    this.classList.add("custom-button");
     this.style.cursor = "pointer";
 
     const label = this.getAttribute("label");

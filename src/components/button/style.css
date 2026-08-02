@@ -9,6 +9,10 @@
   justify-content: center;
   gap: 8px;
   border: 0;
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE 10 and IE 11 */
 }
 
 .primary-button {
@@ -43,6 +47,10 @@
 .ghost-button:hover,
 .secondary-button:active {
   background-color: var(--secondary-button-active);
+}
+
+.secondary-button[active] {
+  background-color: var(--surface-highlight);
 }
 
 .custom-button-icon {
