@@ -71,26 +71,6 @@ as much when opening a drawer for editing.
 }
 
 /* 
-Wrapper around titles for tables.
-    - Uses a flex display with a row based layout
-    - Has a minimum height of 82 pixels but can grow larger
-    - Items are aligned horizontally along their midline
-    - Items are laid out at the edges of the container with equal space between them
-    - Items are separated by a 20 pixel gap
-    - There are 15 pixels of vertical padding and 20 pixels of horizontal padding
-    - There is 1 pixel wide bottom border
-*/
-.table-header {
-  display: flex;
-  min-height: 82px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 15px 20px;
-  border-bottom: 1px solid var(--border);
-}
-
-/* 
 The title for the table
     - Uses a 17 pixel font size with the standard weight
     - Letter spacing is slightly compressed
