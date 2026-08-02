@@ -1,0 +1,29 @@
+date-range-picker-2 {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+date-range-picker-2 .range-control {
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+}
+
+.range-control .control-left {
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+}
+
+.range-control .control-right {
+  border-top-left-radius: 0px;
+  border-bottom-left-radius: 0px;
+}
+
+.range-control .control-display {
+  border-radius: 0px;
+  border-left-width: 0;
+  border-right-width: 0;
+  min-width: 150px;
+  pointer-events: none;
+}

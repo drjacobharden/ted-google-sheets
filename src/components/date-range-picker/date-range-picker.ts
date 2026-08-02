@@ -1,38 +1,163 @@
-import DateRangePickerTempString from "./template.html" with { type: "text" };
+import DatePickerTempString from "./template.html" with { type: "text" };
+import { DateRange, DateUtils } from "../../utilities/date-utilities";
+import { CustomButton } from "../button/button";
 
-const DateRangePickerTemp = document.createElement("template");
-DateRangePickerTemp.innerHTML = DateRangePickerTempString;
+export type DatePickerStep = "week" | "month" | "year";
 
-class DateRangePicker extends HTMLElement {
-  #elementName: HTMLElement | null = null;
+export interface DateRangeChangedEvent extends CustomEvent {
+  detail: {
+    range: DateRange;
+    step: DatePickerStep;
+  };
+}
 
-  static get observedAttributes(): string[] {
-    return [];
-  }
+const DatePickerTemp = document.createElement("template");
+DatePickerTemp.innerHTML = DatePickerTempString;
+
+export class DatePicker extends HTMLElement {
+  #step: DatePickerStep = "year";
+  #range: DateRange = DateUtils.defaultRange;
+
+  #stepButtons!: NodeListOf<CustomButton>;
+  #display!: CustomButton;
+  #nextButton!: CustomButton;
+  #prevButton!: CustomButton;
 
   connectedCallback(): void {
-    const clone = DateRangePickerTemp.content.cloneNode(
-      true,
-    ) as DocumentFragment;
-    const container = clone.querySelector("date-range-picker") as HTMLElement;
-  }
+    const clone = DatePickerTemp.content.cloneNode(true) as DocumentFragment;
+    this.append(clone);
 
-  attributeChangedCallback(
-    name: string,
-    oldValue: string | null,
-    newValue: string | null,
-  ): void {
-    if (oldValue === newValue) return;
+    this.#display = this.querySelector<CustomButton>(".control-display")!;
+    this.#nextButton = this.querySelector<CustomButton>(
+      '[data-date-action="next"]',
+    )!;
+    this.#prevButton = this.querySelector<CustomButton>(
+      '[data-date-action="prev"]',
+    )!;
+    this.#stepButtons =
+      this.querySelectorAll<CustomButton>("[data-range-step]");
+
+    this.#handleStepChange();
+
+    this.addEventListener("click", this);
   }
 
   handleEvent(event: Event) {
     switch (event.type) {
+      case "click":
+        this.#handleClick(event);
+
       default:
         break;
     }
   }
 
-  disconnectedCallback() {}
+  #handleClick(event: Event) {
+    const target = event.target as CustomButton;
+
+    const actionButton = target.closest("[data-date-action]") as HTMLElement;
+    if (actionButton) {
+      event.preventDefault();
+      const amount = actionButton.dataset.dateAction === "prev" ? -1 : 1;
+      this.#handleStep(amount);
+      return;
+    }
+
+    const stepButton = target.closest("[data-range-step]") as HTMLElement;
+    if (stepButton) {
+      event.preventDefault();
+      const step = stepButton.dataset.rangeStep as DatePickerStep;
+      this.#step = step;
+      this.#handleStepChange();
+      return;
+    }
+  }
+
+  #handleStepChange() {
+    const current = this.#range.start;
+    const step = this.#step;
+
+    const util = {
+      week: { start: DateUtils.startOfWeek, end: DateUtils.endOfWeek },
+      month: { start: DateUtils.startOfMonth, end: DateUtils.endOfMonth },
+      year: { start: DateUtils.startOfYear, end: DateUtils.endOfYear },
+    }[step];
+
+    this.#range = {
+      start: util.start(current),
+      end: util.end(current),
+    };
+
+    this.#formatDisplay();
+    this.#emitRangeChangeEvent();
+
+    for (let i = 0, l = this.#stepButtons.length; i < l; i++) {
+      const item = this.#stepButtons[i];
+
+      if (step === item.dataset.rangeStep) {
+        item.toggleAttribute("active", true);
+      } else {
+        item.toggleAttribute("active", false);
+      }
+    }
+  }
+
+  #handleStep(amount: 1 | -1) {
+    const range = this.#range;
+    const step = this.#step;
+
+    const util = {
+      week: (d: Date): DateRange => {
+        const _date = DateUtils.addWeeks(d, amount);
+        return {
+          start: DateUtils.startOfWeek(_date),
+          end: DateUtils.endOfWeek(_date),
+        };
+      },
+      month: (d: Date): DateRange => {
+        const _date = DateUtils.addMonths(d, amount);
+        return {
+          start: DateUtils.startOfMonth(_date),
+          end: DateUtils.endOfMonth(_date),
+        };
+      },
+      year: (d: Date): DateRange => {
+        const _date = DateUtils.addYears(d, amount);
+        return {
+          start: DateUtils.startOfYear(_date),
+          end: DateUtils.endOfYear(_date),
+        };
+      },
+    }[step];
+
+    this.#range = util(range.start);
+    this.#formatDisplay();
+    this.#emitRangeChangeEvent();
+  }
+
+  #formatDisplay() {
+    this.#display.label = DateUtils.formatDateRange(
+      this.#range.start,
+      this.#range.end,
+      {
+        showDays: this.#step === "week",
+        showMonth: this.#step !== "year",
+        monthFormat: "short",
+      },
+    );
+  }
+
+  #emitRangeChangeEvent() {
+    this.dispatchEvent(
+      new CustomEvent("date-range-changed", {
+        detail: { range: this.#range, step: this.#step },
+      }),
+    );
+  }
+
+  disconnectedCallback() {
+    this.removeEventListener("click", this);
+  }
 }
 
-customElements.define("date-range-picker", DateRangePicker);
+customElements.define("date-range-picker-2", DatePicker);
