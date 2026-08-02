@@ -11,9 +11,13 @@ import settingsIcon from "./settings.html" with { type: "text" };
 import cartIcon from "./cart.html" with { type: "text" };
 import sidebarIcon from "./sidebar.html" with { type: "text" };
 import chevronRightIcon from "./chevron-right.html" with { type: "text" };
+import chevronLeftIcon from "./chevron-left.html" with { type: "text" };
 import filterIcon from "./filter.html" with { type: "text" };
 import searchIcon from "./search.html" with { type: "text" };
 import sortIcon from "./sort.html" with { type: "text" };
+import checkmarkIcon from "./checkmark.html" with { type: "text" };
+import dotsHorizontalIcon from "./dots-horizontal.html" with { type: "text" };
+import dotsVerticalIcon from "./dots-vertical.html" with { type: "text" };
 
 export type IconKeys = keyof typeof iconStrings;
 
@@ -31,9 +35,13 @@ const iconStrings = {
   cart: cartIcon,
   sidebar: sidebarIcon,
   chevronRight: chevronRightIcon,
+  chevronLeft: chevronLeftIcon,
   filter: filterIcon,
   search: searchIcon,
   sort: sortIcon,
+  checkmark: checkmarkIcon,
+  dotsHorizontal: dotsHorizontalIcon,
+  dotsVertical: dotsVerticalIcon,
 };
 
 const iconTemplateCache = new Map();
