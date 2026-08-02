@@ -24,7 +24,11 @@
 
     let query = "";
     let type = "all";
-    let activeRange = rangePicker?.value || { start: "", end: "", preset: "month" };
+    let activeRange = rangePicker?.value || {
+      start: "",
+      end: "",
+      preset: "month",
+    };
     let visibleLimit = PAGE_SIZE;
 
     function amountFor(transaction) {
@@ -63,6 +67,7 @@
       return transactions
         .filter((item) => {
           const { start, end } = activeRange;
+
           return (!start || item.date >= start) && (!end || item.date <= end);
         })
         .filter((item) => type === "all" || item.type === type)
@@ -91,11 +96,15 @@
     function render() {
       const items = filteredTransactions();
       const total = items.length;
-      visibleLimit = Math.min(Math.max(visibleLimit, PAGE_SIZE), Math.max(total, PAGE_SIZE));
+      visibleLimit = Math.min(
+        Math.max(visibleLimit, PAGE_SIZE),
+        Math.max(total, PAGE_SIZE),
+      );
       const visible = items.slice(0, visibleLimit);
-      transactionCount.textContent = visible.length < total
-        ? `Showing ${visible.length} of ${total} transactions`
-        : `${total} ${total === 1 ? "transaction" : "transactions"}`;
+      transactionCount.textContent =
+        visible.length < total
+          ? `Showing ${visible.length} of ${total} transactions`
+          : `${total} ${total === 1 ? "transaction" : "transactions"}`;
 
       if (!items.length) {
         tableWrap.hidden = true;
