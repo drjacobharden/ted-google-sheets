@@ -1,5 +1,7 @@
 import "./api/api.ts";
 
+import "./utilities/date-utilities.ts";
+
 import "./components/page-title/page-title.ts";
 import "./components/button/button.ts";
 import "./components/navigation-button/navigation-button.ts";
@@ -8,6 +10,8 @@ import "./components/breadcrumbs/breadcrumbs.ts";
 import "./components/refresh-indicator/refresh-indicator.ts";
 import "./components/splash-indicator/splash-indicator.ts";
 import "./components/refresh-button/refresh-button.ts";
+import "./components/checkbox/checkbox.ts";
+import "./components/date-range-picker/date-range-picker.ts";
 
 import "./elements/navigation-bar/navigation-bar.ts";
 import "./elements/overlay-manager/overlay-manager.ts";

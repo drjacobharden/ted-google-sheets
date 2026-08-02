@@ -89,10 +89,29 @@ APP HIERARCHY
   scrollbar-gutter: stable;
 }
 
+.horizontal-center {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
 .push-right {
   margin-left: auto;
 }
 
 .push-left {
   margin-right: auto;
+}
+
+.vertical-divider {
+  height: auto;
+  border-right: 1px solid var(--border);
+}
+
+.table-accessory-row {
+  display: flex;
+  padding: 8px var(--horizontal-screen-padding);
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  gap: 8px;
 }
