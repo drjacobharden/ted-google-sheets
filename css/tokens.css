@@ -75,6 +75,25 @@
   --text-small: 12px;
   --text-paragraph: 15px;
 
+  /* Spacing around and between elements */
+  --horizontal-screen-padding: 32px;
+  --gap-xsmall: 2px;
+  --gap-small: 4px;
+  --gap-medium: 8px;
+
+  /* Semantic colors */
+  --success: hsl(120, 30%, 95%);
+  --success-dark: hsl(120, 20%, 30%);
+
+  --archived: hsl(50, 50%, 80%);
+  --archived-dark: hsl(50, 90%, 40%);
+
+  --syncing: hsl(260, 30%, 80%);
+  --syncing-dark: hsl(260, 20%, 40%);
+
+  --row-selection-highlight: hsl(260, 50%, 95%);
+  --row-selection-border: hsl(260, 50%, 50%);
+
   /* 
 
   The color of buttons in the interface.
