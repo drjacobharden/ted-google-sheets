@@ -8,6 +8,8 @@ import {
   DatePickerStep,
   DateRangeChangedEvent,
 } from "../../components/date-range-picker/date-range-picker";
+import { SelectorMenu } from "../../components/selector-menu/selector-menu";
+import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
 import { DateRange, DateUtils } from "../../utilities/date-utilities";
 import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { appRouter, budgetUI } from "../../utilities/legacy-runtime";
@@ -21,22 +23,34 @@ type CategoryScreenTabs = "expense" | "income" | "archived";
 
 /** Displays and manages the expense-category screen. */
 export class CategoryScreen extends HTMLElement implements EventListenerObject {
-  #list!: HTMLElement;
-  #breadcrumbs!: Breadcrumbs;
-  #usage = new Map<string, { count: number; total: number }>();
   #listening = false;
+  #usage = new Map<string, { count: number; total: number }>();
+  #range: DateRange = DateUtils.defaultRange;
+  #selected: string[] = [];
   #tableView: CategoryScreenTabs = "expense";
+
+  // Header
+  #breadcrumbs!: Breadcrumbs;
+  #addCategoryButton!: CustomButton;
+
+  // Table action row
   #actionRow!: HTMLElement;
   #tableViewButtons!: NodeListOf<CustomButton>;
-  #range: DateRange = DateUtils.defaultRange;
   #dateRangeStep: DatePickerStep = "year";
   #datePicker!: DatePicker;
+
+  // Table
+  #list!: HTMLElement;
+
+  // Bottom row
+  #clearSelectionButton!: CustomButton;
   #totalCount!: HTMLElement;
   #totalSum!: HTMLElement;
   #avgSum!: HTMLElement;
 
-  #selected: string[] = [];
-  #clearSelectionButton!: CustomButton;
+  // Overlay
+  #overlayManager!: OverlayManager;
+  #selectorMenu!: SelectorMenu;
 
   /** Initializes the screen and subscribes to UI and budget events. */
   connectedCallback(): void {
@@ -55,6 +69,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#actionRow.addEventListener("click", this);
     this.#datePicker.addEventListener("date-range-changed", this);
     this.#clearSelectionButton.addEventListener("click", this);
+    this.#breadcrumbs.addEventListener("click", this);
 
     window.addEventListener("budget:categories-changed", this);
     window.addEventListener("budget:entity-sync-changed", this);
@@ -74,6 +89,8 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#actionRow.removeEventListener("click", this);
     this.#datePicker.removeEventListener("date-range-changed", this);
     this.#clearSelectionButton.removeEventListener("click", this);
+    this.#breadcrumbs.removeEventListener("click", this);
+
     window.removeEventListener("budget:categories-changed", this);
     window.removeEventListener("budget:entity-sync-changed", this);
     window.removeEventListener("budget:transaction-sync-changed", this);
@@ -123,6 +140,8 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#clearSelectionButton = this.querySelector(
       '[data-action="clear-selection"]',
     )!;
+    this.#overlayManager = document.querySelector("overlay-manager")!;
+    this.#selectorMenu = document.querySelector("selector-menu")!;
   }
 
   /** Sets the breadcrumbs at the top of the page */
@@ -469,6 +488,20 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
     if (row?.dataset.entityId) {
       this.#navigateToCategory(row.dataset.entityId);
+      return;
+    }
+
+    const addButton = event.target.closest<CustomButton>(
+      '[data-action="new-category"]',
+    );
+
+    if (addButton) {
+      this.#overlayManager.showEntityForm(addButton, "category", {
+        side: "bottom",
+        align: "end",
+        gap: 8,
+        offset: 16,
+      });
     }
   }
 
