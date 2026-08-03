@@ -1,4 +1,4 @@
-import { OverlayManager } from "../../templates/overlay-manager/overlay-manager";
+import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
 import { CustomButton } from "../button/button";
 
 import RefreshButtonTempString from "./template.html" with { type: "text" };
@@ -6,7 +6,7 @@ import RefreshButtonTempString from "./template.html" with { type: "text" };
 const RefreshButtonTemp = document.createElement("template");
 RefreshButtonTemp.innerHTML = RefreshButtonTempString;
 
-class RefreshButton extends CustomButton {
+export class RefreshButton extends CustomButton {
   #overlayManager!: OverlayManager;
   #button!: HTMLElement;
 
