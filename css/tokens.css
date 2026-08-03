@@ -63,6 +63,7 @@
 
   /* Shadows to provide a sense of depth and elevation */
   --shadow: 0 24px 60px rgba(38, 44, 36, 0.08);
+  --shadow-prominent: 0 8px 20px hsl(0, 0%, 0%, 0.2);
 
   /* Roundness of corners on inputs and boxes */
   --radius-large: 24px;
@@ -93,6 +94,9 @@
 
   --row-selection-highlight: hsl(260, 50%, 95%);
   --row-selection-border: hsl(260, 50%, 50%);
+
+  --error: hsl(0, 70%, 90%);
+  --error-dark: hsl(0, 40%, 30%);
 
   /* 
 
