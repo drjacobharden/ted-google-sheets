@@ -18,6 +18,8 @@ import sortIcon from "./sort.html" with { type: "text" };
 import checkmarkIcon from "./checkmark.html" with { type: "text" };
 import dotsHorizontalIcon from "./dots-horizontal.html" with { type: "text" };
 import dotsVerticalIcon from "./dots-vertical.html" with { type: "text" };
+import closeIcon from "./close.html" with { type: "text" };
+import chevronDownIcon from "./chevron-down.html" with { type: "text" };
 
 export type IconKeys = keyof typeof iconStrings;
 
@@ -36,12 +38,14 @@ const iconStrings = {
   sidebar: sidebarIcon,
   chevronRight: chevronRightIcon,
   chevronLeft: chevronLeftIcon,
+  chevronDown: chevronDownIcon,
   filter: filterIcon,
   search: searchIcon,
   sort: sortIcon,
   checkmark: checkmarkIcon,
   dotsHorizontal: dotsHorizontalIcon,
   dotsVertical: dotsVerticalIcon,
+  close: closeIcon,
 };
 
 const iconTemplateCache = new Map();
