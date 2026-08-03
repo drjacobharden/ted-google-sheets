@@ -12,8 +12,10 @@ import "./components/splash-indicator/splash-indicator.ts";
 import "./components/refresh-button/refresh-button.ts";
 import "./components/checkbox/checkbox.ts";
 import "./components/date-range-picker/date-range-picker.ts";
+import "./components/selector-menu/selector-menu.ts";
 
 import "./elements/navigation-bar/navigation-bar.ts";
+import "./elements/new-entity-popover/new-entity-popover.ts";
 import "./elements/overlay-manager/overlay-manager.ts";
 
 import "./screens/category-screen/category-screen.ts";

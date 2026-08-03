@@ -1,0 +1,42 @@
+<div class="horizontal popover-icon-header">
+  <div id="new-entity-icon"></div>
+  <custom-button
+    class="ghost-button square"
+    leading-icon="close"
+    data-action="close"
+  ></custom-button>
+</div>
+
+<p id="new-entity-title">Title</p>
+<p id="new-entity-subtitle">a subtitle</p>
+<form>
+  <label for="name" class="form-field-new">
+    <span>Name</span>
+    <input name="name" placeholder="enter name" required type="text" />
+    <span class="input-error" hidden>This category already exists.</span>
+  </label>
+
+  <label for="type" class="form-field-new">
+    <span>Type</span>
+    <custom-button
+      name="type"
+      label="Expense"
+      trailing-icon="chevronDown"
+      class="secondary-button"
+      data-action="open-selector"
+    ></custom-button>
+  </label>
+
+  <div class="horizontal-center action-row">
+    <custom-button
+      label="Cancel"
+      class="secondary-button"
+      data-action="cancel"
+    ></custom-button>
+    <custom-button
+      label="Save"
+      class="primary-button"
+      data-action="save"
+    ></custom-button>
+  </div>
+</form>

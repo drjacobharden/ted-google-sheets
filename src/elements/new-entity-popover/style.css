@@ -1,0 +1,139 @@
+.new-entity-popover {
+  background-color: var(--surface);
+  box-shadow: var(--shadow-prominent);
+  padding: 24px 24px;
+  pointer-events: auto;
+  flex-direction: column;
+  max-width: 400px;
+  margin: 0px;
+  white-space: wrap;
+  border-radius: var(--radius-medium);
+}
+
+.new-entity-popover .popover-icon-header {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.new-entity-popover custom-button[data-action="close"] {
+  margin: -4px -4px 0 0;
+}
+
+.new-entity-popover custom-button[data-action="close"]:hover {
+  background-color: var(--surface-highlight-subtle);
+}
+
+#new-entity-icon {
+  height: 36px;
+  width: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  display: grid;
+  place-items: center;
+}
+
+#new-entity-icon svg {
+  height: 20px;
+  width: 20px;
+  color: var(--text);
+}
+
+#new-entity-title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
+  margin: 0px;
+  margin-bottom: 4px;
+}
+
+#new-entity-subtitle {
+  font-size: 13px;
+  opacity: 0.6;
+  margin: 0px;
+  line-height: 15px;
+  margin-bottom: 12px;
+}
+
+.new-entity-popover .horizontal-center {
+  gap: 8px;
+  padding-left: 20%;
+  margin-top: 40px;
+}
+
+.new-entity-popover .action-row custom-button {
+  flex: 1;
+  height: 40px;
+}
+
+.new-entity-popover form input {
+  font-size: 14px;
+  font-weight: 400;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xsmall);
+  padding: 0px 12px;
+  height: 40px;
+  background-color: var(--surface-highlight-subtle);
+  margin: 0 -2px;
+  width: calc(100% + 4px);
+}
+
+.new-entity-popover form input:focus {
+  background-color: var(--row-selection-highlight);
+  border: 1px solid var(--row-selection-border);
+  outline: none;
+}
+
+.new-entity-popover form input.error {
+  background-color: var(--error);
+  border: 1px solid var(--error-dark);
+  color: var(--error-dark);
+  outline: none;
+}
+
+.input-error {
+  color: var(--error-dark);
+  margin: 4px 0 0;
+}
+
+.new-entity-popover form label span {
+  font-size: 12px;
+}
+
+.new-entity-popover custom-button[data-action="open-selector"] {
+  display: inline-flex;
+  background-color: var(--surface-highlight-subtle);
+  height: 40px;
+  justify-content: space-between;
+  margin: 0 -2px;
+  width: calc(50% + 4px);
+  padding-left: 12px;
+}
+
+.new-entity-popover custom-button[data-action="open-selector"].is-open {
+  background-color: var(--row-selection-highlight);
+  border: 1px solid var(--row-selection-border);
+  outline: none;
+}
+
+.new-entity-popover custom-button[data-action="open-selector"] span {
+  font-size: 14px;
+}
+
+.form-field-new {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.form-field-new > span {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 4px;
+}
+
+new-entity-popover.is-visible .backdrop {
+  display: block;
+  pointer-events: all;
+}

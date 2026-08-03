@@ -12,6 +12,15 @@
   box-sizing: border-box;
 }
 
+button,
+span,
+p,
+h1,
+h2,
+h3 {
+  color: var(--text);
+}
+
 html,
 body {
   height: 100%;
@@ -87,6 +96,20 @@ APP HIERARCHY
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.vertical {
+  display: flex;
+  flex-direction: column;
+}
+
+.horizontal {
+  display: flex;
+  flex-direction: row;
+}
+
+.flex {
+  flex: 1;
 }
 
 .horizontal-center {
