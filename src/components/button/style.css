@@ -20,6 +20,10 @@
   color: var(--inverse-text);
 }
 
+.primary-button span {
+  color: var(--inverse-text);
+}
+
 .ghost-button {
   background-color: transparent;
   color: var(--text);

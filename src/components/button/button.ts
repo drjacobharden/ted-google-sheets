@@ -2,6 +2,8 @@ import { getIcon, IconKeys } from "../../icons";
 
 export class CustomButton extends HTMLElement {
   #label!: HTMLElement;
+  #leadingIcon: HTMLElement | null = null;
+  #trailingIcon: HTMLElement | null = null;
 
   connectedCallback(): void {
     this.setAttribute("role", "button");
@@ -12,28 +14,62 @@ export class CustomButton extends HTMLElement {
     const trailingIcon = this.getAttribute("trailing-icon") as IconKeys;
 
     if (label) {
-      const span = document.createElement("span");
-      span.textContent = label;
-      span.setAttribute("class", "custom-button-label");
-      this.#label = span;
-      this.append(span);
+      this.#createLabel(label);
     }
 
     if (leadingIcon) {
-      const icon = getIcon(leadingIcon);
-      icon.setAttribute("class", "custom-button-icon");
-      this.insertBefore(icon, this.firstChild);
+      this.#createLeadingIcon(leadingIcon);
     }
 
     if (trailingIcon) {
-      const icon = getIcon(leadingIcon);
-      icon.setAttribute("class", "custom-button-icon");
-      this.append(icon);
+      this.#createTrailingIcon(trailingIcon);
     }
   }
 
   set label(value: string) {
-    this.#label.textContent = value;
+    if (this.#label) {
+      this.#label.textContent = value;
+    } else {
+      this.#createLabel(value);
+    }
+  }
+
+  set leadingIcon(value: IconKeys) {
+    if (this.#leadingIcon) {
+      this.#leadingIcon = getIcon(value);
+    } else {
+      this.#createLeadingIcon(value);
+    }
+  }
+
+  set trailingIcon(value: IconKeys) {
+    if (this.#trailingIcon) {
+      this.#trailingIcon = getIcon(value);
+    } else {
+      this.#createTrailingIcon(value);
+    }
+  }
+
+  #createLabel(label: string) {
+    const span = document.createElement("span");
+    span.textContent = label;
+    span.setAttribute("class", "custom-button-label");
+    this.#label = span;
+    this.append(span);
+  }
+
+  #createLeadingIcon(leadingIcon: IconKeys) {
+    const icon = getIcon(leadingIcon);
+    icon.setAttribute("class", "custom-button-icon");
+    this.insertBefore(icon, this.firstChild);
+    this.#leadingIcon = icon;
+  }
+
+  #createTrailingIcon(trailingIcon: IconKeys) {
+    const icon = getIcon(trailingIcon);
+    icon.setAttribute("class", "custom-button-icon");
+    this.append(icon);
+    this.#trailingIcon = icon;
   }
 }
 
