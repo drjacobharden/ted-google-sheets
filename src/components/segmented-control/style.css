@@ -1,0 +1,70 @@
+segmented-control {
+  position: relative;
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  padding: 3px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xsmall);
+  background: var(--surface-highlight-subtle);
+  isolation: isolate;
+}
+
+.segmented-control__list {
+  position: relative;
+  display: flex;
+  width: max-content;
+}
+
+.segmented-control__item {
+  position: relative;
+  z-index: 1;
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: calc(var(--radius-xsmall) - 3px);
+  background: transparent;
+  color: var(--text);
+  font-weight: 450;
+  opacity: 0.55;
+  white-space: nowrap;
+  font-size: 13px;
+  transition: opacity 240ms ease;
+}
+
+.segmented-control__item.is-selected {
+  opacity: 1;
+}
+
+.segmented-control__item:focus-visible {
+  outline: 2px solid var(--primary-button);
+  outline-offset: -2px;
+}
+
+.segmented-control__indicator {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  border-radius: calc(var(--radius-xsmall) - 3px);
+  background: var(--surface);
+  box-shadow: var(--shadow-subtle, 0 1px 3px rgb(0 0 0 / 12%));
+  pointer-events: none;
+  will-change: width, transform;
+}
+
+segmented-control[indicator-ready] .segmented-control__indicator {
+  transition:
+    width 240ms ease,
+    transform 240ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segmented-control__item,
+  segmented-control[indicator-ready] .segmented-control__indicator {
+    transition: none;
+  }
+}
