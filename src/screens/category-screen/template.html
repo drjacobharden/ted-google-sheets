@@ -14,26 +14,35 @@
     class="ghost-button table-view-button"
     label="Expenses"
     data-table-view="expense"
+    data-action="change-tab"
   >
   </custom-button>
   <custom-button
     class="ghost-button table-view-button"
     label="Income"
     data-table-view="income"
+    data-action="change-tab"
   >
   </custom-button>
 
   <date-range-picker-2 class="push-right"></date-range-picker-2>
   <div class="vertical-divider"></div>
-  <custom-button
-    class="secondary-button"
+  <dropdown-menu
+    id="sort-categories-dropdown"
     label="Sort"
-    leading-icon="sort"
-  ></custom-button>
+    icon="sort"
+  ></dropdown-menu>
+  <dropdown-menu
+    id="filter-categories-dropdown"
+    label="Filter"
+    icon="filter"
+  ></dropdown-menu>
+
   <custom-button
     class="secondary-button"
     label="Filter"
     leading-icon="filter"
+    data-action="filter"
   ></custom-button>
 </div>
 

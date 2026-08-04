@@ -179,18 +179,21 @@ category-screen .table-row:focus-visible {
   grid-column-end: 3;
 }
 
+category-screen .status {
+  border-radius: 999px;
+  height: 20px;
+  font-size: 12px;
+  margin-left: auto;
+}
+
 category-screen .status[status="syncing"] {
   background-color: var(--syncing);
   color: var(--syncing-dark);
 }
 
 category-screen .status[status="active"] {
-  margin-left: auto;
   background-color: var(--success);
   color: var(--success-dark);
-  border-radius: 999px;
-  height: 20px;
-  font-size: 12px;
 }
 
 category-screen .status[status="archived"] {
@@ -239,43 +242,6 @@ category-screen .table-footer div .sum-label {
 /* Container around the header extending the grid row */
 
 /* Individual rows inside the table */
-
-.category-screen__sync-state {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 5px;
-}
-
-.category-screen__sync-state span {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: #eef3eb;
-  color: var(--accent-dark);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.category-screen__sync-state.failed span {
-  background: #fceceb;
-  color: var(--danger);
-}
-
-.category-screen__sync-state button {
-  padding: 4px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.category-screen__sync-state button:hover {
-  color: var(--text);
-}
 
 .table-view-button {
   border: 1px solid transparent;

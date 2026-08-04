@@ -8,18 +8,27 @@ import {
   DatePickerStep,
   DateRangeChangedEvent,
 } from "../../components/date-range-picker/date-range-picker";
-import { SelectorMenu } from "../../components/selector-menu/selector-menu";
+import { DropdownMenu } from "../../components/dropdown-menu/dropdown-menu";
 import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
 import { DateRange, DateUtils } from "../../utilities/date-utilities";
 import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { appRouter, budgetUI } from "../../utilities/legacy-runtime";
 import { money } from "../../utilities/view-formatters";
+import {
+  sortCategoryScreen,
+  SortedEntityArrayFxn,
+} from "./sort-category-screen";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
-
 type CategoryScreenTabs = "expense" | "income" | "archived";
+
+interface ActionButton extends HTMLButtonElement {
+  dataset: {
+    action: "filter" | "change-tab" | "clear-selection" | "new-category";
+  };
+}
 
 /** Displays and manages the expense-category screen. */
 export class CategoryScreen extends HTMLElement implements EventListenerObject {
@@ -28,6 +37,8 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   #range: DateRange = DateUtils.defaultRange;
   #selected: string[] = [];
   #tableView: CategoryScreenTabs = "expense";
+  #sortKey = "name";
+  #sortFxn: SortedEntityArrayFxn = (data) => data;
 
   // Header
   #breadcrumbs!: Breadcrumbs;
@@ -38,6 +49,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   #tableViewButtons!: NodeListOf<CustomButton>;
   #dateRangeStep: DatePickerStep = "year";
   #datePicker!: DatePicker;
+  #sortButton!: CustomButton;
 
   // Table
   #list!: HTMLElement;
@@ -50,7 +62,9 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
   // Overlay
   #overlayManager!: OverlayManager;
-  #selectorMenu!: SelectorMenu;
+
+  #sortDropdown!: DropdownMenu;
+  #filterDropdown!: DropdownMenu;
 
   /** Initializes the screen and subscribes to UI and budget events. */
   connectedCallback(): void {
@@ -71,6 +85,8 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#clearSelectionButton.addEventListener("click", this);
     this.#breadcrumbs.addEventListener("click", this);
 
+    this.#sortDropdown.addListener(this);
+
     window.addEventListener("budget:categories-changed", this);
     window.addEventListener("budget:entity-sync-changed", this);
     window.addEventListener("budget:transaction-sync-changed", this);
@@ -90,6 +106,8 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#datePicker.removeEventListener("date-range-changed", this);
     this.#clearSelectionButton.removeEventListener("click", this);
     this.#breadcrumbs.removeEventListener("click", this);
+
+    this.#sortDropdown.removeListener(this);
 
     window.removeEventListener("budget:categories-changed", this);
     window.removeEventListener("budget:entity-sync-changed", this);
@@ -122,6 +140,13 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
         this.#loadUsage();
         this.#render();
         break;
+
+      case "dropdown-selection":
+        this.#handleSortSelection(event);
+        break;
+
+      default:
+        break;
     }
   }
 
@@ -141,7 +166,18 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       '[data-action="clear-selection"]',
     )!;
     this.#overlayManager = document.querySelector("overlay-manager")!;
-    this.#selectorMenu = document.querySelector("selector-menu")!;
+    this.#sortButton = this.#actionRow.querySelector('[data-action="sort"]')!;
+
+    this.#sortDropdown = this.#actionRow.querySelector(
+      "#sort-categories-dropdown",
+    )!;
+
+    this.#sortDropdown.items = [
+      { key: "name", title: "Name" },
+      { key: "status", title: "Status" },
+      { key: "count", title: "Transaction count" },
+      { key: "total", title: "Total" },
+    ];
   }
 
   /** Sets the breadcrumbs at the top of the page */
@@ -217,8 +253,9 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
     const categories = APIs.budget.listAllCategories();
     const filtered = categories.filter((item) => item.type === this.#tableView);
+    const sorted = this.#sortFxn(filtered, this.#usage);
     this.#list.replaceChildren(
-      ...filtered.map((item) => this.#createCategoryRow(item)),
+      ...sorted.map((item) => this.#createCategoryRow(item)),
     );
     this.#getSum();
   }
@@ -372,34 +409,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     return row;
   }
 
-  /** Validates and submits a new expense category. */
-  // async #handleSubmit(event: Event): Promise<void> {
-  //   event.preventDefault();
-  //   this.#setFormMessage("");
-  //   if (!this.#form.checkValidity()) {
-  //     this.#form.reportValidity();
-  //     return;
-  //   }
-
-  //   try {
-  //     const category = await APIs.budget.addCategory({
-  //       name: this.#nameInput.value,
-  //       type: "expense",
-  //     });
-  //     this.#form.reset();
-  //     this.#nameInput.focus();
-  //     this.#setFormMessage(
-  //       APIs.budget.getConfig().endpoint
-  //         ? `${category.name} was added. Syncing…`
-  //         : `${category.name} was added.`,
-  //       "success",
-  //     );
-  //     this.#render();
-  //   } catch (error: unknown) {
-  //     this.#setFormMessage(errorMessage(error), "error");
-  //   }
-  // }
-
+  /** Selects or deslects a row in the table */
   #handleSelection(selectedRow: HTMLElement | null) {
     // Clear the selection
     if (selectedRow === null) {
@@ -451,12 +461,35 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   #handleClick(event: Event): void {
     if (!(event.target instanceof Element)) return;
 
-    const tabButton =
-      event.target.closest<HTMLButtonElement>("[data-table-view]");
+    const button = event.target.closest<ActionButton>("[data-action]");
 
-    if (tabButton) {
-      this.#handleTableViewChange(tabButton);
-      return;
+    if (button) {
+      const action = button.dataset.action;
+
+      if (action === "filter") {
+        console.log("filter");
+        return;
+      }
+
+      if (action === "change-tab") {
+        this.#handleTableViewChange(button);
+        return;
+      }
+
+      if (action === "clear-selection") {
+        this.#handleSelection(null);
+        return;
+      }
+
+      if (action === "new-category") {
+        this.#overlayManager.showEntityForm(button, "category", {
+          side: "bottom",
+          align: "end",
+          gap: 8,
+          offset: 16,
+        });
+        return;
+      }
     }
 
     const actionButton = event.target.closest<HTMLButtonElement>(
@@ -465,15 +498,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
     if (actionButton) {
       this.#handleEntityAction(actionButton);
-      return;
-    }
-
-    const clearButton = event.target.closest<CustomButton>(
-      '[data-action="clear-selection"]',
-    );
-
-    if (clearButton) {
-      this.#handleSelection(null);
       return;
     }
 
@@ -489,19 +513,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     if (row?.dataset.entityId) {
       this.#navigateToCategory(row.dataset.entityId);
       return;
-    }
-
-    const addButton = event.target.closest<CustomButton>(
-      '[data-action="new-category"]',
-    );
-
-    if (addButton) {
-      this.#overlayManager.showEntityForm(addButton, "category", {
-        side: "bottom",
-        align: "end",
-        gap: 8,
-        offset: 16,
-      });
     }
   }
 
@@ -559,12 +570,15 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     });
   }
 
-  /** Updates the form's accessible status message and visual state. */
-  // #setFormMessage(message: string, state?: "success" | "error"): void {
-  //   this.#formMessage.textContent = message;
-  //   if (state) this.#formMessage.dataset.state = state;
-  //   else delete this.#formMessage.dataset.state;
-  // }
+  // Sets the sort function based on the item selected from the menu, re-renders the page, and removes the listener.
+  #handleSortSelection(event: Event) {
+    this.#sortDropdown.handleSelection(event, (e) => {
+      this.#sortKey = e.detail.value;
+      this.#sortFxn = sortCategoryScreen(e);
+      this.#render();
+      this.#sortDropdown.close();
+    });
+  }
 }
 
 if (!customElements.get("category-screen")) {
