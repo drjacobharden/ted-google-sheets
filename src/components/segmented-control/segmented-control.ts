@@ -7,7 +7,7 @@ export interface SegmentedControlItem {
 
 export interface SegmentedControlSelectionEvent extends CustomEvent {
   detail: {
-    key: string;
+    value: string;
     title: string;
   };
 }
@@ -204,7 +204,9 @@ export class SegmentedControl
 
     this.#selection = item.key;
     this.#renderSelection();
-    if (emit) this.#selectionHandler.dispatch({ ...item });
+    if (emit) {
+      this.#selectionHandler.dispatch({ value: item.key, title: item.title });
+    }
   }
 
   #buttons(): HTMLButtonElement[] {
