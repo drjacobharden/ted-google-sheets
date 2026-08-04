@@ -13,7 +13,6 @@ import "./components/splash-indicator/splash-indicator.ts";
 import "./components/refresh-button/refresh-button.ts";
 import "./components/checkbox/checkbox.ts";
 import "./components/date-range-picker/date-range-picker.ts";
-import "./components/selector-menu/selector-menu.ts";
 import "./components/dropdown-menu/dropdown-menu.ts";
 import "./components/segmented-control/segmented-control.ts";
 
