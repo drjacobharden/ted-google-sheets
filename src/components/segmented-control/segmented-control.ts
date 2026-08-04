@@ -163,6 +163,7 @@ export class SegmentedControl
     const button = (event.target as Element).closest<HTMLButtonElement>(
       ".segmented-control__item",
     );
+
     if (!button || !this.#list.contains(button)) return;
 
     this.#select(button.dataset.segmentKey ?? null, true);
