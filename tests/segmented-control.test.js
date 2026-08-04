@@ -28,7 +28,10 @@ test("segmented control is registered and accepts typed variable-width items", (
 test("selection uses createEventHandler and exposes the selected item", () => {
   assert.match(component, /createEventHandler<SegmentedControlSelectionEvent>/);
   assert.match(component, /["']segmented-control-selection["']/);
-  assert.match(component, /this\.#selectionHandler\.dispatch\(\{ \.\.\.item \}\)/);
+  assert.match(
+    component,
+    /this\.#selectionHandler\.dispatch\(\{ value: item\.key, title: item\.title \}\)/,
+  );
   assert.match(component, /addListener = this\.#selectionHandler\.addListener/);
   assert.match(component, /removeListener = this\.#selectionHandler\.removeListener/);
   assert.match(component, /set selection\(key: string \| null\)/);
