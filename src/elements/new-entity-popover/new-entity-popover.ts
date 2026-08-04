@@ -1,23 +1,27 @@
 import { APIs } from "../../api/api";
-import { BudgetAPI } from "../../api/budget-api";
+import { TransactionType } from "../../api/budget-api";
 import { CustomButton } from "../../components/button/button";
 import {
   Popover,
   PopoverOptions,
 } from "../../components/popover-menu/popover-menu";
+import { SegmentedControl } from "../../components/segmented-control/segmented-control";
 import { getIcon, IconKeys } from "../../icons";
 import { OverlayManager } from "../overlay-manager/overlay-manager";
 import NewEntityPopoverTempString from "./template.html" with { type: "text" };
 
-const NewEntityPopoverTemp = document.createElement("template");
-NewEntityPopoverTemp.innerHTML = NewEntityPopoverTempString;
+const NewEntityTemp = document.createElement("template");
+NewEntityTemp.innerHTML = NewEntityPopoverTempString;
 
 export type NewEntityOptions = "category" | "vendor" | "person" | "account";
 
 export class NewEntityPopover extends HTMLElement {
+  #form!: HTMLFormElement;
+  #typeSelector: SegmentedControl | null = null;
+
   #entity: NewEntityOptions = "category";
   #name: string = "";
-  #type: "expense" | "income" = "expense";
+  #type: TransactionType = "expense";
 
   #backdrop!: HTMLElement;
   #popover!: Popover;
@@ -36,6 +40,8 @@ export class NewEntityPopover extends HTMLElement {
   #categories = APIs.budget.listAllCategories();
 
   connectedCallback(): void {
+    const clone = NewEntityTemp.content.cloneNode(true) as HTMLTemplateElement;
+
     const backdrop = document.createElement("div");
     backdrop.classList.add("backdrop");
     this.append(backdrop);
@@ -48,12 +54,11 @@ export class NewEntityPopover extends HTMLElement {
 
     this.setAttribute("role", "form");
 
-    const clone = NewEntityPopoverTemp.content.cloneNode(
-      true,
-    ) as DocumentFragment;
     this.#popover.append(clone);
+    this.#form = this.#popover.querySelector("form")!;
 
     this.#connectElements();
+    this.#renderForm("category");
     this.#connectListeners();
   }
 
@@ -68,10 +73,7 @@ export class NewEntityPopover extends HTMLElement {
     this.#closeButton = this.querySelector('[data-action="close"]')!;
     this.#cancelButton = this.querySelector('[data-action="cancel"]')!;
     this.#saveButton = this.querySelector('[data-action="save"]')!;
-    this.#input = this.querySelector("input")!;
     this.#overlayManager = document.querySelector("overlay-manager")!;
-    this.#selector = this.querySelector('[data-action="open-selector"]')!;
-    this.#inputMessage = this.querySelector(".input-error")!;
   }
 
   // Add listeners to the component. MUST REMOVE THEM IN DISCONNECT BELOW!
@@ -79,8 +81,6 @@ export class NewEntityPopover extends HTMLElement {
     this.#closeButton.addEventListener("click", this);
     this.#cancelButton.addEventListener("click", this);
     this.#saveButton.addEventListener("click", this);
-    this.#selector.addEventListener("click", this);
-    this.#input.addEventListener("input", this);
     this.#backdrop.addEventListener("click", this);
   }
   // Remove listeners from the component.
@@ -88,9 +88,29 @@ export class NewEntityPopover extends HTMLElement {
     this.#closeButton.removeEventListener("click", this);
     this.#cancelButton.removeEventListener("click", this);
     this.#saveButton.removeEventListener("click", this);
-    this.#selector.removeEventListener("click", this);
-    this.#input.removeEventListener("input", this);
     this.#backdrop.removeEventListener("click", this);
+
+    this.#disconnectFormListeners();
+  }
+
+  /** Connects listeners owned by controls that are recreated for each form. */
+  #connectFormListeners() {
+    this.#input.addEventListener("input", this);
+
+    if (this.#typeSelector) {
+      this.#typeSelector.addListener(this);
+    }
+  }
+
+  /** Disconnects listeners before their form controls are replaced. */
+  #disconnectFormListeners() {
+    if (this.#input) {
+      this.#input.removeEventListener("input", this);
+    }
+
+    if (this.#typeSelector) {
+      this.#typeSelector.removeListener(this);
+    }
   }
 
   handleEvent(event: Event) {
@@ -103,12 +123,8 @@ export class NewEntityPopover extends HTMLElement {
         this.#handleInput();
         break;
 
-      case "selector-menu:item-selected":
-        this.#handleTypeChange(event as CustomEvent);
-        break;
-
-      case "selector-menu:menu-closed":
-        this.#handleSelectorClose();
+      case "segmented-control-selection":
+        this.#handleTypeChange(event);
         break;
 
       default:
@@ -120,6 +136,7 @@ export class NewEntityPopover extends HTMLElement {
     const target = event.target as HTMLElement;
     const button = target.closest("[data-action]") as CustomButton;
 
+    // Close the form
     if (
       button === this.#closeButton ||
       button === this.#cancelButton ||
@@ -129,56 +146,38 @@ export class NewEntityPopover extends HTMLElement {
       return;
     }
 
-    if (button === this.#selector) {
-      // Focus the button
-      button.classList.add("is-open");
-
-      // Show the menu
-      this.#overlayManager.selectorMenu.show({
-        anchor: button,
-        selection: this.#type,
-        data: [
-          { key: "expense", title: "Expense" },
-          { key: "income", title: "Income" },
-        ],
-        options: {
-          side: "bottom",
-          align: "center",
-          gap: 8,
-        },
-        menuKey: "newEntityCategoryTypeSelector",
-      });
-
-      this.#overlayManager.addEventListener(
-        "selector-menu:item-selected",
-        this,
-      );
-      this.#overlayManager.addEventListener("selector-menu:menu-closed", this);
-    }
-
+    // Submit the form
     if (button === this.#saveButton) {
+      this.#handleSubmit(event);
     }
   }
 
-  #handleTypeChange(event: CustomEvent) {
-    this.#type = event.detail.value;
-    this.#selector.label = event.detail.title;
-    this.#overlayManager.selectorMenu.hide();
+  async #handleSubmit(event: Event) {
+    event.preventDefault();
+
+    const name = this.#input.value.trim();
+    const type = this.#type;
+
+    try {
+      APIs.budget.addCategory({ name, type });
+      this.#input.value = "";
+    } catch (error: unknown) {
+      this.#inputMessage.textContent = error as string;
+    } finally {
+      this.hideForm();
+    }
   }
 
-  #handleSelectorClose() {
-    this.#selector.classList.remove("is-open");
-    this.#overlayManager.removeEventListener("selector-menu:menu-closed", this);
-    this.#overlayManager.removeEventListener(
-      "selector-menu:item-selected",
-      this,
-    );
+  #handleTypeChange(event: Event) {
+    this.#typeSelector?.handleSelection(event, (e) => {
+      this.#type = e.detail.value as TransactionType;
+    });
   }
 
   #handleInput() {
-    const input = this.#input.value;
+    const input = this.#input.value.toLowerCase().trim();
     const exists = this.#categories.some(
-      (item) => item.name.toLowerCase() === input.toLowerCase().trim(),
+      (item) => item.name.toLowerCase() === input,
     );
 
     if (exists) {
@@ -188,6 +187,68 @@ export class NewEntityPopover extends HTMLElement {
       this.#input.classList.remove("error");
       this.#inputMessage.toggleAttribute("hidden", true);
     }
+
+    this.#saveButton.toggleAttribute("disabled", exists || input.length === 0);
+  }
+
+  #renderForm(entity: NewEntityOptions) {
+    this.#disconnectFormListeners();
+    this.#typeSelector = null;
+
+    const { title, subtitle, icon, inputLabel, inputPlaceholder } =
+      newEntityData[entity];
+
+    this.#title.textContent = title;
+    this.#subtitle.textContent = subtitle;
+    this.#icon.replaceChildren(getIcon(icon as IconKeys));
+
+    const label = document.createElement("label");
+    const labelText = document.createElement("span");
+    const input = document.createElement("input");
+    const inputMessage = document.createElement("span");
+
+    label.classList.add("form-field-new");
+    label.setAttribute("for", "name");
+    labelText.classList.add("form-field-label");
+    labelText.textContent = inputLabel;
+    input.name = "name";
+    input.placeholder = `enter the name of the ${entity}`;
+    input.toggleAttribute("required", true);
+    inputMessage.classList.add("input-error");
+    inputMessage.textContent = `This ${entity} already exists.`;
+    inputMessage.toggleAttribute("hidden", true);
+
+    label.append(labelText, input, inputMessage);
+    this.#form.replaceChildren(label);
+
+    this.#input = input;
+    this.#inputMessage = inputMessage;
+
+    if (entity === "category") {
+      const label = document.createElement("label");
+      const labelText = document.createElement("span");
+      const typeSelector = document.createElement(
+        "segmented-control",
+      ) as SegmentedControl;
+
+      label.classList.add("form-field-label");
+      label.setAttribute("for", "type");
+      label.classList.add("form-field-new");
+      labelText.textContent = "Type";
+      labelText.classList.add("form-field-label");
+      typeSelector.setAttribute("name", "type");
+
+      label.append(labelText, typeSelector);
+      this.#form.append(label);
+      this.#typeSelector = typeSelector;
+      this.#typeSelector.items = [
+        { key: "expense", title: "Expense" },
+        { key: "income", title: "Income" },
+      ];
+      this.#typeSelector.selection = this.#type;
+    }
+
+    this.#connectFormListeners();
   }
 
   showForm(
@@ -195,35 +256,9 @@ export class NewEntityPopover extends HTMLElement {
     entity: NewEntityOptions,
     options: PopoverOptions,
   ) {
-    const title = {
-      category: "New category",
-      vendor: "New vendor",
-      person: "New person",
-      account: "New invesment account",
-    }[entity];
-
-    const subtitle = {
-      category: "Create a new option for categorizing transactions",
-      vendor: "Create a new payor or payee",
-      person: "Add a new person to your group to see who's spending what",
-      account: "Track investments in a new account",
-    }[entity];
-
-    const icon: Record<NewEntityOptions, IconKeys> = {
-      category: "label",
-      vendor: "cart",
-      person: "people",
-      account: "box",
-    };
-
+    this.#entity = entity;
+    this.#renderForm(entity);
     this.classList.add("is-visible");
-    this.#title.textContent = title;
-    this.#subtitle.textContent = subtitle;
-    this.#icon.replaceChildren(getIcon(icon[entity]));
-    this.#input.value = "";
-    this.#input.textContent = "";
-    this.#input.focus();
-
     this.#popover.show(anchor, options);
   }
 
@@ -234,3 +269,37 @@ export class NewEntityPopover extends HTMLElement {
 }
 
 customElements.define("new-entity-popover", NewEntityPopover);
+
+const newEntityData = {
+  category: {
+    title: "New category",
+    subtitle: "Create a new option for categorizing transactions",
+    icon: "label",
+    inputLabel: "Category name",
+    inputPlaceholder: "enter the name of the category",
+  },
+
+  vendor: {
+    title: "New vendor",
+    subtitle: "Create a new payor or payee",
+    icon: "cart",
+    inputLabel: "Vendor name",
+    inputPlaceholder: "enter the name of the vendor",
+  },
+
+  person: {
+    title: "New person",
+    subtitle: "Add a new person to your group to see who's spending what",
+    icon: "people",
+    inputLabel: "Name",
+    inputPlaceholder: "enter the name of the person",
+  },
+
+  account: {
+    title: "New invesment account",
+    subtitle: "Track investments in a new account",
+    icon: "box",
+    inputLabel: "Account name",
+    inputPlaceholder: "enter the name of the account",
+  },
+};

@@ -9,15 +9,24 @@
 
 <p id="new-entity-title">Title</p>
 <p id="new-entity-subtitle">a subtitle</p>
-<form>
-  <label for="name" class="form-field-new">
-    <span>Name</span>
-    <input name="name" placeholder="enter name" required type="text" />
-    <span class="input-error" hidden>This category already exists.</span>
-  </label>
+<form></form>
+<div class="horizontal-center action-row">
+  <custom-button
+    label="Cancel"
+    class="secondary-button"
+    data-action="cancel"
+  ></custom-button>
+  <custom-button
+    label="Save"
+    class="primary-button"
+    data-action="save"
+    disabled
+  ></custom-button>
+</div>
 
-  <label for="type" class="form-field-new">
+<!-- <label for="type" class="form-field-new">
     <span>Type</span>
+    <dropdown-menu label="Expense"></dropdown-menu>
     <custom-button
       name="type"
       label="Expense"
@@ -25,18 +34,4 @@
       class="secondary-button"
       data-action="open-selector"
     ></custom-button>
-  </label>
-
-  <div class="horizontal-center action-row">
-    <custom-button
-      label="Cancel"
-      class="secondary-button"
-      data-action="cancel"
-    ></custom-button>
-    <custom-button
-      label="Save"
-      class="primary-button"
-      data-action="save"
-    ></custom-button>
-  </div>
-</form>
+  </label> -->
