@@ -13,6 +13,7 @@ export interface DropdownMenuItem {
   key: string;
   title: string;
   icon?: IconKeys;
+  defaultValue?: boolean;
 }
 
 export interface DropdownSelectionEvent extends CustomEvent {
@@ -29,6 +30,7 @@ export class DropdownMenu extends HTMLElement {
   #listening = false;
   #unsubscribeFromState: (() => void) | null = null;
   #value: string | null = null;
+  #selection: HTMLElement | null = null;
 
   /**
    *
@@ -98,10 +100,8 @@ export class DropdownMenu extends HTMLElement {
   }
 
   #renderItems(items: DropdownMenuItem[]) {
-    let children = [];
-
-    for (let i = 0, l = items.length; i < l; i++) {
-      const { key, title, icon } = items[i];
+    const children = items.map((item) => {
+      const { key, title, icon, defaultValue } = item;
 
       const option = document.createElement("div");
       option.classList.add("dropdown-menu-item");
@@ -120,8 +120,15 @@ export class DropdownMenu extends HTMLElement {
       checkmark.classList.add("selection-indicator");
       option.append(checkmark);
 
-      children.push(option);
-    }
+      if (defaultValue) {
+        this.#selection?.classList.remove("is-selected");
+        this.#selection = option;
+        this.#selection.classList.add("is-selected");
+        this.#value = key;
+      }
+
+      return option;
+    });
 
     this.#menu.replaceChildren(...children);
   }
@@ -169,6 +176,9 @@ export class DropdownMenu extends HTMLElement {
 
   //   Emit an event to alert an item was selected and pass along its data
   #handleSelection(item: HTMLElement) {
+    this.#selection?.classList.remove("is-selected");
+    this.#selection = item;
+    this.#selection?.classList.add("is-selected");
     this.#value = item.dataset.value ?? null;
     this.#selectionListener.dispatch({
       value: item.dataset.value!,
