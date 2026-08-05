@@ -134,10 +134,11 @@ export interface InvestmentAPIContract {
   sync(): Promise<void> | null;
   retry(source: "investmentAccount" | "investmentMonth", id: string): void;
   discard(source: "investmentAccount" | "investmentMonth", id: string): void;
+  getSyncItems(): import("./budget-api").SyncItem[];
 }
 
 /** Builds the investment API and initializes its local persistence and sync state. */
-export function InvestmentAPI(): InvestmentAPIContract {
+export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract): InvestmentAPIContract {
   const KEYS = Object.freeze({
     accounts: "myFinance.investmentAccounts.v1",
     balances: "myFinance.investmentBalances.v1",
@@ -165,9 +166,9 @@ export function InvestmentAPI(): InvestmentAPIContract {
   /** Handles the emit operation for the investment data layer. */
   const emit = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
   /** Handles the activeUser operation for the investment data layer. */
-  const activeUser = () => window.BudgetAPI.getActiveUser();
+  const activeUser = () => budget.getActiveUser();
   /** Handles the endpoint operation for the investment data layer. */
-  const endpoint = () => window.BudgetAPI.getConfig().endpoint;
+  const endpoint = () => budget.getConfig().endpoint;
   /** Handles the monthKey operation for the investment data layer. */
   const monthKey = (accountId, month) => `${accountId}|${month}`;
 
@@ -276,7 +277,7 @@ export function InvestmentAPI(): InvestmentAPIContract {
   function hydrateBalance(balance) {
     const migrated = migrateBalance(balance);
     const account = accounts().find((item) => item.id === migrated.accountId);
-    const creator = window.BudgetAPI
+    const creator = budget
       ?.listUsers?.()
       .find((item) => item.id === migrated.createdBy);
     return {
@@ -578,8 +579,7 @@ export function InvestmentAPI(): InvestmentAPIContract {
   function calculateGrowth(openingBalance, endingBalance, periodFlows) { if (openingBalance === null || openingBalance === undefined || endingBalance === null || endingBalance === undefined) return null; return Number(endingBalance) - Number(openingBalance) - periodFlows.reduce((sum, item) => sum + Number(item.amount ?? item.contribution ?? 0), 0); }
 
   /** Handles the originalSyncItems operation for the investment data layer. */
-  const originalSyncItems = window.BudgetAPI.getSyncItems.bind(window.BudgetAPI); window.BudgetAPI.getSyncItems = () => [...originalSyncItems(), ...syncItems()];
-  const api = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, isLoaded, applyBootstrapData, addAccount, updateAccount, archiveAccount, queueMonth, queueImportedMonths, awaitImportedMonths, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard };
+  const api = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, isLoaded, applyBootstrapData, addAccount, updateAccount, archiveAccount, queueMonth, queueImportedMonths, awaitImportedMonths, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard, getSyncItems: syncItems };
   window.addEventListener("online", () => { write(KEYS.accountOutbox, accountOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); write(KEYS.monthOutbox, monthOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); sync(); });
   window.addEventListener("offline", () => { if (retryTimer) clearTimeout(retryTimer); retryTimer = null; emit("budget:sync-changed"); }); scheduleNext();
   return api;

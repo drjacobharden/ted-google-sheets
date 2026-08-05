@@ -6,6 +6,7 @@ import {
   uuid,
   writeStorageArray,
 } from "../utilities/data-utilities";
+import { ImportUtils } from "../utilities/import-utilities";
 
 export type ImportTarget = "budget" | "investment";
 export type AmountMode = "unified" | "debitCredit" | "monthly";
@@ -217,10 +218,10 @@ function requireMappings(value: unknown): ImportMapping[] {
 }
 
 /** Builds the import API and its private state. */
-export function ImportAPI(): ImportAPIContract {
+export function ImportAPI(budget: import("./budget-api").BudgetAPIContract): ImportAPIContract {
   /** Returns the currently configured Apps Script endpoint. */
   function endpoint(): string {
-    return window.BudgetAPI.getConfig().endpoint;
+    return budget.getConfig().endpoint;
   }
 
   /** Sends an import action to the configured endpoint. */
@@ -362,7 +363,7 @@ export function ImportAPI(): ImportAPIContract {
     items.forEach((item) => {
       const sourceDescription = String(item.sourceDescription || "");
       const normalizedSourceDescription =
-        window.ImportUtils.normalizeDescription(sourceDescription);
+        ImportUtils.normalizeDescription(sourceDescription);
       if (!normalizedSourceDescription || !item[idField]) return;
       unique.set(normalizedSourceDescription, {
         ...item,

@@ -209,6 +209,13 @@ export interface BudgetAPIContract {
   testConnection(endpointOverride?: string): Promise<unknown>;
 }
 
+interface BudgetIntegrations {
+  investment?: { hasUnsynced(): boolean; load(options?: { refresh?: boolean }): Promise<unknown>; applyBootstrapData(data: unknown): unknown };
+  imports?: { listProfiles(options?: { refresh?: boolean }): Promise<unknown[]>; applyBootstrapData(data: unknown): unknown };
+}
+let integrations: BudgetIntegrations = {};
+export function configureBudgetIntegrations(value: BudgetIntegrations): void { integrations = value; }
+
 // The UI talks only to this data layer. Local mode mirrors the normalized
 // Google Sheets model so switching storage backends does not change contracts.
 /** Builds the budget API and initializes its local persistence and sync state. */
@@ -320,7 +327,7 @@ export function BudgetAPI(): BudgetAPIContract {
       endpoint !== getConfig().endpoint &&
       (getOutbox().length ||
         getEntityOutbox().length ||
-        window.InvestmentAPI?.hasUnsynced())
+        integrations.investment?.hasUnsynced())
     ) {
       throw new Error(
         "Sync or remove pending changes before changing the connection URL.",
@@ -1717,8 +1724,8 @@ export function BudgetAPI(): BudgetAPIContract {
     if (!getConfig().endpoint) {
       const referenceData = await loadReferenceData();
       const transactions = await listTransactions();
-      const investments = await window.InvestmentAPI?.load?.();
-      const importProfiles = await window.ImportAPI?.listProfiles?.();
+      const investments = await integrations.investment?.load();
+      const importProfiles = await integrations.imports?.listProfiles();
       return {
         ...referenceData,
         transactions,
@@ -1737,8 +1744,8 @@ export function BudgetAPI(): BudgetAPIContract {
       applyReferenceData(data, queuedAtStart);
       writeConfirmedTransactionCache(data.transactions);
       const transactions = mergeServerTransactions(data.transactions);
-      window.InvestmentAPI?.applyBootstrapData?.(data);
-      window.ImportAPI?.applyBootstrapData?.(data);
+      integrations.investment?.applyBootstrapData(data);
+      integrations.imports?.applyBootstrapData(data);
       window.dispatchEvent(new CustomEvent("budget:reference-data-changed"));
       return { ...data, transactions };
     } catch (error) {
@@ -1748,8 +1755,8 @@ export function BudgetAPI(): BudgetAPIContract {
         await Promise.all([
           loadReferenceData(),
           listTransactions(),
-          window.InvestmentAPI?.load?.({ refresh: true }),
-          window.ImportAPI?.listProfiles?.({ refresh: true }),
+          integrations.investment?.load({ refresh: true }),
+          integrations.imports?.listProfiles({ refresh: true }),
         ]);
       return {
         ...referenceData,
