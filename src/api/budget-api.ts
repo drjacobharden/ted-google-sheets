@@ -179,6 +179,7 @@ export interface BudgetAPIContract {
     input: Partial<BudgetEntity> & { id: string },
   ): Promise<BudgetEntity>;
   archiveCategory(id: string): Promise<BudgetEntity>;
+  listAllVendors(): BudgetEntity[];
   listVendors(): BudgetEntity[];
   addVendor(input: Partial<BudgetEntity> & { name: string }): BudgetEntity;
   updateVendor(
@@ -188,6 +189,7 @@ export interface BudgetAPIContract {
     input: Partial<BudgetEntity> & { id: string },
   ): Promise<BudgetEntity>;
   archiveVendor(id: string): Promise<BudgetEntity>;
+  listAllPeople(): BudgetEntity[];
   listPeople(): BudgetEntity[];
   addPerson(input: Partial<BudgetEntity> & { name: string }): BudgetEntity;
   updatePerson(
@@ -581,21 +583,29 @@ export function BudgetAPI(): BudgetAPIContract {
       .filter((item) => !options.type || item.type === options.type)
       .sort((a, b) => a.name.localeCompare(b.name));
   }
-  /** Handles the listVendors operation for the budget data layer. */
-  function listVendors() {
+  /** Returns every cached vendor, including archived records. */
+  function listAllVendors() {
     ensureLocalData();
-    return active(readArray(KEYS.vendors)).sort((a, b) =>
+    return readArray(KEYS.vendors).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
   }
-  /** Handles the listPeople operation for the budget data layer. */
-  function listPeople() {
+  /** Handles the listVendors operation for the budget data layer. */
+  function listVendors() {
+    return active(listAllVendors());
+  }
+  /** Returns every cached assignment, including archived records. */
+  function listAllPeople() {
     ensureLocalData();
-    return active(readArray(KEYS.assignments)).sort(
+    return readArray(KEYS.assignments).sort(
       (a, b) =>
         Number(b.isDefault) - Number(a.isDefault) ||
         a.name.localeCompare(b.name),
     );
+  }
+  /** Handles the listPeople operation for the budget data layer. */
+  function listPeople() {
+    return active(listAllPeople());
   }
 
   /** Handles the archivedEntityCollections operation for the budget data layer. */
@@ -2506,11 +2516,13 @@ export function BudgetAPI(): BudgetAPIContract {
     updateCategory: (input) => updateEntity("category", input),
     reactivateCategory: (input) => reactivateEntity("category", input),
     archiveCategory: (id) => archiveEntity("category", id),
+    listAllVendors,
     listVendors,
     addVendor,
     updateVendor: (input) => updateEntity("vendor", input),
     reactivateVendor: (input) => reactivateEntity("vendor", input),
     archiveVendor: (id) => archiveEntity("vendor", id),
+    listAllPeople,
     listPeople,
     addPerson,
     updatePerson: (input) => updateEntity("assignment", input),
