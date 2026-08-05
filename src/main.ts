@@ -15,6 +15,7 @@ import "./components/checkbox/checkbox.ts";
 import "./components/date-range-picker/date-range-picker.ts";
 import "./components/dropdown-menu/dropdown-menu.ts";
 import "./components/segmented-control/segmented-control.ts";
+import "./components/filter-bar/filter-bar.ts";
 
 import "./elements/navigation-bar/navigation-bar.ts";
 import "./elements/new-entity-popover/new-entity-popover.ts";
