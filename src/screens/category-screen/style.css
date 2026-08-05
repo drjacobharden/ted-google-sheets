@@ -114,9 +114,10 @@ category-screen
   opacity: 1;
 }
 
-category-screen .table-row .option-button {
+category-screen .table-row .option-button custom-button {
   height: 20px;
-  opacity: 0.3;
+  opacity: 0.5;
+  border-width: 0;
 }
 
 category-screen .table-row:first-child {

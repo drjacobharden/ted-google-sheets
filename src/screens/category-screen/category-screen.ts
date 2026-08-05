@@ -8,7 +8,10 @@ import {
   DatePickerStep,
   DateRangeChangedEvent,
 } from "../../components/date-range-picker/date-range-picker";
-import { DropdownMenu } from "../../components/dropdown-menu/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownSelectionEvent,
+} from "../../components/dropdown-menu/dropdown-menu";
 import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
 import { DateRange, DateUtils } from "../../utilities/date-utilities";
 import { errorMessage } from "../../utilities/data-utilities";
@@ -101,7 +104,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     window.addEventListener("budget:transaction-sync-changed", this);
     window.addEventListener("budget:transaction-saved", this);
     this.#render();
-    this.#loadArchivedCategories();
     this.#setBreadcrumbs();
   }
 
@@ -151,7 +153,13 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
         break;
 
       case "dropdown-selection":
-        this.#handleSortSelection(event);
+        if (event.target === this.#sortDropdown) {
+          this.#handleSortSelection(event);
+        } else {
+          void this.#handleCategoryMenuSelection(
+            event as DropdownSelectionEvent,
+          );
+        }
         break;
 
       case "filters-changed":
@@ -273,22 +281,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#getSum();
   }
 
-  /** Loads archived categories without delaying the initial active-category render. */
-  #loadArchivedCategories(): void {
-    void APIs.budget
-      .listArchivedEntities()
-      .then(() => {
-        if (this.isConnected) this.#render();
-      })
-      .catch((error: unknown) => {
-        window.dispatchEvent(
-          new CustomEvent("budget:api-warning", {
-            detail: `Couldn’t load archived categories: ${errorMessage(error)}`,
-          }),
-        );
-      });
-  }
-
   #getSum() {
     let totalCount = 0;
     let totalSum = 0;
@@ -404,10 +396,22 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     sum.classList.add("col-6", "push-right");
 
     // Option button to show popover to delete or edit
-    const optionButton = document.createElement("custom-button");
-    optionButton.classList.add("ghost-button");
-    optionButton.setAttribute("leading-icon", "dotsHorizontal");
+    const optionButton = document.createElement(
+      "dropdown-menu",
+    ) as DropdownMenu;
+    optionButton.classList.add("col-7", "table-row-option-button");
     optionButton.classList.add("col-7", "option-button");
+    optionButton.icon = "dotsHorizontal";
+    optionButton.toggleAttribute("hide-trailing-chevron", true);
+
+    optionButton.items = [
+      { key: "detail", title: "View data", icon: "box" },
+      { key: "edit", title: "Edit category", icon: "pencil" },
+      category.active
+        ? { key: "archive", title: "Archive category", icon: "pieChart" }
+        : { key: "restore", title: "Reactivate category", icon: "restore" },
+    ];
+    optionButton.addListener(this);
 
     // Current status of the item: syncing, active, archived
     const status = document.createElement("span");
@@ -544,10 +548,10 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       return;
     }
 
-    if (row?.dataset.entityId) {
-      this.#navigateToCategory(row.dataset.entityId);
-      return;
-    }
+    // if (row?.dataset.entityId) {
+    //   this.#navigateToCategory(row.dataset.entityId);
+    //   return;
+    // }
   }
 
   /** Handles keyboard activation for category rows. */
@@ -555,7 +559,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     if (!(event instanceof KeyboardEvent)) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     if (!(event.target instanceof Element)) return;
-    if (event.target.closest("[data-entity-action]")) return;
+    if (event.target.closest("[data-entity-action], dropdown-menu")) return;
 
     const row = event.target.closest<HTMLElement>("[data-entity-id]");
     if (!row?.dataset.entityId) return;
@@ -601,6 +605,45 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       kind: "category",
       id: categoryId,
     });
+  }
+
+  /** Executes the action selected from a category row's option menu. */
+  async #handleCategoryMenuSelection(
+    event: DropdownSelectionEvent,
+  ): Promise<void> {
+    if (!(event.target instanceof DropdownMenu)) return;
+
+    const row = event.target.closest<HTMLElement>("[data-entity-id]");
+    const categoryId = row?.dataset.entityId;
+    if (!categoryId) return;
+
+    if (event.detail.value === "detail") {
+      this.#navigateToCategory(categoryId);
+      return;
+    }
+
+    if (event.detail.value === "edit") {
+      appRouter().updateParams({
+        drawer: "entity-edit",
+        entityKind: "category",
+        entityId: categoryId,
+      });
+      return;
+    }
+
+    try {
+      if (event.detail.value === "archive") {
+        await APIs.budget.archiveCategory(categoryId);
+      } else if (event.detail.value === "restore") {
+        await APIs.budget.reactivateCategory({ id: categoryId });
+      }
+    } catch (error: unknown) {
+      window.dispatchEvent(
+        new CustomEvent("budget:api-warning", {
+          detail: `Couldn’t ${event.detail.value} category: ${errorMessage(error)}`,
+        }),
+      );
+    }
   }
 
   // Sets the sort function based on the item selected from the menu, re-renders the page, and removes the listener.
