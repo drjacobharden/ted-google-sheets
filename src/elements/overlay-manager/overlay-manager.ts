@@ -78,10 +78,12 @@ export class OverlayManager extends HTMLElement {
         break;
 
       case "pointerdown":
-        if (
-          !event.composedPath().some((item) => item instanceof DropdownMenu)
-        ) {
+        if (!event.composedPath().some((item) => item instanceof DropdownMenu)) {
           appState.set("activeDropdownKey", null);
+        }
+
+        if (!this.#newEntityPopover.containsFormInteraction(event)) {
+          this.hideEntityForm();
         }
         break;
 
