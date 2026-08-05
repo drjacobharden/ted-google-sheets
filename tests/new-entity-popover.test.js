@@ -6,6 +6,10 @@ const component = fs.readFileSync(
   "src/elements/new-entity-popover/new-entity-popover.ts",
   "utf8",
 );
+const overlayManager = fs.readFileSync(
+  "src/elements/overlay-manager/overlay-manager.ts",
+  "utf8",
+);
 
 test("rerendered form controls receive fresh listeners", () => {
   assert.match(
@@ -39,5 +43,16 @@ test("dynamic listeners are removed from old controls before replacement", () =>
   assert.match(
     component,
     /#disconnectListeners\(\)[\s\S]*this\.#disconnectFormListeners\(\)/,
+  );
+});
+
+test("the overlay manager closes the form only for outside interactions", () => {
+  assert.match(
+    component,
+    /containsFormInteraction\(event: Event\): boolean\s*\{\s*return event\.composedPath\(\)\.includes\(this\.#popover\);/,
+  );
+  assert.match(
+    overlayManager,
+    /if \(!this\.#newEntityPopover\.containsFormInteraction\(event\)\)\s*\{\s*this\.hideEntityForm\(\);/,
   );
 });
