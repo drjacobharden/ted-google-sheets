@@ -266,6 +266,11 @@ export class NewEntityPopover extends HTMLElement {
     this.classList.remove("is-visible");
     this.#popover.hide();
   }
+
+  /** Whether an event originated within the interactive form panel. */
+  containsFormInteraction(event: Event): boolean {
+    return event.composedPath().includes(this.#popover);
+  }
 }
 
 customElements.define("new-entity-popover", NewEntityPopover);
