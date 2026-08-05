@@ -11,6 +11,7 @@ import {
 import { DropdownMenu } from "../../components/dropdown-menu/dropdown-menu";
 import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
 import { DateRange, DateUtils } from "../../utilities/date-utilities";
+import { errorMessage } from "../../utilities/data-utilities";
 import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { appRouter, budgetUI } from "../../utilities/legacy-runtime";
 import { money } from "../../utilities/view-formatters";
@@ -19,6 +20,10 @@ import {
   SortedEntityArrayFxn,
 } from "./sort-category-screen";
 import templateString from "./template.html" with { type: "text" };
+import {
+  AppliedFilter,
+  FilterBar,
+} from "../../components/filter-bar/filter-bar";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -64,7 +69,10 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   #overlayManager!: OverlayManager;
 
   #sortDropdown!: DropdownMenu;
-  #filterDropdown!: DropdownMenu;
+  #filterDropdown!: FilterBar;
+  #filters: AppliedFilter[] = [
+    { key: "status", value: "Active", operator: "Equals" },
+  ];
 
   /** Initializes the screen and subscribes to UI and budget events. */
   connectedCallback(): void {
@@ -86,13 +94,14 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#breadcrumbs.addEventListener("click", this);
 
     this.#sortDropdown.addListener(this);
+    this.#filterDropdown.addListener(this);
 
     window.addEventListener("budget:categories-changed", this);
     window.addEventListener("budget:entity-sync-changed", this);
     window.addEventListener("budget:transaction-sync-changed", this);
     window.addEventListener("budget:transaction-saved", this);
-    this.#loadUsage();
     this.#render();
+    this.#loadArchivedCategories();
     this.#setBreadcrumbs();
   }
 
@@ -108,6 +117,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#breadcrumbs.removeEventListener("click", this);
 
     this.#sortDropdown.removeListener(this);
+    this.#filterDropdown.removeListener(this);
 
     window.removeEventListener("budget:categories-changed", this);
     window.removeEventListener("budget:entity-sync-changed", this);
@@ -137,7 +147,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
       case "budget:transaction-sync-changed":
       case "budget:transaction-saved":
-        this.#loadUsage();
         this.#render();
         break;
 
@@ -145,10 +154,18 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
         this.#handleSortSelection(event);
         break;
 
+      case "filters-changed":
+        this.#handleFiltersChanged(event);
+
       default:
         break;
     }
   }
+
+  /**
+   * Create elements for the screen
+   *
+   */
 
   /** Captures the typed elements rendered from the component template. */
   #captureElements(): void {
@@ -166,18 +183,31 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       '[data-action="clear-selection"]',
     )!;
     this.#overlayManager = document.querySelector("overlay-manager")!;
-    this.#sortButton = this.#actionRow.querySelector('[data-action="sort"]')!;
 
+    // Set up sorting
     this.#sortDropdown = this.#actionRow.querySelector(
       "#sort-categories-dropdown",
     )!;
-
     this.#sortDropdown.items = [
-      { key: "name", title: "Name" },
+      { key: "name", title: "Name", defaultValue: true },
       { key: "status", title: "Status" },
       { key: "count", title: "Transaction count" },
       { key: "total", title: "Total" },
     ];
+
+    // Set up filtering
+    this.#filterDropdown = this.#actionRow.querySelector(
+      "#categories-filter-bar",
+    )!;
+
+    this.#filterDropdown.availableFilters = [
+      { key: "name", dataType: "string", title: "Name" },
+      { key: "status", dataType: ["Active", "Archived"], title: "Status" },
+      { key: "count", dataType: "number", title: "Transaction count" },
+      { key: "average", dataType: "number", title: "Average transaction" },
+      { key: "total", dataType: "number", title: "Total" },
+    ];
+    this.#filterDropdown.filters = this.#filters;
   }
 
   /** Sets the breadcrumbs at the top of the page */
@@ -209,26 +239,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     }
   }
 
-  #updateUsage() {
-    const rows = this.#list.children;
-
-    for (let i = 0, l = rows.length; i < l; i++) {
-      const row = rows[i] as HTMLElement;
-      const countElement = row.querySelector('[data-data="count"]')!;
-      const sumElement = row.querySelector('[data-data="sum"]')!;
-
-      const { count, total } = this.#usage.get(row.dataset.entityId!) ?? {
-        count: 0,
-        total: 0,
-      };
-
-      countElement.textContent = count.toString();
-      sumElement.textContent = money(total);
-    }
-
-    this.#getSum();
-  }
-
   /** Returns the current application transaction collection. */
   #transactions(): BudgetTransaction[] {
     return (
@@ -238,6 +248,8 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
   /** Renders the current expense categories and their sync state. */
   #render(): void {
+    this.#loadUsage();
+
     this.#selected = [];
     this.#list.toggleAttribute("selection-active", false);
 
@@ -251,13 +263,30 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       }
     }
 
-    const categories = APIs.budget.listAllCategories();
-    const filtered = categories.filter((item) => item.type === this.#tableView);
-    const sorted = this.#sortFxn(filtered, this.#usage);
+    const categories = this.#filterCategories();
+    const sorted = this.#sortCategories(categories);
+
     this.#list.replaceChildren(
       ...sorted.map((item) => this.#createCategoryRow(item)),
     );
+
     this.#getSum();
+  }
+
+  /** Loads archived categories without delaying the initial active-category render. */
+  #loadArchivedCategories(): void {
+    void APIs.budget
+      .listArchivedEntities()
+      .then(() => {
+        if (this.isConnected) this.#render();
+      })
+      .catch((error: unknown) => {
+        window.dispatchEvent(
+          new CustomEvent("budget:api-warning", {
+            detail: `Couldn’t load archived categories: ${errorMessage(error)}`,
+          }),
+        );
+      });
   }
 
   #getSum() {
@@ -361,24 +390,28 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     const quantity = document.createElement("span");
     quantity.dataset.data = "count";
     quantity.textContent = count.toString();
-    quantity.classList.add("col-4");
+    quantity.classList.add("col-4", "push-right");
+
+    const average = document.createElement("span");
+    average.dataset.data = "average";
+    average.textContent = money(count === 0 ? 0 : total / count);
+    average.classList.add("col-5", "push-right");
 
     // Total transaction sum for the category in the time range
     const sum = document.createElement("span");
     sum.dataset.data = "sum";
     sum.textContent = money(total);
-    sum.classList.add("col-5");
+    sum.classList.add("col-6", "push-right");
 
     // Option button to show popover to delete or edit
     const optionButton = document.createElement("custom-button");
     optionButton.classList.add("ghost-button");
     optionButton.setAttribute("leading-icon", "dotsHorizontal");
-    optionButton.classList.add("option-button");
-    optionButton.classList.add("col-6");
+    optionButton.classList.add("col-7", "option-button");
 
     // Current status of the item: syncing, active, archived
     const status = document.createElement("span");
-    status.className = "status col-3";
+    status.className = "status col-3 push-right";
 
     const syncStatus = APIs.budget.getEntitySyncStatus("category", category.id);
 
@@ -402,6 +435,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       name,
       status,
       quantity,
+      average,
       sum,
       optionButton,
     );
@@ -558,8 +592,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   #handleDateRangeChanged(event: DateRangeChangedEvent) {
     this.#range = event.detail.range;
     this.#dateRangeStep = event.detail.step;
-    this.#loadUsage();
-    this.#updateUsage();
+    this.#render();
   }
 
   /** Navigates to the selected category's entity detail route. */
@@ -578,6 +611,71 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       this.#render();
       this.#sortDropdown.close();
     });
+  }
+
+  #handleFiltersChanged(event: Event) {
+    this.#filterDropdown.handleFiltersChanged(event, (e) => {
+      this.#filters = e.detail;
+      this.#render();
+    });
+  }
+
+  #filterCategories() {
+    const categories = APIs.budget.listAllCategories();
+
+    let filtered = categories;
+
+    if (this.#filters.length > 0) {
+      filtered = categories.filter((item) => {
+        const { count, total } = this.#usage.get(item.id) ?? {
+          count: 0,
+          total: 0,
+        };
+        const values = {
+          name: item.name.toLowerCase(),
+          count,
+          total,
+          average: total === 0 ? 0 : total / count,
+          status: item.active ? "Active" : "Archived",
+        };
+
+        return (
+          item.type === this.#tableView &&
+          this.#filters.every((filter) => {
+            const filterKey = filter.key as keyof typeof values;
+            const value = values[filterKey];
+
+            if (filter.operator === "Equals") {
+              return value === filter.value;
+            }
+
+            if (filter.operator === "Greater than") {
+              return value > filter.value;
+            }
+
+            if (filter.operator === "Less than") {
+              return value < filter.value;
+            }
+
+            if (filter.operator === "Contains") {
+              const val = value as string;
+              return val.includes(filter.value.toString().toLowerCase());
+            }
+
+            if (filter.operator === "Starts with") {
+              const val = value as string;
+              return val.startsWith(filter.value.toString().toLowerCase());
+            }
+          })
+        );
+      });
+    }
+
+    return filtered;
+  }
+
+  #sortCategories(categories: BudgetEntity[]) {
+    return this.#sortFxn(categories, this.#usage);
   }
 }
 

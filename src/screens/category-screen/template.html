@@ -32,18 +32,8 @@
     label="Sort"
     icon="sort"
   ></dropdown-menu>
-  <dropdown-menu
-    id="filter-categories-dropdown"
-    label="Filter"
-    icon="filter"
-  ></dropdown-menu>
 
-  <custom-button
-    class="secondary-button"
-    label="Filter"
-    leading-icon="filter"
-    data-action="filter"
-  ></custom-button>
+  <filter-bar id="categories-filter-bar"></filter-bar>
 </div>
 
 <div class="content">
@@ -53,17 +43,19 @@
       aria-labelledby="category-list-title"
     >
       <div class="table-grid table-header">
-        <span class="col-2">Name</span>
-        <span class="col-3">Status</span>
-        <span class="col-4">Transactions</span>
-        <span class="col-5">Total</span>
+        <div></div>
+        <span>Name</span>
+        <span class="push-right">Status</span>
+        <span class="push-right">Transaction count</span>
+        <span class="push-right">Avg transactions</span>
+        <span class="push-right">Total</span>
       </div>
       <div class="list" id="category-list" aria-live="polite"></div>
     </section>
   </div>
 </div>
 
-<div class="table-grid table-footer">
+<div class="table-footer">
   <div>
     <custom-button
       class="secondary-button"
