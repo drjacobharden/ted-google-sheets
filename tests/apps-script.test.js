@@ -317,6 +317,7 @@ test("bootstraps all top-level data with one spreadsheet open and one read per s
   const { call, spreadsheet } = runtime;
   const userId = "123e4567-e89b-42d3-a456-426614174000";
   const vendorId = "223e4567-e89b-42d3-a456-426614174000";
+  const accountId = "723e4567-e89b-42d3-a456-426614174000";
   call({ action: "addUser", user: { id: userId, firstName: "Ada", lastName: "Byron" } });
   call({ action: "addVendor", vendor: { id: vendorId, name: "Cafe" } });
   const categoryId = call({ action: "listCategories" }).data.find((item) => item.name === "Dining").id;
@@ -327,6 +328,10 @@ test("bootstraps all top-level data with one spreadsheet open and one read per s
     categoryId, vendorId, assignmentId, notes: "Historical",
   } });
   call({ action: "archiveVendor", id: vendorId });
+  call({ action: "addInvestmentAccount", account: {
+    id: accountId, name: "Old 401k", source: "manual",
+  } });
+  call({ action: "archiveInvestmentAccount", id: accountId });
 
   const transactions = spreadsheet.getSheetByName("Transactions");
   const bulkRows = Array.from({ length: 2000 }, (_, index) => [
@@ -348,7 +353,8 @@ test("bootstraps all top-level data with one spreadsheet open and one read per s
   assert.equal(result.data.transactions.length, 2001);
   assert.equal(result.data.transactions[0].date, "2024-01-15");
   assert.equal(result.data.transactions[0].vendor, "Cafe");
-  assert.equal(result.data.vendors.some((item) => item.id === vendorId), false);
+  assert.equal(result.data.vendors.find((item) => item.id === vendorId).active, false);
+  assert.equal(result.data.investmentAccounts.find((item) => item.id === accountId).active, false);
   assert.deepEqual(Object.keys(result.data), [
     "transactions", "categories", "vendors", "assignments", "users", "importProfiles",
     "investmentAccounts", "investmentBalances", "investmentContributions",
@@ -527,7 +533,8 @@ test("batch-adds mixed entities with grouped writes, retries, and name reconcili
   assert.equal(reconciled.data.saved.length, 0);
   assert.equal(reconciled.data.reconciled.length, 1);
   assert.equal(reconciled.data.reconciled[0].record.id, entities[1].record.id);
-  assert.equal(call({ action: "health" }).data.apiVersion, 10);
+  assert.equal(call({ action: "health" }).data.apiVersion, 11);
+  assert.equal(call({ action: "health" }).data.features.includes("bootstrapArchives"), true);
   assert.equal(call({ action: "health" }).data.features.includes("batchEntities"), true);
 });
 

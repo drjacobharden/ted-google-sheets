@@ -1,6 +1,6 @@
 import RefreshTempString from "./template.html" with { type: "text" };
 
-export type RefreshStates = "inProgress" | "idle" | "failed";
+export type RefreshStates = "inProgress" | "retrying" | "idle" | "failed";
 
 const RefreshTemp = document.createElement("template");
 RefreshTemp.innerHTML = RefreshTempString;
@@ -24,6 +24,13 @@ export class RefreshIndicator extends HTMLElement {
       this.#spinner!.hidden = false;
       this.#button!.hidden = true;
       this.#label!.textContent = "Refreshing data…";
+    }
+
+    if (value === "retrying") {
+      this.#refreshIndicator.hidden = false;
+      this.#spinner!.hidden = false;
+      this.#button!.hidden = true;
+      this.#label!.textContent = "Google didn’t return the data. Retrying…";
     }
 
     if (value === "failed") {

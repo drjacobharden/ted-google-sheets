@@ -1,14 +1,9 @@
 import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
+import { budgetUI } from "../../utilities/legacy-runtime";
 import { CustomButton } from "../button/button";
-
-import RefreshButtonTempString from "./template.html" with { type: "text" };
-
-const RefreshButtonTemp = document.createElement("template");
-RefreshButtonTemp.innerHTML = RefreshButtonTempString;
 
 export class RefreshButton extends CustomButton {
   #overlayManager!: OverlayManager;
-  #button!: HTMLElement;
 
   connectedCallback(): void {
     this.setAttribute("leading-icon", "sync");
@@ -44,7 +39,9 @@ export class RefreshButton extends CustomButton {
 
   #handleClick(event: Event) {
     const target = event.target as HTMLElement;
-    const button = target.closest("#app-refresh-button");
+    const button = target.closest("refresh-button");
+    if (!button) return;
+    void budgetUI()?.initializeData({ refresh: true }).catch(() => {});
   }
 
   #pointerEnter(event: Event) {

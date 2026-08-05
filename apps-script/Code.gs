@@ -4,7 +4,7 @@ const APP = Object.freeze({
   spreadsheetIdProperty: "SPREADSHEET_ID",
   setupVersionProperty: "SETUP_VERSION",
   setupVersion: "7",
-  apiVersion: 10,
+  apiVersion: 11,
   ledgerDirtyProperty: "LEDGER_DIRTY",
   incomeCategoryId: "00000000-0000-4000-8000-000000000001",
   sharedAssignmentId: "00000000-0000-4000-8000-000000000101",
@@ -271,6 +271,7 @@ function handleRequest_(request) {
           apiVersion: APP.apiVersion,
           features: [
             "bootstrap",
+            "bootstrapArchives",
             "batchTransactions",
             "batchEntities",
             "batchTransactionUpdates",
@@ -673,9 +674,11 @@ function buildBootstrapPayload_(recordsBySheet) {
     transactions: transactions.map(function (transaction) {
       return hydrateTransaction_(transaction, references);
     }),
-    categories: active(categories),
-    vendors: active(vendors),
-    assignments: active(assignments),
+    // Cache complete reference collections during bootstrap. Pickers use the
+    // active-only list functions, while archive screens use the same cache.
+    categories: categories,
+    vendors: vendors,
+    assignments: assignments,
     users: active(users),
     importProfiles: active(recordsBySheet[TABLES.importProfiles.name]).map(
       publicImportProfile_,

@@ -2,7 +2,6 @@ import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction } from "../../api/budget-api";
 import { budgetUI, eventTargetElement, appRouter } from "../../utilities/legacy-runtime";
 import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
-import { errorMessage } from "../../utilities/data-utilities";
 import { escapeHTML, messageFromError } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -41,7 +40,6 @@ export class VendorsScreen extends HTMLElement implements EventListenerObject {
     window.addEventListener("budget:transaction-sync-changed", this);
     window.addEventListener("budget:transaction-saved", this);
     this.#loadUsage();
-    this.#loadArchivedEntities();
   }
 
   /** Removes the listeners owned by this route screen. */
@@ -111,22 +109,6 @@ export class VendorsScreen extends HTMLElement implements EventListenerObject {
       return;
     }
     this.#list.replaceChildren(...vendors.map((vendor) => this.#createRow(vendor)));
-  }
-
-  /** Loads archived vendors without delaying the initial active-vendor render. */
-  #loadArchivedEntities(): void {
-    void APIs.budget
-      .listArchivedEntities()
-      .then(() => {
-        if (this.isConnected) this.#render();
-      })
-      .catch((error: unknown) => {
-        window.dispatchEvent(
-          new CustomEvent("budget:api-warning", {
-            detail: `Couldn’t load archived vendors: ${errorMessage(error)}`,
-          }),
-        );
-      });
   }
 
   /** Creates an accessible vendor row and any pending-sync controls. */

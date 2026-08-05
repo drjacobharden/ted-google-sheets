@@ -25,6 +25,14 @@ export class SplashIndicator extends HTMLElement {
       this.#message!.textContent = "Loading your budget…";
     }
 
+    if (value === "retrying") {
+      this.#splash.hidden = false;
+      this.#spinner!.hidden = false;
+      this.#button!.hidden = true;
+      this.#message!.textContent =
+        "Google didn’t return the data. Retrying…";
+    }
+
     if (value === "failed") {
       this.#splash.hidden = false;
       this.#spinner!.hidden = true;

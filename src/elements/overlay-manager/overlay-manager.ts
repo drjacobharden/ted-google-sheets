@@ -52,6 +52,7 @@ export class OverlayManager extends HTMLElement {
     this.#listening = true;
 
     window.addEventListener("budget:data-refresh-started", this);
+    window.addEventListener("budget:data-refresh-retrying", this);
     window.addEventListener("budget:data-refresh-complete", this);
     window.addEventListener("budget:data-refresh-failed", this);
     window.addEventListener("app:route-changed", this);
@@ -63,6 +64,10 @@ export class OverlayManager extends HTMLElement {
     switch (event.type) {
       case "budget:data-refresh-started":
         this.#handleRefreshStarted(event as CustomEvent);
+        break;
+
+      case "budget:data-refresh-retrying":
+        this.#handleRefreshRetrying();
         break;
 
       case "budget:data-refresh-complete":
@@ -136,6 +141,13 @@ export class OverlayManager extends HTMLElement {
       this.#refreshIndicator.state = "idle";
     }
   }
+  #handleRefreshRetrying() {
+    if (this.#splash && !this.#splash.hidden) {
+      this.#splash.state = "retrying";
+    } else if (this.#refreshIndicator) {
+      this.#refreshIndicator.state = "retrying";
+    }
+  }
   #handleRefreshFailed(event: CustomEvent) {
     if (!event.detail.connected) return;
 
@@ -156,6 +168,7 @@ export class OverlayManager extends HTMLElement {
     if (!this.#listening) return;
     this.#listening = false;
     window.removeEventListener("budget:data-refresh-started", this);
+    window.removeEventListener("budget:data-refresh-retrying", this);
     window.removeEventListener("budget:data-refresh-complete", this);
     window.removeEventListener("budget:data-refresh-failed", this);
     window.removeEventListener("app:route-changed", this);

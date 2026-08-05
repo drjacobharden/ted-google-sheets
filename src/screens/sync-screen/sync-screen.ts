@@ -113,7 +113,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
         ? "New investment account"
         : this.#isInvestmentMonth(item)
           ? "Investment monthly update"
-          : `New ${item.kind ? ({ category: "category", vendor: "vendor", assignment: "assignment" } satisfies Record<EntityKind, string>)[item.kind] : "entity"}`;
+          : `${item.operation === "archive" ? "Archive" : item.operation === "reactivate" ? "Reactivate" : "New"} ${item.kind ? ({ category: "category", vendor: "vendor", assignment: "assignment" } satisfies Record<EntityKind, string>)[item.kind] : "entity"}`;
     const detail = item.source === "transaction"
       ? this.#transactionDescription(item.record as BudgetTransaction)
       : this.#isInvestmentMonth(item)

@@ -31,6 +31,7 @@ export interface LegacyBudgetUI {
   getTransactions(): BudgetTransaction[];
   areTransactionsLoaded(): boolean;
   isReferenceDataLoaded(): boolean;
+  initializeData(options?: { refresh?: boolean }): Promise<unknown>;
 }
 
 export interface InvestmentMetrics {

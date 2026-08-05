@@ -80,7 +80,7 @@ export interface SyncSummary {
 export interface SyncItem {
   key: string;
   source: "transaction" | "entity" | "investmentAccount" | "investmentMonth" | "investmentSnapshot";
-  operation?: "create" | "update";
+  operation?: "create" | "update" | "archive" | "reactivate";
   kind?: EntityKind;
   id: string;
   status: SyncState;
@@ -252,6 +252,10 @@ export function BudgetAPI(): BudgetAPIContract {
     "createdByName",
   ]);
   const RETRY_DELAYS = Object.freeze([2000, 5000, 15000, 30000, 60000]);
+  const BOOTSTRAP_TIMEOUT_MS = 15000;
+  const RETRYABLE_BOOTSTRAP_STATUSES = new Set([
+    404, 408, 425, 429, 500, 502, 503, 504,
+  ]);
   let syncPromise = null;
   let retryTimer = null;
   let batchTransactionsSupported = null;
@@ -260,7 +264,6 @@ export function BudgetAPI(): BudgetAPIContract {
   let entityRetryTimer = null;
   let batchEntitiesSupported = null;
   let appDataPromise = null;
-  let archivedEntitiesPromise = null;
 
   /** Handles the browserIsOffline operation for the budget data layer. */
   function browserIsOffline() {
@@ -328,7 +331,6 @@ export function BudgetAPI(): BudgetAPIContract {
     batchTransactionUpdatesSupported = null;
     batchEntitiesSupported = null;
     appDataPromise = null;
-    archivedEntitiesPromise = null;
   }
 
   /** Handles the migrateLocalData operation for the budget data layer. */
@@ -623,40 +625,10 @@ export function BudgetAPI(): BudgetAPIContract {
     };
   }
 
-  /** Handles the mergeArchivedEntityCollections operation for the budget data layer. */
-  function mergeArchivedEntityCollections(collections) {
-    [
-      ["categories", KEYS.categories],
-      ["vendors", KEYS.vendors],
-      ["assignments", KEYS.assignments],
-    ].forEach(([name, key]) => {
-      const incoming = Array.isArray(collections?.[name])
-        ? collections[name]
-        : [];
-      const activeRecords = readArray(key).filter(
-        (item) => item.active !== false,
-      );
-      writeArray(key, [...activeRecords, ...incoming]);
-    });
-  }
-
-  /** Handles the listArchivedEntities operation for the budget data layer. */
-  async function listArchivedEntities(options = {}) {
+  /** Returns archived entities from the complete collections cached by bootstrap. */
+  async function listArchivedEntities(_options = {}) {
     ensureLocalData();
-    if (!getConfig().endpoint) return archivedEntityCollections();
-    if (options.refresh) archivedEntitiesPromise = null;
-    if (!archivedEntitiesPromise) {
-      archivedEntitiesPromise = request("listArchivedEntities")
-        .then((collections) => {
-          mergeArchivedEntityCollections(collections);
-          return archivedEntityCollections();
-        })
-        .catch((error) => {
-          archivedEntitiesPromise = null;
-          throw error;
-        });
-    }
-    return archivedEntitiesPromise;
+    return archivedEntityCollections();
   }
 
   /** Handles the entityStorageKey operation for the budget data layer. */
@@ -681,6 +653,14 @@ export function BudgetAPI(): BudgetAPIContract {
       category: "listCategories",
       vendor: "listVendors",
       assignment: "listAssignments",
+    }[kind];
+  }
+  /** Returns the legacy archive action for an entity kind. */
+  function entityArchiveAction(kind) {
+    return {
+      category: "archiveCategory",
+      vendor: "archiveVendor",
+      assignment: "archiveAssignment",
     }[kind];
   }
   /** Handles the entityBodyKey operation for the budget data layer. */
@@ -731,7 +711,9 @@ export function BudgetAPI(): BudgetAPIContract {
       const outbox = getEntityOutbox();
       outbox.push({
         kind,
+        operation: matching ? "reactivate" : "create",
         record,
+        baseRecord: matching ? { ...matching } : null,
         status: "pending",
         attempts: 0,
         nextRetryAt: 0,
@@ -836,11 +818,9 @@ export function BudgetAPI(): BudgetAPIContract {
     const key = entityStorageKey(kind);
     return key ? readArray(key).find((item) => item.id === id) || null : null;
   }
-  /** Handles the reactivateEntity operation for the budget data layer. */
-  const reactivateEntity = (kind, input) =>
-    updateEntity(kind, { ...input, active: true });
-  /** Handles the archiveEntity operation for the budget data layer. */
-  async function archiveEntity(kind, id) {
+  /** Optimistically changes an entity's active state and queues synchronization. */
+  async function changeEntityActiveState(kind, input, active) {
+    const id = input.id;
     const key = {
       category: KEYS.categories,
       vendor: KEYS.vendors,
@@ -849,17 +829,77 @@ export function BudgetAPI(): BudgetAPIContract {
     const records = readArray(key);
     const index = records.findIndex((item) => item.id === id);
     if (index < 0) throw new Error(`That ${kind} could not be found.`);
-    const action = {
-      category: "archiveCategory",
-      vendor: "archiveVendor",
-      assignment: "archiveAssignment",
-    }[kind];
-    if (getConfig().endpoint) await request(action, { body: { id } });
-    records[index] = { ...records[index], active: false, updatedAt: now() };
+    if (!active && records[index].isDefault)
+      throw new Error("Default records cannot be archived.");
+
+    const pending = getEntityOutbox().find(
+      (item) => item.kind === kind && item.record.id === id,
+    );
+    const baseRecord = pending?.baseRecord ?? { ...records[index] };
+
+    if (
+      pending?.status !== "syncing" &&
+      pending?.baseRecord &&
+      pending.baseRecord.active === active &&
+      String(input.name || pending.baseRecord.name).trim() ===
+        pending.baseRecord.name
+    ) {
+      records[index] = pending.baseRecord;
+      writeArray(key, records);
+      writeEntityOutbox(
+        getEntityOutbox().filter(
+          (item) => !(item.kind === kind && item.record.id === id),
+        ),
+      );
+      emitEntitySyncStatus();
+      window.dispatchEvent(
+        new CustomEvent(entityEvent(kind), { detail: pending.baseRecord }),
+      );
+      return pending.baseRecord;
+    }
+
+    const record = {
+      ...records[index],
+      ...input,
+      name: String(input.name || records[index].name).trim(),
+      active,
+      updatedAt: now(),
+    };
+    records[index] = record;
     writeArray(key, records);
-    window.dispatchEvent(new CustomEvent(entityEvent(kind)));
-    return records[index];
+
+    if (getConfig().endpoint) {
+      const replacement = {
+        kind,
+        operation: active ? "reactivate" : "archive",
+        record,
+        baseRecord,
+        status: "pending",
+        attempts: 0,
+        nextRetryAt: 0,
+        error: "",
+      };
+      writeEntityOutbox([
+        ...getEntityOutbox().filter(
+          (item) => !(item.kind === kind && item.record.id === id),
+        ),
+        replacement,
+      ]);
+      emitEntitySyncStatus();
+      scheduleEntitySync(0);
+    }
+
+    window.dispatchEvent(
+      new CustomEvent(entityEvent(kind), { detail: record }),
+    );
+    return record;
   }
+  /** Handles the reactivateEntity operation for the budget data layer. */
+  const reactivateEntity = (kind, input) =>
+    changeEntityActiveState(kind, input, true);
+  /** Handles the archiveEntity operation for the budget data layer. */
+  const archiveEntity = (kind, id) =>
+    changeEntityActiveState(kind, { id }, false);
   /** Handles the entityEvent operation for the budget data layer. */
   function entityEvent(kind) {
     return `budget:${{ category: "categories", vendor: "vendors", assignment: "people" }[kind]}-changed`;
@@ -870,6 +910,8 @@ export function BudgetAPI(): BudgetAPIContract {
     return readArray(KEYS.entityOutbox)
       .map((item) => ({
         ...item,
+        operation: item.operation || "create",
+        baseRecord: item.baseRecord || null,
         status: item.status || "pending",
         attempts: Number(item.attempts) || 0,
         nextRetryAt: Number(item.nextRetryAt) || 0,
@@ -934,11 +976,11 @@ export function BudgetAPI(): BudgetAPIContract {
   function restoreQueuedEntities() {
     getEntityOutbox().forEach((item) => {
       const key = entityStorageKey(item.kind);
-      const records = readArray(key);
-      if (!records.some((record) => record.id === item.record.id)) {
-        records.push(item.record);
-        writeArray(key, records);
-      }
+      const records = readArray(key).filter(
+        (record) => record.id !== item.record.id,
+      );
+      records.push(item.record);
+      writeArray(key, records);
     });
   }
 
@@ -981,7 +1023,7 @@ export function BudgetAPI(): BudgetAPIContract {
   }
 
   /** Handles the sendEntityBatch operation for the budget data layer. */
-  async function sendEntityBatch(items) {
+  async function sendEntityCreateBatch(items) {
     if (batchEntitiesSupported !== false) {
       try {
         const result = await request("addEntities", {
@@ -1003,6 +1045,36 @@ export function BudgetAPI(): BudgetAPIContract {
             "The sheet returned an invalid entity batch response.",
           );
         }
+        const unresolved = [];
+        for (const failure of result.failed) {
+          const item = items.find(
+            (entry) =>
+              entry.kind === failure.kind && entry.record.id === failure.id,
+          );
+          if (
+            item?.operation !== "reactivate" ||
+            !/already used by different data|already exists/i.test(
+              failure.error,
+            )
+          ) {
+            unresolved.push(failure);
+            continue;
+          }
+
+          const records = await request(entityListAction(item.kind));
+          const canonical = records.find(
+            (record) =>
+              record.id === item.record.id &&
+              entityNameKey(item.kind, record) ===
+                entityNameKey(item.kind, item.record),
+          );
+          if (canonical) {
+            result.saved.push({ kind: item.kind, record: canonical });
+          } else {
+            unresolved.push(failure);
+          }
+        }
+        result.failed = unresolved;
         return result;
       } catch (error) {
         if (!/Unknown action/i.test(error.message)) throw error;
@@ -1029,10 +1101,13 @@ export function BudgetAPI(): BudgetAPIContract {
         }
       } catch (error) {
         if (!error.isApiError) throw error;
-        if (/already exists/i.test(error.message)) {
+        if (/already exists|already used by different data/i.test(error.message)) {
           const records = await request(entityListAction(item.kind));
           const canonical = records.find(
             (record) =>
+              (record.id === item.record.id ||
+                entityNameKey(item.kind, record) ===
+                  entityNameKey(item.kind, item.record)) &&
               entityNameKey(item.kind, record) ===
               entityNameKey(item.kind, item.record),
           );
@@ -1053,6 +1128,33 @@ export function BudgetAPI(): BudgetAPIContract {
       }
     }
     return { saved, reconciled, failed };
+  }
+
+  /** Sends queued entity creates/reactivations in batches and archives individually. */
+  async function sendEntityBatch(items) {
+    const creates = items.filter((item) => item.operation !== "archive");
+    const archives = items.filter((item) => item.operation === "archive");
+    const result = creates.length
+      ? await sendEntityCreateBatch(creates)
+      : { saved: [], reconciled: [], failed: [] };
+
+    for (const item of archives) {
+      try {
+        const record = await request(entityArchiveAction(item.kind), {
+          body: { id: item.record.id },
+        });
+        result.saved.push({ kind: item.kind, record });
+      } catch (error) {
+        if (!error.isApiError) throw error;
+        result.failed.push({
+          kind: item.kind,
+          id: item.record.id,
+          error: error.message,
+        });
+      }
+    }
+
+    return result;
   }
 
   /** Handles the commitImportedEntities operation for the budget data layer. */
@@ -1316,6 +1418,19 @@ export function BudgetAPI(): BudgetAPIContract {
     if (!item) throw new Error("That item could not be found.");
     if (item.status === "syncing")
       throw new Error("That item is already syncing.");
+    if (item.operation !== "create" && item.baseRecord) {
+      replaceCachedEntity(kind, id, item.baseRecord);
+      writeEntityOutbox(
+        getEntityOutbox().filter(
+          (entry) => !(entry.kind === kind && entry.record.id === id),
+        ),
+      );
+      window.dispatchEvent(
+        new CustomEvent(entityEvent(kind), { detail: item.baseRecord }),
+      );
+      emitEntitySyncStatus();
+      return item;
+    }
     const field = {
       category: "categoryId",
       vendor: "vendorId",
@@ -1367,26 +1482,71 @@ export function BudgetAPI(): BudgetAPIContract {
       );
     return payload?.data ?? payload?.transactions ?? payload;
   }
-  /** Handles the request operation for the budget data layer. */
-  async function request(action, options = {}) {
+  /** Performs one Apps Script request, optionally bounded by a timeout. */
+  async function requestOnce(action, options = {}, timeoutMs = 0) {
     const { endpoint } = getConfig();
     if (!endpoint) throw new Error("No Apps Script URL is configured.");
+    const controller = timeoutMs ? new AbortController() : null;
+    const timeout = controller
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
     let response;
-    if (options.body) {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action, ...options.body }),
-        redirect: "follow",
-      });
-    } else {
-      const url = new URL(endpoint);
-      url.searchParams.set("action", action);
-      url.searchParams.set("_", Date.now().toString());
-      response = await fetch(url, { redirect: "follow" });
+    try {
+      if (options.body) {
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action, ...options.body }),
+          redirect: "follow",
+          signal: controller?.signal,
+        });
+      } else {
+        const url = new URL(endpoint);
+        url.searchParams.set("action", action);
+        url.searchParams.set("_", Date.now().toString());
+        response = await fetch(url, {
+          redirect: "follow",
+          signal: controller?.signal,
+        });
+      }
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
-    if (!response.ok) throw new Error(`Request failed (${response.status}).`);
+    if (!response.ok) {
+      const error = new Error(`Request failed (${response.status}).`);
+      error.status = response.status;
+      throw error;
+    }
     return normalizeResponse(await response.json());
+  }
+
+  /** Returns whether a failed bootstrap is safe and useful to retry once. */
+  function isRetryableBootstrapError(error) {
+    return (
+      error?.name === "AbortError" ||
+      error?.name === "TypeError" ||
+      RETRYABLE_BOOTSTRAP_STATUSES.has(error?.status)
+    );
+  }
+
+  /** Requests data, retrying one interrupted bootstrap without retrying writes. */
+  async function request(action, options = {}) {
+    const isBootstrap = action === "bootstrap" && !options.body;
+    try {
+      return await requestOnce(
+        action,
+        options,
+        isBootstrap ? BOOTSTRAP_TIMEOUT_MS : 0,
+      );
+    } catch (error) {
+      if (!isBootstrap || !isRetryableBootstrapError(error)) throw error;
+      window.dispatchEvent(
+        new CustomEvent("budget:data-refresh-retrying", {
+          detail: { error, attempt: 2, maxAttempts: 2 },
+        }),
+      );
+      return requestOnce(action, options, BOOTSTRAP_TIMEOUT_MS);
+    }
   }
 
   /** Handles the applyReferenceData operation for the budget data layer. */
@@ -2391,7 +2551,7 @@ export function BudgetAPI(): BudgetAPIContract {
     const entities = getEntityOutbox().map((item) => ({
       key: `entity:${item.kind}:${item.record.id}`,
       source: "entity",
-      operation: "create",
+      operation: item.operation,
       kind: item.kind,
       id: item.record.id,
       status: item.status,
