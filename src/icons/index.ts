@@ -20,6 +20,9 @@ import dotsHorizontalIcon from "./dots-horizontal.html" with { type: "text" };
 import dotsVerticalIcon from "./dots-vertical.html" with { type: "text" };
 import closeIcon from "./close.html" with { type: "text" };
 import chevronDownIcon from "./chevron-down.html" with { type: "text" };
+import pencilIcon from "./pencil.html" with { type: "text" };
+import pieChartIcon from "./pie-chart.html" with { type: "text" };
+import restoreIcon from "./restore.html" with { type: "text" };
 
 export type IconKeys = keyof typeof iconStrings;
 
@@ -46,6 +49,9 @@ const iconStrings = {
   dotsHorizontal: dotsHorizontalIcon,
   dotsVertical: dotsVerticalIcon,
   close: closeIcon,
+  pencil: pencilIcon,
+  pieChart: pieChartIcon,
+  restore: restoreIcon,
 };
 
 const iconTemplateCache = new Map();
