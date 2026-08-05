@@ -51,7 +51,7 @@ export class DropdownMenu extends HTMLElement {
       this.#menuKey = this.id || uuid();
 
       this.#renderTrigger();
-      this.#renderItems([]);
+      this.#renderItems();
       this.#trigger.setAttribute("aria-haspopup", "menu");
       this.#trigger.setAttribute("aria-expanded", "false");
     }
@@ -90,16 +90,27 @@ export class DropdownMenu extends HTMLElement {
   #renderTrigger() {
     const label = this.getAttribute("label")!;
     const icon = this.getAttribute("icon")! as IconKeys;
+    const hideTrailingChevron =
+      this.hasAttribute("hide-trailing-chevron") ?? false;
 
-    this.#trigger.label = label;
-    this.#trigger.trailingIcon = "chevronDown";
+    if (label) {
+      this.#trigger.label = label;
+    }
+
+    if (!hideTrailingChevron) {
+      this.#trigger.trailingIcon = "chevronDown";
+    }
 
     if (icon) {
       this.#trigger.leadingIcon = icon;
     }
   }
 
-  #renderItems(items: DropdownMenuItem[]) {
+  #renderItems() {
+    const items = JSON.parse(
+      this.getAttribute("items") ?? "[]",
+    ) as DropdownMenuItem[];
+
     const children = items.map((item) => {
       const { key, title, icon, defaultValue } = item;
 
@@ -194,15 +205,27 @@ export class DropdownMenu extends HTMLElement {
    */
 
   set items(array: DropdownMenuItem[]) {
-    this.#renderItems(array);
+    this.setAttribute("items", JSON.stringify(array));
+
+    if (this.#menu) {
+      this.#renderItems();
+    }
   }
 
   set label(text: string) {
-    this.#trigger.label = text;
+    this.setAttribute("label", text);
+
+    if (this.#trigger) {
+      this.#trigger.label = text;
+    }
   }
 
   set icon(icon: IconKeys) {
-    this.#trigger.leadingIcon = icon;
+    this.setAttribute("icon", icon);
+
+    if (this.#trigger) {
+      this.#trigger.leadingIcon = icon;
+    }
   }
 
   close() {
