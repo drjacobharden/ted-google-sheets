@@ -2,6 +2,7 @@ import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction } from "../../api/budget-api";
 import { appRouter, budgetUI, eventTargetElement } from "../../utilities/legacy-runtime";
 import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
+import { errorMessage } from "../../utilities/data-utilities";
 import { escapeHTML, messageFromError } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -15,6 +16,7 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
   #count!: HTMLElement;
   #message!: HTMLElement;
   #usage = new Map<string, number>();
+  #includeArchived = false;
   #listening = false;
 
   /** Initializes the screen and subscribes to assignment and transaction events. */
@@ -36,6 +38,7 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
     window.addEventListener("budget:transaction-sync-changed", this);
     window.addEventListener("budget:transaction-saved", this);
     this.#loadUsage();
+    this.#loadArchivedEntities();
   }
 
   /** Removes the listeners owned by this route screen. */
@@ -84,9 +87,27 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
 
   /** Renders the household assignment collection and synchronization controls. */
   #render(): void {
-    const people = APIs.budget.listPeople();
+    const people = APIs.budget
+      .listAllPeople()
+      .filter((person) => this.#includeArchived || person.active !== false);
     this.#count.textContent = `${people.length} ${people.length === 1 ? "assignment" : "assignments"}`;
     this.#list.replaceChildren(...people.map((person) => this.#createRow(person)));
+  }
+
+  /** Loads archived people without delaying the initial active-person render. */
+  #loadArchivedEntities(): void {
+    void APIs.budget
+      .listArchivedEntities()
+      .then(() => {
+        if (this.isConnected) this.#render();
+      })
+      .catch((error: unknown) => {
+        window.dispatchEvent(
+          new CustomEvent("budget:api-warning", {
+            detail: `Couldn’t load archived people: ${errorMessage(error)}`,
+          }),
+        );
+      });
   }
 
   /** Creates an accessible assignment row and any pending-sync controls. */

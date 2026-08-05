@@ -14,6 +14,7 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
   #message!: HTMLElement;
   #list!: HTMLElement;
   #count!: HTMLElement;
+  #includeArchived = false;
   #listening = false;
 
   /** Initializes the screen and subscribes to investment data events. */
@@ -64,7 +65,9 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
 
   /** Renders all active investment accounts and their latest balances. */
   #render(): void {
-    const accounts = APIs.investment.accounts().filter((account) => account.active !== false);
+    const accounts = APIs.investment
+      .accounts()
+      .filter((account) => this.#includeArchived || account.active !== false);
     const latest = investmentView().latestByAccount();
     this.#count.textContent = `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`;
     if (!accounts.length) {
