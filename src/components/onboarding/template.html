@@ -1,0 +1,63 @@
+    <div class="overlay" id="onboarding-overlay" hidden>
+      <section
+        class="onboarding-dialog"
+        id="onboarding-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
+        aria-describedby="onboarding-description"
+        tabindex="-1"
+      >
+        <header class="onboarding-header">
+          <div class="onboarding-header-row">
+            <div class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M12 3.25c-4.83 0-8.75 3.92-8.75 8.75S7.17 20.75 12 20.75 20.75 16.83 20.75 12 16.83 3.25 12 3.25Z"
+                />
+                <path
+                  d="M7.5 12h9M12 7.5v9"
+                  fill="none"
+                  stroke="white"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+            <div>
+              <p class="eyebrow">Welcome to TED</p>
+              <h1 id="onboarding-title">Set up your budget</h1>
+            </div>
+          </div>
+          <div>
+            <p id="onboarding-description">
+              Getting started requires connecting your app to a private Google
+              Sheet.
+            </p>
+          </div>
+        </header>
+
+        <ol
+          class="onboarding-stepper"
+          id="onboarding-stepper"
+          aria-label="Setup progress"
+          hidden
+        ></ol>
+        <div class="onboarding-content" id="onboarding-content"></div>
+        <p
+          class="onboarding-message"
+          id="onboarding-message"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <footer class="onboarding-actions" id="onboarding-actions" hidden>
+          <button class="secondary-button" id="onboarding-back" type="button">
+            Back
+          </button>
+          <button class="primary-button" id="onboarding-next" type="button">
+            Continue
+          </button>
+        </footer>
+      </section>
+    </div>
+

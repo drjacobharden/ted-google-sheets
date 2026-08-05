@@ -1,5 +1,9 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
-import { budgetUI } from "../../utilities/legacy-runtime";
 import { CustomButton } from "../button/button";
 
 export class RefreshButton extends CustomButton {
@@ -41,7 +45,7 @@ export class RefreshButton extends CustomButton {
     const target = event.target as HTMLElement;
     const button = target.closest("refresh-button");
     if (!button) return;
-    void budgetUI()?.initializeData({ refresh: true }).catch(() => {});
+    void appController.initializeData({ refresh: true }).catch(() => {});
   }
 
   #pointerEnter(event: Event) {
