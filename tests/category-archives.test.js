@@ -7,21 +7,32 @@ const screen = fs.readFileSync(
   "utf8",
 );
 
-test("category screen renders active categories before loading archives", () => {
-  assert.match(
-    screen,
-    /this\.#loadUsage\(\);\s*this\.#render\(\);\s*this\.#loadArchivedCategories\(\);/,
-  );
-  assert.match(
-    screen,
-    /#loadArchivedCategories\(\): void[\s\S]*APIs\.budget[\s\S]*\.listArchivedEntities\(\)/,
-  );
-  assert.match(screen, /if \(this\.isConnected\) this\.#render\(\)/);
+test("category screen renders archives from bootstrap without a page-load request", () => {
+  assert.match(screen, /this\.#render\(\);\s*this\.#setBreadcrumbs\(\);/);
+  assert.doesNotMatch(screen, /#loadArchivedCategories/);
+  assert.doesNotMatch(screen, /\.listArchivedEntities\(\)/);
 });
 
-test("default views exclude archived categories and archive view includes them", () => {
+test("category status filters operate on the inclusive category cache", () => {
+  assert.match(screen, /APIs\.budget\.listAllCategories\(\)/);
+  assert.match(screen, /status: item\.active \? "Active" : "Archived"/);
+  assert.match(screen, /value === filter\.value/);
+});
+
+test("category row menus route, edit, archive, and restore their own category", () => {
+  assert.match(screen, /optionButton\.addListener\(this\)/);
   assert.match(
     screen,
-    /this\.#tableView === "archived"\s*\? item\.active === false\s*:\s*item\.active !== false && item\.type === this\.#tableView/,
+    /event\.target\.closest<HTMLElement>\("\[data-entity-id\]"\)/,
+  );
+  assert.match(screen, /this\.#navigateToCategory\(categoryId\)/);
+  assert.match(
+    screen,
+    /drawer: "entity-edit",\s*entityKind: "category",\s*entityId: categoryId/,
+  );
+  assert.match(screen, /APIs\.budget\.archiveCategory\(categoryId\)/);
+  assert.match(
+    screen,
+    /APIs\.budget\.reactivateCategory\(\{ id: categoryId \}\)/,
   );
 });

@@ -25,11 +25,10 @@ test("budget API exposes inclusive vendor and people collections", () => {
   assert.match(api, /listPeople[\s\S]*return active\(listAllPeople\(\)\)/);
 });
 
-test("vendor and people screens load archives after their initial render", () => {
+test("vendor and people screens reuse bootstrap data without page-load archive requests", () => {
   [vendors, people].forEach((screen) => {
-    assert.match(screen, /this\.#loadUsage\(\);\s*this\.#loadArchivedEntities\(\)/);
-    assert.match(screen, /\.listArchivedEntities\(\)/);
-    assert.match(screen, /if \(this\.isConnected\) this\.#render\(\)/);
+    assert.doesNotMatch(screen, /#loadArchivedEntities/);
+    assert.doesNotMatch(screen, /\.listArchivedEntities\(\)/);
     assert.match(screen, /#includeArchived \|\| [a-z]+\.active !== false/);
   });
   assert.match(vendors, /\.listAllVendors\(\)/);

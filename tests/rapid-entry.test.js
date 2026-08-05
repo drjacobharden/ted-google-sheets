@@ -77,3 +77,12 @@ test("entity creation is optimistic and management screens reuse loaded transact
     assert.doesNotMatch(source, /APIs\.budget\.listTransactions\(/);
   });
 });
+
+test("entity status changes are optimistic and labeled in Sync", () => {
+  const api = fs.readFileSync("src/api/budget-api.ts", "utf8");
+  const sync = fs.readFileSync("src/screens/sync-screen/sync-screen.ts", "utf8");
+  assert.match(api, /operation: active \? "reactivate" : "archive"/);
+  assert.match(api, /scheduleEntitySync\(0\)/);
+  assert.match(sync, /item\.operation === "archive" \? "Archive"/);
+  assert.match(sync, /item\.operation === "reactivate" \? "Reactivate"/);
+});
