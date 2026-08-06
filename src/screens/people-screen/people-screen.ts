@@ -1,7 +1,10 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction } from "../../api/budget-api";
-import { appRouter, budgetUI, eventTargetElement } from "../../utilities/legacy-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { escapeHTML, messageFromError } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -71,7 +74,7 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
 
   /** Returns the current transaction collection from the staged UI bridge or API cache. */
   #transactions(): BudgetTransaction[] {
-    return budgetUI()?.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
+    return appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
   }
 
   /** Recalculates transaction usage counts before rendering assignments. */
@@ -185,7 +188,7 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
 
   /** Navigates to the selected assignment detail route. */
   #openPerson(id: string): void {
-    appRouter().navigate("entity-detail", { kind: "assignment", id });
+    router.navigate("entity-detail", { kind: "assignment", id });
   }
 
   /** Updates the accessible form message and its visual state. */
@@ -196,4 +199,3 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
 }
 
 if (!customElements.get("people-screen")) customElements.define("people-screen", PeopleScreen);
-registerLegacyRouteAdapter("PeopleRoute");
