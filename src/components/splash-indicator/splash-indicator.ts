@@ -1,4 +1,5 @@
 import { RefreshStates } from "../refresh-indicator/refresh-indicator";
+import { appController } from "../../state/app-controller";
 import SplashTempString from "./template.html" with { type: "text" };
 
 const SplashTemp = document.createElement("template");
@@ -50,8 +51,18 @@ export class SplashIndicator extends HTMLElement {
     this.#spinner = container.querySelector(".spinner");
     this.#message = container.querySelector("#app-loading-message");
     this.#button = container.querySelector("#app-loading-retry");
+    this.#button?.addEventListener("click", this);
 
     this.append(container);
+  }
+
+  handleEvent(event: Event): void {
+    if (event.type === "click" && event.currentTarget === this.#button)
+      void appController.initializeData({ refresh: true }).catch(() => {});
+  }
+
+  disconnectedCallback(): void {
+    this.#button?.removeEventListener("click", this);
   }
 }
 
