@@ -1,0 +1,42 @@
+    <div class="drawer-overlay" id="entity-drawer-backdrop" hidden>
+      <aside
+        class="transaction-drawer"
+        id="entity-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="entity-drawer-title"
+        tabindex="-1"
+      >
+        <drawer-header
+          id="entity-drawer-header"
+          title="Edit entity"
+          eyebrow="Edit details"
+        ></drawer-header>
+        <form id="entity-edit-form" novalidate>
+          <div class="drawer-form-grid">
+            <label class="form-field"
+              ><span>Name</span
+              ><input name="name" type="text" maxlength="80" required
+            /></label>
+          </div>
+          <p class="form-message" aria-live="polite"></p>
+          <footer class="transaction-drawer-actions">
+            <button
+              class="secondary-button entity-archive-action"
+              id="archive-entity"
+              type="button"
+            >
+              Archive
+            </button>
+            <button
+              class="secondary-button"
+              id="cancel-entity-edit"
+              type="button"
+            >
+              Cancel</button
+            ><button class="primary-button" type="submit">Save changes</button>
+          </footer>
+        </form>
+      </aside>
+    </div>
+    <!-- Investment account right sidebar -->
