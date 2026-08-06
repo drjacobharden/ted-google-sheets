@@ -547,17 +547,13 @@ function listTransactions_() {
 }
 
 function bootstrap_() {
-  let recordsBySheet = null;
   try {
-    recordsBySheet = readBootstrapWithSheetsApi_();
+    return buildBootstrapPayload_(readBootstrapWithSheetsApi_());
   } catch (error) {
-    console.warn(
-      "Sheets API batch bootstrap failed; using SpreadsheetApp fallback: " +
-        errorMessage_(error),
+    throw new Error(
+      "Bootstrap batch read failed: " + errorMessage_(error),
     );
   }
-  if (!recordsBySheet) recordsBySheet = readBootstrapWithSpreadsheetApp_();
-  return buildBootstrapPayload_(recordsBySheet);
 }
 
 function bootstrapSpecs_() {
@@ -580,11 +576,12 @@ function readBootstrapWithSheetsApi_() {
     !Sheets.Spreadsheets ||
     !Sheets.Spreadsheets.Values
   )
-    return null;
+    throw new Error("The Advanced Sheets service is not available.");
   const spreadsheetId = PropertiesService.getScriptProperties().getProperty(
     APP.spreadsheetIdProperty,
   );
-  if (!spreadsheetId) return null;
+  if (!spreadsheetId)
+    throw new Error("No spreadsheet is configured for the batch read.");
   const specs = bootstrapSpecs_();
   const ranges = specs.map(function (spec) {
     return (
@@ -620,19 +617,6 @@ function readBootstrapWithSheetsApi_() {
       .map(function (row) {
         return rowToRecord_(spec, normalizeBatchRow_(spec, row));
       });
-  });
-  return recordsBySheet;
-}
-
-function readBootstrapWithSpreadsheetApp_() {
-  const spreadsheet = getSpreadsheet_();
-  const recordsBySheet = {};
-  bootstrapSpecs_().forEach(function (spec) {
-    recordsBySheet[spec.name] = readRecordsFromSheet_(
-      requiredSheet_(spreadsheet, spec),
-      spec,
-      true,
-    );
   });
   return recordsBySheet;
 }
