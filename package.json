@@ -1,5 +1,12 @@
 {
   "name": "ted-google-sheets",
+  "module": "index.ts",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
   "private": true,
   "scripts": {
     "build": "bun run build.ts",
@@ -9,12 +16,5 @@
     "go": "bun run build & bun run css",
     "test": "bun test tests/app-state.test.ts tests/migration.test.ts"
   },
-  "module": "index.ts",
-  "type": "module",
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
-  }
+  "type": "module"
 }
