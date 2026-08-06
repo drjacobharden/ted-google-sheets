@@ -1,4 +1,3 @@
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -17,4 +16,3 @@ export class SettingsScreen extends HTMLElement {
 }
 
 if (!customElements.get("settings-screen")) customElements.define("settings-screen", SettingsScreen);
-registerLegacyRouteAdapter("SettingsRoute");
