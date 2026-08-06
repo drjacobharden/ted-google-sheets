@@ -1,7 +1,10 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction, EntityKind, SyncItem } from "../../api/budget-api";
-import { appRouter, eventTargetElement } from "../../utilities/legacy-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { escapeHTML, messageFromError, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -133,7 +136,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
 
   /** Renders every sync item and updates retry summary state. */
   #render(): void {
-    const items = APIs.budget.getSyncItems();
+    const items = APIs.getSyncItems();
     const failed = items.filter((item) => item.status === "failed").length;
     const retrying = items.filter((item) => item.retrying).length;
     const waiting = items.filter((item) => item.waitingForOnline).length;
@@ -163,7 +166,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
     const action = target?.closest<HTMLElement>("[data-sync-action]")?.dataset.syncAction;
     const element = target?.closest<HTMLElement>("[data-sync-key]");
     if (!action || !element?.dataset.syncKey) return;
-    const item = APIs.budget.getSyncItems().find((entry) => entry.key === element.dataset.syncKey);
+    const item = APIs.getSyncItems().find((entry) => entry.key === element.dataset.syncKey);
     if (!item) return;
     try {
       if (action === "review") this.#reviewItem(item);
@@ -177,8 +180,8 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
 
   /** Opens the appropriate conflict-review drawer for a sync item. */
   #reviewItem(item: SyncItem): void {
-    if (item.source === "transaction") appRouter().updateParams({ drawer: "review", transactionId: item.id });
-    else if (this.#isInvestmentMonth(item)) appRouter().updateParams({ drawer: "investment-month", investmentAccountId: this.#recordString(item, "accountId"), investmentMonth: this.#recordString(item, "month"), investmentReviewId: item.id });
+    if (item.source === "transaction") router.updateParams({ drawer: "review", transactionId: item.id });
+    else if (this.#isInvestmentMonth(item)) router.updateParams({ drawer: "investment-month", investmentAccountId: this.#recordString(item, "accountId"), investmentMonth: this.#recordString(item, "month"), investmentReviewId: item.id });
   }
 
   /** Retries a transaction, investment, or entity sync item. */
@@ -205,7 +208,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
 
   /** Retries all retryable synchronization items except unresolved conflicts. */
   #handleRetryAll(): void {
-    APIs.budget.getSyncItems().filter((item) => item.retrying || item.status === "failed").forEach((item) => {
+    APIs.getSyncItems().filter((item) => item.retrying || item.status === "failed").forEach((item) => {
       if (item.failureCode !== "conflict") this.#retryItem(item);
     });
     this.#render();
@@ -213,4 +216,3 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
 }
 
 if (!customElements.get("sync-screen")) customElements.define("sync-screen", SyncScreen);
-registerLegacyRouteAdapter("SyncRoute");
