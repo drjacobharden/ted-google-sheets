@@ -311,7 +311,7 @@ test("validates normalized references, rebuilds Ledger, and batch-renames 1,000 
 
 });
 
-test("bootstraps all top-level data with one spreadsheet open and one read per sheet", () => {
+test("bootstraps all top-level data with one Sheets API batch request", () => {
   const runtime = loadScript();
   runtime.context.setup();
   const { call, spreadsheet } = runtime;
@@ -346,10 +346,27 @@ test("bootstraps all top-level data with one spreadsheet open and one read per s
   ];
   topLevelSheets.forEach((name) => { spreadsheet.getSheetByName(name).reads = []; });
   runtime.resetOpenCalls();
+  let batchCalls = 0;
+  runtime.context.Sheets = {
+    Spreadsheets: {
+      Values: {
+        batchGet(_id, options) {
+          batchCalls += 1;
+          return {
+            valueRanges: options.ranges.map((range) => {
+              const name = range.match(/^'(.+)'!/)[1].replace(/''/g, "'");
+              return { values: spreadsheet.getSheetByName(name).data.map((row) => row.slice()) };
+            }),
+          };
+        },
+      },
+    },
+  };
 
   const result = call({ action: "bootstrap" });
   assert.equal(result.ok, true);
-  assert.equal(runtime.getOpenCalls(), 1);
+  assert.equal(batchCalls, 1);
+  assert.equal(runtime.getOpenCalls(), 0);
   assert.equal(result.data.transactions.length, 2001);
   assert.equal(result.data.transactions[0].date, "2024-01-15");
   assert.equal(result.data.transactions[0].vendor, "Cafe");
@@ -360,9 +377,26 @@ test("bootstraps all top-level data with one spreadsheet open and one read per s
     "investmentAccounts", "investmentBalances", "investmentContributions",
   ]);
   topLevelSheets.forEach((name) => {
-    assert.ok(spreadsheet.getSheetByName(name).reads.length <= 1, `${name} was read more than once`);
+    assert.equal(spreadsheet.getSheetByName(name).reads.length, 0, `${name} used the SpreadsheetApp fallback`);
   });
   assert.equal(call({ action: "health" }).data.features.includes("bootstrap"), true);
+});
+
+test("fails bootstrap instead of falling back when the Sheets API is unavailable", () => {
+  const runtime = loadScript();
+  runtime.context.setup();
+  [...runtime.spreadsheet.sheets.values()].forEach((sheet) => { sheet.reads = []; });
+  runtime.resetOpenCalls();
+
+  const result = runtime.call({ action: "bootstrap" });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Bootstrap batch read failed: The Advanced Sheets service is not available/);
+  assert.equal(runtime.getOpenCalls(), 0);
+  assert.equal(
+    [...runtime.spreadsheet.sheets.values()].reduce((sum, sheet) => sum + sheet.reads.length, 0),
+    0,
+  );
 });
 
 test("bootstraps through one Sheets API batchGet and normalizes unformatted dates", () => {

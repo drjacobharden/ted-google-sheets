@@ -19,7 +19,7 @@ function loadDateRange() {
     Intl, Date, Set,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("js/components/date-range-picker.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("src/components/date-range-picker/date-range-picker.ts", "utf8"), context);
   return context.window.DateRangePickerUtils;
 }
 
@@ -56,7 +56,7 @@ test("custom date selection keeps draft ranges ordered and supports a single day
 });
 
 test("calendar day buttons remain attached across range updates", () => {
-  const component = fs.readFileSync("js/components/date-range-picker.js", "utf8");
+  const component = fs.readFileSync("src/components/date-range-picker/date-range-picker.ts", "utf8");
   assert.match(component, /this\.\#grid\.replaceChildren\(\.\.\.buttons\)/);
   assert.match(component, /const buttons = this\.\#grid\.children/);
   assert.doesNotMatch(component, /#renderCalendar\(\)[\s\S]*replaceChildren/);
@@ -73,7 +73,7 @@ test("shell fills the viewport and elevates only the desktop workspace", () => {
   const shell = fs.readFileSync("css/shell.css", "utf8");
   const navigation = fs.readFileSync("css/navigation-bar.css", "utf8");
   const responsive = fs.readFileSync("css/responsiveness.css", "utf8");
-  const userForm = fs.readFileSync("js/components/user-form.js", "utf8");
+  const userForm = fs.readFileSync("src/components/user-form/user-form.ts", "utf8");
 
   assert.doesNotMatch(html, /class="topbar"/);
   assert.doesNotMatch(html, /id="profile-(?:name|monogram)"/);
@@ -92,9 +92,9 @@ test("shell fills the viewport and elevates only the desktop workspace", () => {
 
 test("transaction entry exposes an accessible vendor combobox", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const vendor = fs.readFileSync("js/components/vendor-input.js", "utf8");
+  const vendor = fs.readFileSync("src/components/vendor-input/vendor-input.ts", "utf8");
   const controller = fs.readFileSync(
-    "js/components/select-create-controller.js",
+    "src/components/select-create-controller/select-create-controller.ts",
     "utf8",
   );
   assert.match(html, /<vendor-input><\/vendor-input>/);
@@ -116,7 +116,7 @@ test("entity lists drill down into a shared detail screen and rename drawer", ()
   const people = fs.readFileSync("src/screens/people-screen/people-screen.ts", "utf8");
   const detail = fs.readFileSync("src/screens/entity-detail-screen/entity-detail-screen.ts", "utf8");
   const detailTemplate = fs.readFileSync("src/screens/entity-detail-screen/template.html", "utf8");
-  const editor = fs.readFileSync("js/routes/entity-drawer.js", "utf8");
+  const editor = fs.readFileSync("src/screens/entity-drawer-screen/entity-drawer-screen.ts", "utf8");
   assert.match(html, /id="route-entity-detail"/);
   assert.match(detail, /this\.dataset\.screen = "entity-detail"/);
   assert.match(html, /id="entity-drawer-backdrop"/);
@@ -209,7 +209,7 @@ test("routed drawers share focus-safe entry and exit animations", () => {
     /\.drawer-overlay\.is-closing > \.transaction-drawer[\s\S]*translateX\(100%\)[\s\S]*transition-duration: 260ms/,
   );
 
-  ["js/routes/transaction-drawer.js", "js/routes/entity-drawer.js"].forEach(
+  ["src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "src/screens/entity-drawer-screen/entity-drawer-screen.ts"].forEach(
     (path) => {
       const drawer = fs.readFileSync(path, "utf8");
       assert.match(drawer, /void drawer\.offsetWidth/);

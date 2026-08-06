@@ -14,6 +14,10 @@ const overlay = fs.readFileSync(
   "src/elements/overlay-manager/overlay-manager.ts",
   "utf8",
 );
+const splash = fs.readFileSync(
+  "src/components/splash-indicator/splash-indicator.ts",
+  "utf8",
+);
 
 test("refresh button explicitly refreshes the shared bootstrap data", () => {
   assert.match(source, /budgetUI\(\)\?\.initializeData\(\{ refresh: true \}\)/);
@@ -25,4 +29,9 @@ test("refresh indicator explains an automatic bootstrap retry", () => {
   assert.match(indicator, /Google didn’t return the data\. Retrying…/);
   assert.match(overlay, /budget:data-refresh-retrying/);
   assert.match(overlay, /state = "retrying"/);
+});
+
+test("failed bootstrap indicators expose a working retry action", () => {
+  assert.match(indicator, /appController\.initializeData\(\{ refresh: true \}\)/);
+  assert.match(splash, /appController\.initializeData\(\{ refresh: true \}\)/);
 });

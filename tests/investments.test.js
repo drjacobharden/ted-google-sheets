@@ -99,7 +99,7 @@ function loadInvestments(options = {}) {
     Promise,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("js/investments-api.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("src/api/investment-api.ts", "utf8"), context);
   return {
     api: window.InvestmentAPI,
     values,
@@ -144,7 +144,7 @@ function loadInvestmentView(data) {
   const context = { window, Date, Map, Set, Number, String, Math, Array };
   vm.createContext(context);
   vm.runInContext(
-    fs.readFileSync("js/utils/investment-view.js", "utf8"),
+    fs.readFileSync("src/utilities/investment-view.ts", "utf8"),
     context,
   );
   return window.InvestmentView;
@@ -924,12 +924,12 @@ test("investment routes and drawers replace the legacy global screens", () => {
   const source = [
     "src/screens/dashboard-screen/dashboard-screen.ts",
     "src/api/investment-api.ts",
-    "js/utils/investment-view.js",
+    "src/utilities/investment-view.ts",
     "src/screens/investment-overview-screen/investment-overview-screen.ts",
     "src/screens/investment-accounts-screen/investment-accounts-screen.ts",
     "src/screens/investment-account-detail-screen/investment-account-detail-screen.ts",
-    "js/routes/investment-account-drawer.js",
-    "js/routes/investment-month-drawer.js",
+    "src/screens/investment-account-drawer-screen/investment-account-drawer-screen.ts",
+    "src/screens/investment-month-drawer-screen/investment-month-drawer-screen.ts",
   ]
     .map((file) => fs.readFileSync(file, "utf8"))
     .join("\n");
@@ -986,7 +986,7 @@ test("investment routes and drawers replace the legacy global screens", () => {
 
 test("primary navigation groups budgeting and investment destinations", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const source = fs.readFileSync("js/main.js", "utf8");
+  const source = fs.readFileSync("src/main.ts", "utf8");
   const styles =
     fs.readFileSync("styles.css", "utf8") +
     fs.readFileSync("css/navigation-bar.css", "utf8");

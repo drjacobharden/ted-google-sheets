@@ -5,7 +5,7 @@ const vm = require("node:vm");
 
 function loadUtils() {
   const window = {};
-  vm.runInNewContext(fs.readFileSync("js/utils/import-utils.js", "utf8"), {
+  vm.runInNewContext(fs.readFileSync("src/utilities/import-utilities.ts", "utf8"), {
     window, String, Number, Date, Math, JSON, Map, Set, Error,
   });
   return window.ImportUtils;
@@ -234,8 +234,8 @@ test("investment staging breaks balance ties by later CSV row and leaves missing
 test("import route and scripts are wired for direct index loading", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const navigationTemplate = fs.readFileSync("html templates/navigation-bar.html", "utf8");
-  const router = fs.readFileSync("js/router.js", "utf8");
-  const api = fs.readFileSync("js/import-api.js", "utf8");
+  const router = fs.readFileSync("src/router/router.ts", "utf8");
+  const api = fs.readFileSync("src/api/import-api.ts", "utf8");
   assert.match(navigationTemplate, /data-tab="import"/);
   assert.match(html, /id="route-import"/);
   assert.match(html, /<import-screen><\/import-screen>/);
@@ -263,7 +263,7 @@ test("import route and scripts are wired for direct index loading", () => {
   assert.doesNotMatch(route, /type="month"/);
   assert.doesNotMatch(route, /data-contribution-index/);
   assert.match(route, /notes: row\.existing\?\.balance\?\.notes \|\| ""/);
-  const datePicker = fs.readFileSync("js/components/date-picker.js", "utf8");
+  const datePicker = fs.readFileSync("src/components/date-picker/date-picker.ts", "utf8");
   assert.match(datePicker, /!this\.#value && !this\.hasAttribute\("allow-empty"\)/);
   assert.match(route, /Match or create vendors using these values/);
   assert.match(route, /Match or create categories using these values/);

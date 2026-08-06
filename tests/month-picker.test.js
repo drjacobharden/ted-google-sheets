@@ -35,7 +35,7 @@ function loadMonthPicker() {
     Math,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("js/components/month-picker.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("src/components/month-picker/month-picker.ts", "utf8"), context);
   return { helpers: context.window.MonthPickerUI, MonthPicker };
 }
 
@@ -87,8 +87,8 @@ test("month and date-range pickers are wired into investment selections", () => 
   const html = fs.readFileSync("index.html", "utf8");
   const overview = fs.readFileSync("src/screens/investment-overview-screen/investment-overview-screen.ts", "utf8");
   const overviewTemplate = fs.readFileSync("src/screens/investment-overview-screen/template.html", "utf8");
-  const monthDrawer = fs.readFileSync("js/routes/investment-month-drawer.js", "utf8");
-  const component = fs.readFileSync("js/components/month-picker.js", "utf8");
+  const monthDrawer = fs.readFileSync("src/screens/investment-month-drawer-screen/investment-month-drawer-screen.ts", "utf8");
+  const component = fs.readFileSync("src/components/month-picker/month-picker.ts", "utf8");
   assert.doesNotMatch(html, /type=["']month["']/);
   assert.doesNotMatch(overview + monthDrawer, /type=["']month["']/);
   assert.match(html, /<month-picker\s+label="Reporting month"\s+alignment="right"/);

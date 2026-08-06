@@ -36,7 +36,7 @@ function loadAPI(seed = {}, fetchImpl, runtimeOptions = {}) {
     console,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("js/api.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("src/api/budget-api.ts", "utf8"), context);
   return {
     api: context.window.BudgetAPI, localStorage, values, events,
     dispatchWindowEvent: (type) => context.window.dispatchEvent({ type }),
