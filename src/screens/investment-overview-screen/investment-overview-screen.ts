@@ -1,6 +1,9 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
-import { dateRangeDetail, investmentView, type DateRangePickerElement, type DateRangeValue } from "../../utilities/legacy-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { escapeHTML, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -68,7 +71,7 @@ export class InvestmentOverviewScreen extends HTMLElement implements EventListen
 
   /** Renders investment summary cards, trend coverage, and account allocation. */
   #render(): void {
-    const view = investmentView();
+    const view = InvestmentView;
     const range = view.monthRangeFromDates(this.#dateRange);
     const values = view.metrics(range);
     this.#summary.innerHTML =
@@ -94,4 +97,3 @@ export class InvestmentOverviewScreen extends HTMLElement implements EventListen
 }
 
 if (!customElements.get("investment-overview-screen")) customElements.define("investment-overview-screen", InvestmentOverviewScreen);
-registerLegacyRouteAdapter("InvestmentOverviewRoute");
