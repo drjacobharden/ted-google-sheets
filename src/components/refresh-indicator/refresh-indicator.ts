@@ -1,3 +1,4 @@
+import { appController } from "../../state/app-controller";
 import RefreshTempString from "./template.html" with { type: "text" };
 
 export type RefreshStates = "inProgress" | "retrying" | "idle" | "failed";
@@ -51,8 +52,18 @@ export class RefreshIndicator extends HTMLElement {
     this.#spinner = container.querySelector(".spinner");
     this.#label = container.querySelector("#app-refresh-text");
     this.#button = container.querySelector("#app-refresh-retry");
+    this.#button?.addEventListener("click", this);
 
     this.append(container);
+  }
+
+  handleEvent(event: Event): void {
+    if (event.type === "click" && event.currentTarget === this.#button)
+      void appController.initializeData({ refresh: true }).catch(() => {});
+  }
+
+  disconnectedCallback(): void {
+    this.#button?.removeEventListener("click", this);
   }
 }
 
