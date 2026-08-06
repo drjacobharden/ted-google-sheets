@@ -4,3 +4,7 @@
   z-index: 1000;
   pointer-events: none;
 }
+
+#overlay-manager :is(.drawer-overlay, .overlay, .toast-stack, .app-notice) {
+  pointer-events: auto;
+}

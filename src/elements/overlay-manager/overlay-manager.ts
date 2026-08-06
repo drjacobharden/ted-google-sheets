@@ -8,6 +8,9 @@ import {
 } from "../new-entity-popover/new-entity-popover";
 import { PopoverOptions } from "../../components/popover-menu/popover-menu";
 import { appState } from "../../state/app-state";
+import type { ToastStack } from "../../components/toast-stack/toast-stack";
+import { registerToastStack } from "../../components/toast-stack/toast-service";
+import { router } from "../../router/router";
 
 export class OverlayManager extends HTMLElement {
   #listening = false;
@@ -45,6 +48,17 @@ export class OverlayManager extends HTMLElement {
       manager.append(newEntity);
       this.#newEntityPopover = newEntity;
 
+      const alert = document.createElement("app-alert");
+      const toasts = document.createElement("toast-stack") as ToastStack;
+      const syncNotifications = document.createElement("sync-notifications");
+      const transactionDrawer = document.createElement("transaction-drawer-screen");
+      const entityDrawer = document.createElement("entity-drawer-screen");
+      const investmentAccountDrawer = document.createElement("investment-account-drawer-screen");
+      const investmentMonthDrawer = document.createElement("investment-month-drawer-screen");
+      const onboarding = document.createElement("onboarding-overlay");
+      manager.append(alert, toasts, syncNotifications, transactionDrawer, entityDrawer, investmentAccountDrawer, investmentMonthDrawer, onboarding);
+      registerToastStack(toasts);
+
       this.append(manager);
     }
 
@@ -57,6 +71,7 @@ export class OverlayManager extends HTMLElement {
     window.addEventListener("budget:data-refresh-failed", this);
     window.addEventListener("app:route-changed", this);
     document.addEventListener("pointerdown", this, true);
+    document.addEventListener("drawer:close-requested", this);
     document.addEventListener("keydown", this, true);
   }
 
@@ -92,6 +107,10 @@ export class OverlayManager extends HTMLElement {
         }
         break;
 
+      case "drawer:close-requested":
+        this.#clearDrawerRoute();
+        break;
+
       case "keydown":
         if ((event as KeyboardEvent).key === "Escape") {
           appState.set("activeDropdownKey", null);
@@ -121,6 +140,10 @@ export class OverlayManager extends HTMLElement {
 
   hideEntityForm() {
     this.#newEntityPopover.hideForm();
+  }
+
+  #clearDrawerRoute(): void {
+    router.updateParams({ drawer: null, transactionId: null, entityKind: null, entityId: null, investmentAccountId: null, investmentMonth: null, investmentReviewId: null });
   }
 
   #handleRefreshStarted(event: CustomEvent) {
@@ -173,6 +196,7 @@ export class OverlayManager extends HTMLElement {
     window.removeEventListener("budget:data-refresh-failed", this);
     window.removeEventListener("app:route-changed", this);
     document.removeEventListener("pointerdown", this, true);
+    document.removeEventListener("drawer:close-requested", this);
     document.removeEventListener("keydown", this, true);
   }
 }
