@@ -1,6 +1,9 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
-import { budgetUI, dateRangeDetail, investmentView, type DateRangePickerElement, type DateRangeValue } from "../../utilities/legacy-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -70,8 +73,8 @@ export class DashboardScreen extends HTMLElement implements EventListenerObject 
 
   /** Renders summary cards, investment trend, and savings breakdown. */
   #render(): void {
-    const view = investmentView();
-    const transactions = budgetUI()?.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
+    const view = InvestmentView;
+    const transactions = appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
     const totals = APIs.investment.calculate(transactions, this.#range);
     const monthRange = view.monthRangeFromDates(this.#range);
     const metrics = view.metrics(monthRange);
@@ -94,4 +97,3 @@ export class DashboardScreen extends HTMLElement implements EventListenerObject 
 }
 
 if (!customElements.get("dashboard-screen")) customElements.define("dashboard-screen", DashboardScreen);
-registerLegacyRouteAdapter("DashboardRoute");
