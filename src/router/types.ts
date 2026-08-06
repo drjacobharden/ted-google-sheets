@@ -1,58 +1,14 @@
-// src/router/router-types.ts
+import type { EntityKind } from "../api/budget-api";
 
-import { AppAPIs } from "../api/api";
-
-export type RouteName =
-  | "dashboard"
-  | "transactions"
-  | "categories"
-  | "vendors"
-  | "people"
-  | "import"
-  | "entity-detail"
-  | "entity-archive"
-  | "sync"
-  | "settings"
-  | "investment-overview"
-  | "investment-accounts"
-  | "investment-account-detail";
-
-export type RouteParams = Record<string, string>;
-
-export interface RouteContext {
-  route: RouteName;
-  params: RouteParams;
-  api: AppAPIs;
+export type RouteName = "dashboard" | "transactions" | "categories" | "vendors" | "people" | "import" | "entity-detail" | "entity-archive" | "sync" | "settings" | "investment-overview" | "investment-accounts" | "investment-account-detail";
+export type DrawerName = "new" | "edit" | "review" | "entity-edit" | "investment-account" | "investment-month";
+export interface KnownRouteParams {
+  kind?: EntityKind; id?: string; accountId?: string; drawer?: DrawerName;
+  transactionId?: string; entityKind?: EntityKind; entityId?: string;
+  investmentAccountId?: string; investmentMonth?: string; investmentReviewId?: string;
 }
-
-export interface RouteModule {
-  mount(screen: HTMLElement, context: RouteContext): void | Promise<void>;
-  unmount(): void;
-}
-
-export interface ParsedRoute {
-  name: RouteName;
-  params: RouteParams;
-}
-
-export interface NavigationTarget {
-  name: RouteName;
-  params: RouteParams;
-  hash: string;
-}
-
+export type RouteParams = Record<string, string> & Partial<KnownRouteParams>;
+export interface ParsedRoute { name: RouteName; params: RouteParams; }
+export interface NavigationTarget extends ParsedRoute { hash: string; }
 export type NavigationGuard = (target: NavigationTarget) => boolean;
-
-export interface RouteChangedEvent extends Event {
-  detail: RouteContext;
-}
-
-export type RouterConfig = Record<
-  RouteName,
-  {
-    section: string;
-    template: string;
-    script?: string;
-    module?: () => RouteModule;
-  }
->;
+export interface RouteChangedEventDetail extends ParsedRoute { route: RouteName; }
