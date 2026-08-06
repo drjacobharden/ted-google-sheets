@@ -1,9 +1,12 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { BudgetEntity, EntityKind, ImportedEntityResolution, TransactionType } from "../../api/budget-api";
 import type { AmountMode, ImportColumnMapping, ImportMapping, ImportProfile, ImportTarget } from "../../api/import-api";
-import { appRouter } from "../../utilities/legacy-runtime";
 import { importUtilities, type ImportColumnKey, type ImportColumnReference, type ImportReferences, type ParsedImport, type StagedImportRow } from "../../utilities/import-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { escapeHTML, messageFromError, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -1583,7 +1586,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
         reviewStep.hidden = true;
         progressStep.hidden = true;
         profileStep.hidden = false;
-        appRouter().setNavigationGuard(null);
+        router.setNavigationGuard(null);
         window.removeEventListener("beforeunload", handleBeforeUnload);
         renderSourcePreview();
         profileOptions();
@@ -2259,7 +2262,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
       }
       reviewStep.hidden = true;
       progressStep.hidden = false;
-      appRouter().setNavigationGuard(guardNavigation);
+      router.setNavigationGuard(guardNavigation);
       window.addEventListener("beforeunload", handleBeforeUnload);
       renderCommitProgress();
       message(root.querySelector("#import-progress-message"), "");
@@ -2346,7 +2349,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
           "Import complete. Every selected row was confirmed in Google Sheets.",
           "success",
         );
-        appRouter().setNavigationGuard(null);
+        router.setNavigationGuard(null);
         window.removeEventListener("beforeunload", handleBeforeUnload);
       } catch (error) {
         state.commit.status = "failed";
@@ -2392,7 +2395,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
           reviewStep.hidden = true;
           progressStep.hidden = true;
           renderSourcePreview();
-          appRouter().setNavigationGuard(null);
+          router.setNavigationGuard(null);
           window.removeEventListener("beforeunload", handleBeforeUnload);
           message(
             root.querySelector("#import-file-message"),
@@ -2448,7 +2451,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
           state.commit = null as unknown as ImportCommit;
           progressStep.hidden = true;
           reviewStep.hidden = false;
-          appRouter().setNavigationGuard(null);
+          router.setNavigationGuard(null);
           window.removeEventListener("beforeunload", handleBeforeUnload);
           renderReview();
         }
@@ -2471,7 +2474,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
             "Ready for another CSV.",
           );
         }
-        if (action === "open-sync") appRouter().navigate("sync");
+        if (action === "open-sync") router.navigate("sync");
         if (action === "load-more") {
           handleLoadMore(event);
         }
@@ -2575,7 +2578,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
         "budget:import-profiles-changed",
         refreshProfiles,
       );
-      appRouter().setNavigationGuard(null);
+      router.setNavigationGuard(null);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }
@@ -2604,4 +2607,3 @@ export class ImportScreen extends HTMLElement {
 }
 
 if (!customElements.get("import-screen")) customElements.define("import-screen", ImportScreen);
-registerLegacyRouteAdapter("ImportRoute");
