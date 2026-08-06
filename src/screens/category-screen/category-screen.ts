@@ -1,3 +1,8 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction } from "../../api/budget-api";
 import { Breadcrumbs } from "../../components/breadcrumbs/breadcrumbs";
@@ -7,7 +12,7 @@ import {
   DatePicker,
   DatePickerStep,
   DateRangeChangedEvent,
-} from "../../components/date-range-picker/date-range-picker";
+} from "../../components/date-range-picker/date-range-picker-2";
 import {
   DropdownMenu,
   DropdownSelectionEvent,
@@ -15,8 +20,6 @@ import {
 import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
 import { DateRange, DateUtils } from "../../utilities/date-utilities";
 import { errorMessage } from "../../utilities/data-utilities";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
-import { appRouter, budgetUI } from "../../utilities/legacy-runtime";
 import { money } from "../../utilities/view-formatters";
 import {
   sortCategoryScreen,
@@ -250,7 +253,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   /** Returns the current application transaction collection. */
   #transactions(): BudgetTransaction[] {
     return (
-      budgetUI()?.getTransactions() ?? APIs.budget.getCachedTransactions() ?? []
+      appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? []
     );
   }
 
@@ -601,7 +604,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
   /** Navigates to the selected category's entity detail route. */
   #navigateToCategory(categoryId: string): void {
-    appRouter().navigate("entity-detail", {
+    router.navigate("entity-detail", {
       kind: "category",
       id: categoryId,
     });
@@ -623,7 +626,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     }
 
     if (event.detail.value === "edit") {
-      appRouter().updateParams({
+      router.updateParams({
         drawer: "entity-edit",
         entityKind: "category",
         entityId: categoryId,
@@ -725,5 +728,3 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 if (!customElements.get("category-screen")) {
   customElements.define("category-screen", CategoryScreen);
 }
-
-registerLegacyRouteAdapter("CategoryRoute");
