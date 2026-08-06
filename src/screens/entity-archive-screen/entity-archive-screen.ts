@@ -1,8 +1,11 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { BudgetEntity, EntityKind } from "../../api/budget-api";
 import type { RouteName } from "../../router/types";
-import { appRouter, eventTargetElement } from "../../utilities/legacy-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { escapeHTML, messageFromError } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -42,7 +45,7 @@ export class EntityArchiveScreen extends HTMLElement implements EventListenerObj
       this.append(template.content.cloneNode(true));
       this.#captureElements();
     }
-    const requestedKind = appRouter().currentParams().kind;
+    const requestedKind = router.currentParams().kind;
     this.#kind = requestedKind === "vendor" || requestedKind === "assignment" ? requestedKind : "category";
     this.#settings = SETTINGS_BY_KIND[this.#kind];
     this.#title.textContent = `Archived ${this.#settings.plural}`;
@@ -140,7 +143,7 @@ export class EntityArchiveScreen extends HTMLElement implements EventListenerObj
   #handleClick(event: Event): void {
     const target = eventTargetElement(event);
     if (target?.closest("[data-archive-back]")) {
-      appRouter().navigate(this.#settings.route);
+      router.navigate(this.#settings.route);
       return;
     }
     const row = target?.closest<HTMLElement>("[data-entity-id]");
@@ -173,9 +176,8 @@ export class EntityArchiveScreen extends HTMLElement implements EventListenerObj
 
   /** Opens the entity editor drawer for an archived item. */
   #openItem(id: string): void {
-    appRouter().updateParams({ drawer: "entity-edit", entityKind: this.#kind, entityId: id });
+    router.updateParams({ drawer: "entity-edit", entityKind: this.#kind, entityId: id });
   }
 }
 
 if (!customElements.get("entity-archive-screen")) customElements.define("entity-archive-screen", EntityArchiveScreen);
-registerLegacyRouteAdapter("EntityArchiveRoute");
