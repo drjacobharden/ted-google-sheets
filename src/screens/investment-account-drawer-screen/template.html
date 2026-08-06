@@ -1,0 +1,43 @@
+    <div class="drawer-overlay" id="investment-account-drawer-backdrop" hidden>
+      <aside
+        class="transaction-drawer"
+        id="investment-account-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="investment-account-drawer-title"
+        tabindex="-1"
+      >
+        <drawer-header
+          id="investment-account-drawer-header"
+          title="Edit investment account"
+          eyebrow="Account details"
+        ></drawer-header>
+
+        <form id="investment-account-edit-form">
+          <div class="drawer-form-grid">
+            <label class="form-field"
+              ><span>Name</span><input name="name" required /></label
+            ><label class="form-field"
+              ><span>Source</span
+              ><select name="source" required>
+                <option value="manual">Manual transfer</option>
+                <option value="paycheck">Paycheck deduction</option>
+              </select></label
+            >
+          </div>
+          <p class="form-footnote">
+            Paycheck deductions count toward Total savings. Manual transfers
+            allocate savings that the budget has already counted.
+          </p>
+          <p class="form-message" role="status"></p>
+          <footer class="transaction-drawer-actions">
+            <button class="secondary-button" type="button" data-account-archive>
+              Archive</button
+            ><button class="secondary-button" type="button" data-account-cancel>
+              Cancel</button
+            ><button class="primary-button" type="submit">Save changes</button>
+          </footer>
+        </form>
+      </aside>
+    </div>
+    <!-- Investment contribution right sidebar -->
