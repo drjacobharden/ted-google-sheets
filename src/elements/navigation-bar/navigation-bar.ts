@@ -1,4 +1,6 @@
 import { getIcon } from "../../icons";
+import { router } from "../../router/router";
+import { APIs } from "../../api/api";
 import { OverlayManager } from "../overlay-manager/overlay-manager";
 import NavBarTempString from "./template.html" with { type: "text" };
 
@@ -126,6 +128,10 @@ class NavBar extends HTMLElement {
     this.#tooltipButtons = this.querySelectorAll<HTMLElement>("[data-tooltip]");
 
     this.#wrapper.addEventListener("click", this);
+    window.addEventListener("budget:sync-changed", this);
+    window.addEventListener("online", this);
+    window.addEventListener("offline", this);
+    this.#updateSyncBadge();
 
     for (let i = 0, l = this.#tooltipButtons.length; i < l; i++) {
       const button = this.#tooltipButtons[i];
@@ -146,6 +152,12 @@ class NavBar extends HTMLElement {
 
       case "pointerleave":
         this.handlePointerLeave();
+        break;
+
+      case "budget:sync-changed":
+      case "online":
+      case "offline":
+        this.#updateSyncBadge();
         break;
 
       default:
@@ -194,11 +206,24 @@ class NavBar extends HTMLElement {
   private handleNavigationClick(target: HTMLElement) {
     const item = target.closest("[data-tab]");
     if (!item) return;
-    window.AppRouter.navigate(item.dataset.tab);
+    const route = (item as HTMLElement).dataset.tab;
+    if (route) router.navigate(route as import("../../router/types").RouteName);
+  }
+
+  #updateSyncBadge(): void {
+    const badge = this.querySelector<HTMLElement>("#sync-nav-badge");
+    if (!badge) return;
+    const items = APIs.getSyncItems();
+    badge.hidden = items.length === 0;
+    badge.textContent = String(items.length);
+    badge.classList.toggle("failed", items.some(item => item.status === "failed"));
   }
 
   disconnectedCallback() {
     this.#wrapper?.removeEventListener("click", this);
+    window.removeEventListener("budget:sync-changed", this);
+    window.removeEventListener("online", this);
+    window.removeEventListener("offline", this);
 
     for (let i = 0, l = this.#tooltipButtons?.length ?? 0; i < l; i++) {
       const button = this.#tooltipButtons![i];
