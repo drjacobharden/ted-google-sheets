@@ -179,6 +179,9 @@ function createDateUtilities() {
     year: "numeric",
     timeZone: "UTC",
   });
+  const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  const createdDateTimeFormatter = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
+  const shortMonthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   //    Formats a date to the "Jan" format
   const shortMonthFormatter = new Intl.DateTimeFormat("en-US", {
@@ -320,7 +323,9 @@ function createDateUtilities() {
     subMonths,
     subYears,
     toDateId,
+    toISODate,
     fromDateId,
+    fromISODate: fromDateId,
     isSameMonth,
     isSameWeek,
     isSameYear,
@@ -332,6 +337,9 @@ function createDateUtilities() {
     shortMonthYearFormatter,
     longMonthYearFormatter,
     dateTimeFormatter,
+    createdDateTimeFormatter,
+    monthFormatter,
+    shortMonthNames,
     defaultRange,
   };
 }

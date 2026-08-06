@@ -106,11 +106,9 @@ export interface ImportUtilities {
   validateInvestmentMonth(row: StagedImportRow, references: ImportReferences, profile: ImportProfile): { errors: string[]; warnings: string[] };
 }
 
-type ImportRuntimeWindow = Window & { ImportUtils?: ImportUtilities };
+import { ImportUtils } from "./import-utilities";
 
 /** Returns the typed CSV parsing and staging utilities exposed by the legacy runtime. */
 export function importUtilities(): ImportUtilities {
-  const utilities = (window as ImportRuntimeWindow).ImportUtils;
-  if (!utilities) throw new Error("Import utilities are not available.");
-  return utilities;
+  return ImportUtils as ImportUtilities;
 }
