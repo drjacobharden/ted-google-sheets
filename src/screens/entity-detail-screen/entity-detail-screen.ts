@@ -1,8 +1,11 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction, EntityKind } from "../../api/budget-api";
 import type { RouteName } from "../../router/types";
-import { appRouter, budgetUI, dateRangeDetail, eventTargetElement, transactionRow, type DateRangePickerElement, type DateRangeValue } from "../../utilities/legacy-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -49,10 +52,10 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
       this.append(template.content.cloneNode(true));
       this.#captureElements();
     }
-    const { kind, id } = appRouter().currentParams();
+    const { kind, id } = router.currentParams();
     this.#selected = this.#isEntityKind(kind) && id ? { kind, id } : null;
     if (!this.#selected) {
-      appRouter().navigate("transactions");
+      router.navigate("transactions");
       return;
     }
     if (this.#listening) return;
@@ -124,7 +127,7 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
       category: "categoryId", vendor: "vendorId", assignment: "assignmentId",
     };
     const selected = this.#selected;
-    const transactions = budgetUI()?.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
+    const transactions = appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
     return transactions
       .filter((item) => item[field[selected.kind]] === selected.id)
       .filter((item) => selected.kind === "assignment" || item.type !== "income")
@@ -142,7 +145,7 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
     if (!this.#selected) return;
     const entity = this.#record();
     if (!entity) {
-      if (!budgetUI()?.isReferenceDataLoaded()) {
+      if (!appController.isReferenceDataLoaded()) {
         this.#header.title = "Loading details…";
         this.#editButton.disabled = true;
         this.#summary.replaceChildren();
@@ -151,7 +154,7 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
         this.#empty.innerHTML = '<div class="spinner" aria-hidden="true"></div><p>Loading details…</p>';
         return;
       }
-      appRouter().navigate(ENTITY_DETAIL_CONFIG[this.#selected.kind].route);
+      router.navigate(ENTITY_DETAIL_CONFIG[this.#selected.kind].route);
       return;
     }
     const items = this.#transactions();
@@ -176,7 +179,7 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
       this.#empty.hidden = false;
       this.#empty.innerHTML = '<div class="empty-symbol" aria-hidden="true">$</div><h3>No activity in this range</h3><p>Choose another date range to see more transactions.</p>';
     } else {
-      this.#list.replaceChildren(...items.map((item) => transactionRow().create(item)));
+      this.#list.replaceChildren(...items.map((item) => createTransactionRow(item)));
       this.#empty.hidden = true;
       this.#table.hidden = false;
     }
@@ -185,13 +188,13 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
   /** Opens the selected entity in the editor drawer. */
   #handleEdit(): void {
     if (!this.#selected) return;
-    appRouter().updateParams({ drawer: "entity-edit", entityKind: this.#selected.kind, entityId: this.#selected.id });
+    router.updateParams({ drawer: "entity-edit", entityKind: this.#selected.kind, entityId: this.#selected.id });
   }
 
   /** Opens a clicked transaction in the editor drawer. */
   #handleListClick(event: Event): void {
     const row = eventTargetElement(event)?.closest<HTMLElement>("tr[data-transaction-id]");
-    if (row?.dataset.transactionId) appRouter().updateParams({ drawer: "edit", transactionId: row.dataset.transactionId });
+    if (row?.dataset.transactionId) router.updateParams({ drawer: "edit", transactionId: row.dataset.transactionId });
   }
 
   /** Opens a keyboard-activated transaction in the editor drawer. */
@@ -200,9 +203,8 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
     const row = eventTargetElement(event)?.closest<HTMLElement>("tr[data-transaction-id]");
     if (!row?.dataset.transactionId) return;
     event.preventDefault();
-    appRouter().updateParams({ drawer: "edit", transactionId: row.dataset.transactionId });
+    router.updateParams({ drawer: "edit", transactionId: row.dataset.transactionId });
   }
 }
 
 if (!customElements.get("entity-detail-screen")) customElements.define("entity-detail-screen", EntityDetailScreen);
-registerLegacyRouteAdapter("EntityRoute");
