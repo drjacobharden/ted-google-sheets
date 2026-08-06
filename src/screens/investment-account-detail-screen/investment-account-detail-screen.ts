@@ -1,7 +1,10 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { InvestmentAccount, InvestmentBalance } from "../../api/investment-api";
-import { appRouter, eventTargetElement, investmentView } from "../../utilities/legacy-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { escapeHTML, money, netFlows } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -30,7 +33,7 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
       this.append(template.content.cloneNode(true));
       this.#captureElements();
     }
-    this.#accountId = appRouter().currentParams().accountId ?? "";
+    this.#accountId = router.currentParams().accountId ?? "";
     if (this.#listening) return;
     this.#listening = true;
     this.#editButton.addEventListener("click", this);
@@ -84,11 +87,11 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
         this.#editButton.disabled = true;
         return;
       }
-      appRouter().navigate("investment-accounts");
+      router.navigate("investment-accounts");
       return;
     }
     this.#heading.title = account.name;
-    this.#heading.subtitle = `${investmentView().sourceLabel(account.source)} · Monthly balance history`;
+    this.#heading.subtitle = `${InvestmentView.sourceLabel(account.source)} · Monthly balance history`;
     this.#editButton.disabled = false;
     const rows = APIs.investment.balances().filter((item) => item.accountId === this.#accountId).sort((left, right) => right.month.localeCompare(left.month));
     this.#count.textContent = `${rows.length} ${rows.length === 1 ? "balance" : "balances"}`;
@@ -102,7 +105,7 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
     const flows = APIs.investment.contributions().filter((item) => item.accountId === this.#accountId && item.month === balance.month);
     const contributions = flows.filter((item) => item.amount > 0).length;
     const withdrawals = flows.filter((item) => item.amount < 0).length;
-    const monthLabel = investmentView().formatMonth(balance.month);
+    const monthLabel = InvestmentView.formatMonth(balance.month);
     const row = document.createElement("tr");
     row.dataset.investmentBalanceMonth = balance.month;
     row.tabIndex = 0;
@@ -115,7 +118,7 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
   /** Opens the selected investment month in its editor drawer. */
   #openMonth(row: HTMLElement | null): void {
     const month = row?.dataset.investmentBalanceMonth;
-    if (month) appRouter().updateParams({ drawer: "investment-month", investmentAccountId: this.#accountId, investmentMonth: month });
+    if (month) router.updateParams({ drawer: "investment-month", investmentAccountId: this.#accountId, investmentMonth: month });
   }
 
   /** Handles pointer activation of a monthly balance row. */
@@ -134,9 +137,8 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
 
   /** Opens the selected investment account in its editor drawer. */
   #handleEdit(): void {
-    appRouter().updateParams({ drawer: "investment-account", investmentAccountId: this.#accountId });
+    router.updateParams({ drawer: "investment-account", investmentAccountId: this.#accountId });
   }
 }
 
 if (!customElements.get("investment-account-detail-screen")) customElements.define("investment-account-detail-screen", InvestmentAccountDetailScreen);
-registerLegacyRouteAdapter("InvestmentAccountDetailRoute");
