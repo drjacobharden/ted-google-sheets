@@ -1,7 +1,10 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { InvestmentAccount } from "../../api/investment-api";
-import { appRouter, eventTargetElement, investmentView, isInvestmentSource } from "../../utilities/legacy-runtime";
-import { registerLegacyRouteAdapter } from "../../utilities/legacy-route-adapter";
 import { escapeHTML, messageFromError, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -68,7 +71,7 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
     const accounts = APIs.investment
       .accounts()
       .filter((account) => this.#includeArchived || account.active !== false);
-    const latest = investmentView().latestByAccount();
+    const latest = InvestmentView.latestByAccount();
     this.#count.textContent = `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`;
     if (!accounts.length) {
       this.#list.innerHTML = '<div class="investment-accounts-screen__empty">Add your first investment account.</div>';
@@ -85,14 +88,14 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
     row.tabIndex = 0;
     row.setAttribute("role", "button");
     row.setAttribute("aria-label", `View ${account.name} balance history`);
-    row.innerHTML = `<span class="investment-accounts-screen__avatar" aria-hidden="true">${escapeHTML(account.name.charAt(0).toUpperCase())}</span><div class="investment-accounts-screen__details"><strong>${escapeHTML(account.name)}</strong><p>${investmentView().sourceLabel(account.source)}</p></div><strong class="investment-accounts-screen__balance">${money(balance)}</strong>`;
+    row.innerHTML = `<span class="investment-accounts-screen__avatar" aria-hidden="true">${escapeHTML(account.name.charAt(0).toUpperCase())}</span><div class="investment-accounts-screen__details"><strong>${escapeHTML(account.name)}</strong><p>${InvestmentView.sourceLabel(account.source)}</p></div><strong class="investment-accounts-screen__balance">${money(balance)}</strong>`;
     return row;
   }
 
   /** Navigates to an investment account selected by mouse or keyboard. */
   #openAccount(row: HTMLElement | null): void {
     const accountId = row?.dataset.investmentAccount;
-    if (accountId) appRouter().navigate("investment-account-detail", { accountId });
+    if (accountId) router.navigate("investment-account-detail", { accountId });
   }
 
   /** Handles pointer activation inside the account list. */
@@ -141,4 +144,3 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
 }
 
 if (!customElements.get("investment-accounts-screen")) customElements.define("investment-accounts-screen", InvestmentAccountsScreen);
-registerLegacyRouteAdapter("InvestmentAccountsRoute");
