@@ -74,11 +74,12 @@ APP HIERARCHY
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  margin: 8px 8px 8px 0;
+  margin: 8px 8px 8px 8px;
   overflow: hidden;
-  background: var(--surface);
-  box-shadow: var(--shadow-prominent);
+  background: var(--content-background);
+  box-shadow: var(--shadow-card);
   border-radius: var(--radius-medium);
+  border: 1px solid var(--border);
 }
 
 .screen {
