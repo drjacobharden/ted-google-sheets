@@ -37,6 +37,18 @@ test("selection uses createEventHandler and exposes the selected item", () => {
   assert.match(component, /set selection\(key: string \| null\)/);
 });
 
+test("items can declare the initial selection", () => {
+  assert.match(component, /isDefaultValue\?: boolean/);
+  assert.match(
+    component,
+    /const defaultItem = this\.\#items\.find\(\(item\) => item\.isDefaultValue\)/,
+  );
+  assert.match(
+    component,
+    /this\.\#selection = defaultItem\?\.key \?\? this\.\#items\[0\]\?\.key \?\? null;/,
+  );
+});
+
 test("indicator position and width animate with selection text opacity", () => {
   assert.match(component, /selected\.offsetWidth/);
   assert.match(component, /selected\.offsetLeft/);

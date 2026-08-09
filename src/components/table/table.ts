@@ -1,4 +1,4 @@
-import { DateUtils } from "../../utilities/date-utilities";
+import { DateRange, DateUtils } from "../../utilities/date-utilities";
 import { getIcon, IconKeys } from "../../icons";
 import {
   addListener,
@@ -37,7 +37,14 @@ interface TableData<T> {
   sort?: { key: keyof T; direction: SortDirection } | null;
 }
 
-type TableControlsArray = ("search" | "date" | "sort" | "filter" | "divider")[];
+type TableControlsArray = (
+  | "search"
+  | "date"
+  | "sort"
+  | "filter"
+  | "divider"
+  | "dateTitle"
+)[];
 type SortDirection = "ascending" | "descending";
 
 export class Table<T extends object> extends HTMLElement {
@@ -137,6 +144,18 @@ export class Table<T extends object> extends HTMLElement {
 
   #handleDateChange(event: Event) {
     handleCustomEvent("date-range-changed", event, ({ range, step }) => {
+      if (this.#controller) {
+        this.#controller.dateTitle = DateUtils.formatDateRange(
+          range.start,
+          range.end,
+          {
+            showDays: step === "week",
+            showMonth: step !== "year",
+            monthFormat: "long",
+          },
+        );
+      }
+
       this.#dateRange = range;
       this.#filterByDate();
       this.#filterData();
@@ -308,6 +327,7 @@ class TableController<T extends object> extends HTMLElement {
   #sort: DropdownMenu | null = null;
   #searchBar: SearchBar | null = null;
   #datePicker: DatePicker | null = null;
+  #dateTitle: HTMLElement | null = null;
 
   connectedCallback() {
     if (!this.#initialized) {
@@ -318,6 +338,12 @@ class TableController<T extends object> extends HTMLElement {
   set controls(values: TableControlsArray) {
     const children = values.map((item) => {
       switch (item) {
+        case "dateTitle":
+          const span = document.createElement("span");
+          span.classList.add("date-title");
+          this.#dateTitle = span;
+          return span;
+
         case "search":
           const searchbar = document.createElement("search-bar") as SearchBar;
           this.#searchBar = searchbar;
@@ -371,6 +397,12 @@ class TableController<T extends object> extends HTMLElement {
       this.#sort.items = values.filter(
         (item) => typeof item !== "string",
       ) as DropdownMenuItem[];
+    }
+  }
+
+  set dateTitle(value: string) {
+    if (this.#dateTitle) {
+      this.#dateTitle.textContent = value;
     }
   }
 

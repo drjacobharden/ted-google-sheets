@@ -217,7 +217,7 @@ export class TransactionScreen
     this.#loadMore = this.querySelector("#load-more-transactions")!;
 
     this.#table2 = this.querySelector("table-root")!;
-    this.#table2.controls = ["search", "date", "divider", "sort", "filter"];
+    this.#table2.controls = ["dateTitle", "date", "divider", "sort", "filter"];
 
     this.#setTableData();
   }
