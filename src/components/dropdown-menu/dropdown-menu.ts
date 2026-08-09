@@ -15,6 +15,7 @@ export interface DropdownMenuItem {
   icon?: IconKeys;
   isDefaultValue?: boolean;
   destructive?: boolean;
+  selectionIcon?: IconKeys | "none";
 }
 
 export interface DropdownSelectionEvent extends CustomEvent {
@@ -111,18 +112,13 @@ export class DropdownMenu extends HTMLElement {
   }
 
   #renderItems() {
-    const selectionIconAttr = this.getAttribute("selection-icon") as
-      | IconKeys
-      | "none";
-    const selectionIcon: IconKeys | null =
-      selectionIconAttr === "none" ? null : (selectionIconAttr ?? "checkmark");
-
     const items = JSON.parse(
       this.getAttribute("items") ?? "[]",
     ) as DropdownMenuItem[];
 
     const children = items.map((item) => {
-      const { key, title, icon, isDefaultValue, destructive } = item;
+      const { key, title, icon, isDefaultValue, destructive, selectionIcon } =
+        item;
 
       const option = document.createElement("div");
       option.classList.add("dropdown-menu-item");
@@ -137,8 +133,8 @@ export class DropdownMenu extends HTMLElement {
       label.textContent = title;
       option.append(label);
 
-      if (selectionIcon) {
-        const icon = getIcon(selectionIcon);
+      if (selectionIcon !== "none") {
+        const icon = getIcon(selectionIcon ?? "checkmark");
         icon.classList.add("selection-indicator");
         option.append(icon);
       }
@@ -151,7 +147,7 @@ export class DropdownMenu extends HTMLElement {
       }
 
       if (destructive) {
-        option.style.color = "var(--error-dark)";
+        option.toggleAttribute("destructive", true);
       }
 
       return option;
@@ -255,11 +251,6 @@ export class DropdownMenu extends HTMLElement {
     if (this.#trigger) {
       this.#trigger.leadingIcon = icon;
     }
-  }
-
-  set selectionIcon(icon: IconKeys | "none") {
-    this.setAttribute("selection-icon", icon);
-    this.#renderItems();
   }
 
   close() {

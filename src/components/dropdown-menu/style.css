@@ -50,6 +50,11 @@ dropdown-menu[is-open] > .popover.dropdown-menu-list {
   margin-right: auto;
 }
 
+.dropdown-menu-item[destructive] span,
+.dropdown-menu-item[destructive] svg {
+  color: var(--danger);
+}
+
 .dropdown-menu-item .selection-indicator {
   color: var(--row-selection-border);
   opacity: 0;
