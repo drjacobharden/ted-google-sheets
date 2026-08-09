@@ -226,10 +226,7 @@ export class SegmentedControl
     );
   }
 
-  #selectionHandler = createEventHandler<SegmentedControlSelectionEvent>(
-    "segmented-control-selection",
-    this,
-  );
+  #selectionHandler = createEventHandler("segmented-control-selection", this);
 
   addListener = this.#selectionHandler.addListener;
   removeListener = this.#selectionHandler.removeListener;

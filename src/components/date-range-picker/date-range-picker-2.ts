@@ -5,7 +5,13 @@ import {
   DateUtils,
 } from "../../utilities/date-utilities";
 import { CustomButton } from "../button/button";
-import { createEventHandler } from "../../utilities/event-utilities";
+import {
+  addListener,
+  createEventHandler,
+  handleCustomEvent,
+  removeListener,
+} from "../../utilities/event-utilities";
+import { SegmentedControl } from "../segmented-control/segmented-control";
 
 export interface DateRangeChangedEvent extends CustomEvent {
   detail: {
@@ -21,6 +27,7 @@ export class DatePicker extends HTMLElement {
   #step: DatePickerStep = "year";
   #range: DateRange = DateUtils.defaultRange;
 
+  #segmentedControl!: SegmentedControl;
   #stepButtons!: NodeListOf<CustomButton>;
   #display!: CustomButton;
   #nextButton!: CustomButton;
@@ -37,18 +44,34 @@ export class DatePicker extends HTMLElement {
     this.#prevButton = this.querySelector<CustomButton>(
       '[data-date-action="prev"]',
     )!;
+
+    this.#segmentedControl = this.querySelector("segmented-control")!;
+    this.#segmentedControl.items = [
+      { key: "week", title: "Weekly" },
+      { key: "month", title: "Monthly" },
+      { key: "year", title: "Yearly" },
+    ];
+
     this.#stepButtons =
       this.querySelectorAll<CustomButton>("[data-range-step]");
 
     this.#handleStepChange();
 
     this.addEventListener("click", this);
+
+    addListener("segmented-control-selection", this.#segmentedControl, this);
   }
 
   handleEvent(event: Event) {
     switch (event.type) {
       case "click":
         this.#handleClick(event);
+        break;
+
+      case "segmented-control-selection":
+        console.log(event);
+        this.#handleStepSelection(event);
+        break;
 
       default:
         break;
@@ -76,6 +99,13 @@ export class DatePicker extends HTMLElement {
     }
   }
 
+  #handleStepSelection(event: Event) {
+    handleCustomEvent("segmented-control-selection", event, ({ value }) => {
+      this.#step = value as DatePickerStep;
+      this.#handleStepChange();
+    });
+  }
+
   #handleStepChange() {
     const current = this.#range.start;
     const step = this.#step;
@@ -91,7 +121,7 @@ export class DatePicker extends HTMLElement {
       end: util.end(current),
     };
 
-    this.#formatDisplay();
+    // this.#formatDisplay();
     this.#emitRangeChangeEvent();
 
     for (let i = 0, l = this.#stepButtons.length; i < l; i++) {
@@ -134,21 +164,21 @@ export class DatePicker extends HTMLElement {
     }[step];
 
     this.#range = util(range.start);
-    this.#formatDisplay();
+    // this.#formatDisplay();
     this.#emitRangeChangeEvent();
   }
 
-  #formatDisplay() {
-    this.#display.label = DateUtils.formatDateRange(
-      this.#range.start,
-      this.#range.end,
-      {
-        showDays: this.#step === "week",
-        showMonth: this.#step !== "year",
-        monthFormat: "short",
-      },
-    );
-  }
+  // #formatDisplay() {
+  //   this.#display.label = DateUtils.formatDateRange(
+  //     this.#range.start,
+  //     this.#range.end,
+  //     {
+  //       showDays: this.#step === "week",
+  //       showMonth: this.#step !== "year",
+  //       monthFormat: "short",
+  //     },
+  //   );
+  // }
 
   #emitRangeChangeEvent() {
     this.#events.dispatch(
@@ -159,12 +189,10 @@ export class DatePicker extends HTMLElement {
 
   disconnectedCallback() {
     this.removeEventListener("click", this);
+    removeListener("segmented-control-selection", this.#segmentedControl, this);
   }
 
-  #events = createEventHandler<DateRangeChangedEvent>(
-    "date-range-changed",
-    this,
-  );
+  #events = createEventHandler("date-range-changed", this);
 
   addListener = this.#events.addListener;
   removeListener = this.#events.removeListener;

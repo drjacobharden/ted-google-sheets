@@ -11,6 +11,8 @@ type EventDetails = Readonly<{
   "checkbox-selection": { isOn: boolean };
   "dropdown-selection": { value: string; title: string };
   "filters-changed": { filters: AppliedFilter<any>[] };
+  "table-sort-request": { key: string };
+  "segmented-control-selection": { value: string; title: string };
 }>;
 
 export const addListener = (

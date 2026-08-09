@@ -2,6 +2,7 @@ import { DateUtils } from "../../utilities/date-utilities";
 import { getIcon, IconKeys } from "../../icons";
 import {
   addListener,
+  createEventHandler,
   handleCustomEvent,
   removeListener,
 } from "../../utilities/event-utilities";
@@ -65,9 +66,8 @@ export class Table<T extends object> extends HTMLElement {
       this.#listening = true;
       addListener("date-range-changed", this, this);
       addListener("checkbox-selection", this, this);
-      addListener("dropdown-selection", this, this);
       addListener("filters-changed", this, this);
-      this.addEventListener("table-sort-request", this);
+      addListener("table-sort-request", this, this);
     }
   }
 
@@ -90,10 +90,6 @@ export class Table<T extends object> extends HTMLElement {
 
       case "checkbox-selection":
         this.#handleCheckboxSelection(event);
-        break;
-
-      case "dropdown-selection":
-        this.#handleSort(event);
         break;
 
       case "table-sort-request":
@@ -155,32 +151,22 @@ export class Table<T extends object> extends HTMLElement {
     });
   }
 
-  #handleSort(event: Event) {
-    handleCustomEvent("dropdown-selection", event, ({ value, title }) => {
-      this.#sortKey = value as keyof T;
-      this.#sortDirection = "descending";
+  #handleHeaderSort(event: CustomEvent<{ key: keyof T }>) {
+    handleCustomEvent("table-sort-request", event, ({ key }) => {
+      if (this.#sortKey !== key || this.#sortDirection === null) {
+        this.#sortKey = key as keyof T;
+        this.#sortDirection = "descending";
+      } else if (this.#sortDirection === "descending") {
+        this.#sortDirection = "ascending";
+      } else {
+        this.#sortKey = null;
+        this.#sortDirection = null;
+      }
+
       this.#filterData();
       this.#sortData();
       this.#setTableData();
     });
-  }
-
-  #handleHeaderSort(event: CustomEvent<{ key: keyof T }>) {
-    const key = event.detail.key;
-
-    if (this.#sortKey !== key || this.#sortDirection === null) {
-      this.#sortKey = key;
-      this.#sortDirection = "descending";
-    } else if (this.#sortDirection === "descending") {
-      this.#sortDirection = "ascending";
-    } else {
-      this.#sortKey = null;
-      this.#sortDirection = null;
-    }
-
-    this.#filterData();
-    this.#sortData();
-    this.#setTableData();
   }
 
   #handleFiltersChanged(event: Event) {
@@ -310,9 +296,8 @@ export class Table<T extends object> extends HTMLElement {
     this.#listening = false;
     removeListener("date-range-changed", this, this);
     removeListener("checkbox-selection", this, this);
-    removeListener("dropdown-selection", this, this);
     removeListener("filters-changed", this, this);
-    this.removeEventListener("table-sort-request", this);
+    removeListener("table-sort-request", this, this);
   }
 }
 
@@ -461,11 +446,9 @@ class TableList<T extends object> extends HTMLElement {
               : `${column.title}: not sorted. Activate to sort descending.`,
         );
         button.addEventListener("click", () => {
-          this.dispatchEvent(
-            new CustomEvent("table-sort-request", {
-              bubbles: true,
-              detail: { key: column.key },
-            }),
+          this.#events.dispatch(
+            { key: column.key as string },
+            { bubbles: true },
           );
         });
 
@@ -567,6 +550,8 @@ class TableList<T extends object> extends HTMLElement {
     this.#renderHeader(data);
     this.#renderRows(data);
   }
+
+  #events = createEventHandler("table-sort-request", this);
 }
 
 customElements.define("table-root", Table);

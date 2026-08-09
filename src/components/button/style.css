@@ -2,8 +2,8 @@
 .secondary-button,
 .ghost-button {
   height: var(--button-height);
-  padding: 3.5px 10px 3.5px 8px;
-  border-radius: var(--radius-xsmall);
+  padding: 3.5px 15px 3.5px 12px;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -30,8 +30,7 @@
 }
 
 .secondary-button {
-  background-color: transparent;
-  border: 1px solid var(--border);
+  background-color: var(--secondary-button);
   color: var(--text);
 }
 
@@ -58,8 +57,8 @@
 }
 
 .custom-button-icon {
-  height: 16px;
-  width: 16px;
+  height: calc(var(--button-height) / 2.5);
+  width: calc(var(--button-height) / 2.5);
   stroke-width: 0.5px;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -71,7 +70,7 @@
 }
 
 .square {
-  height: 32px;
-  width: 32px;
+  height: var(--button-height);
+  width: var(--button-height);
   padding: 0;
 }

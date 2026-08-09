@@ -1,13 +1,14 @@
 segmented-control {
+  --padding: 3px;
+
   position: relative;
   display: inline-flex;
   width: max-content;
   max-width: 100%;
-  padding: 3px;
+  padding: var(--padding);
   overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xsmall);
-  background: var(--surface-highlight-subtle);
+  border-radius: 999px;
+  background: var(--secondary-button);
   isolation: isolate;
 }
 
@@ -17,13 +18,12 @@ segmented-control {
   width: max-content;
 }
 
-.segmented-control__item {
+segmented-control .segmented-control__item {
   position: relative;
   z-index: 1;
-  height: 30px;
+  height: calc(var(--button-height) - (var(--padding) * 2));
   padding: 0 14px;
   border: 0;
-  border-radius: calc(var(--radius-xsmall) - 3px);
   background: transparent;
   color: var(--text);
   font-weight: 450;
@@ -49,7 +49,7 @@ segmented-control {
   bottom: 0;
   left: 0;
   width: 0;
-  border-radius: calc(var(--radius-xsmall) - 3px);
+  border-radius: 999px;
   background: var(--surface);
   box-shadow: var(--shadow-subtle, 0 1px 3px rgb(0 0 0 / 12%));
   pointer-events: none;
