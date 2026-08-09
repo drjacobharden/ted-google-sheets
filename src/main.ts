@@ -31,8 +31,10 @@ import "./components/url-form/url-form.ts";
 import "./components/toast-stack/toast-stack.ts";
 import "./components/app-alert/app-alert.ts";
 import "./components/app-alert/sync-notifications.ts";
+import "./components/search-bar/search-bar.ts";
 import { OnboardingUI } from "./components/onboarding/onboarding";
 import "./components/date-range-picker/date-range-picker-2";
+import "./components/table/table.ts";
 
 import "./elements/navigation-bar/navigation-bar.ts";
 import "./elements/new-entity-popover/new-entity-popover.ts";
@@ -59,29 +61,57 @@ import { appController } from "./state/app-controller";
 import { router } from "./router/router";
 import type { RouteChangedEventDetail } from "./router/types";
 
-const OVERLAY_PARAMS = new Set(["drawer", "transactionId", "entityKind", "entityId", "investmentAccountId", "investmentMonth", "investmentReviewId"]);
+const OVERLAY_PARAMS = new Set([
+  "drawer",
+  "transactionId",
+  "entityKind",
+  "entityId",
+  "investmentAccountId",
+  "investmentMonth",
+  "investmentReviewId",
+]);
 let mountedContentKey = "";
 
-function renderRoute({ name, params }: { name: RouteChangedEventDetail["name"]; params: RouteChangedEventDetail["params"] }): void {
-  const contentParams = Object.fromEntries(Object.entries(params).filter(([key]) => !OVERLAY_PARAMS.has(key)));
+function renderRoute({
+  name,
+  params,
+}: {
+  name: RouteChangedEventDetail["name"];
+  params: RouteChangedEventDetail["params"];
+}): void {
+  const contentParams = Object.fromEntries(
+    Object.entries(params).filter(([key]) => !OVERLAY_PARAMS.has(key)),
+  );
   const contentKey = `${name}?${new URLSearchParams(contentParams)}`;
   if (contentKey === mountedContentKey) return;
   mountedContentKey = contentKey;
   const outlet = document.getElementById("route-outlet");
-  const template = document.getElementById(`route-${name}`) as HTMLTemplateElement | null;
-  if (!outlet || !template) throw new Error(`Missing template for route: ${name}`);
+  const template = document.getElementById(
+    `route-${name}`,
+  ) as HTMLTemplateElement | null;
+  if (!outlet || !template)
+    throw new Error(`Missing template for route: ${name}`);
   outlet.replaceChildren(template.content.cloneNode(true));
-  const activeTab = name === "investment-account-detail" ? "investment-accounts" : name;
-  document.querySelectorAll<HTMLElement>("[data-tab]").forEach(item => {
-    const active = item.dataset.tab === activeTab; item.classList.toggle("active", active);
-    if (active) item.setAttribute("aria-current", "page"); else item.removeAttribute("aria-current");
+  const activeTab =
+    name === "investment-account-detail" ? "investment-accounts" : name;
+  document.querySelectorAll<HTMLElement>("[data-tab]").forEach((item) => {
+    const active = item.dataset.tab === activeTab;
+    item.classList.toggle("active", active);
+    if (active) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
   });
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-window.addEventListener("app:route-changed", (event: Event) => renderRoute((event as CustomEvent<RouteChangedEventDetail>).detail));
-window.addEventListener("budget:onboarding-complete", () => void appController.initializeData());
+window.addEventListener("app:route-changed", (event: Event) =>
+  renderRoute((event as CustomEvent<RouteChangedEventDetail>).detail),
+);
+window.addEventListener(
+  "budget:onboarding-complete",
+  () => void appController.initializeData(),
+);
 document.addEventListener("DOMContentLoaded", () => {
-  if (!OnboardingUI?.isBlocking()) void appController.initializeData({ startup: true }).catch(() => {});
+  if (!OnboardingUI?.isBlocking())
+    void appController.initializeData({ startup: true }).catch(() => {});
   router.start();
 });
