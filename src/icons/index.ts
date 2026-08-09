@@ -23,6 +23,7 @@ import chevronDownIcon from "./chevron-down.html" with { type: "text" };
 import pencilIcon from "./pencil.html" with { type: "text" };
 import pieChartIcon from "./pie-chart.html" with { type: "text" };
 import restoreIcon from "./restore.html" with { type: "text" };
+import trashIcon from "./trash.html" with { type: "text" };
 
 export type IconKeys = keyof typeof iconStrings;
 
@@ -52,6 +53,7 @@ const iconStrings = {
   pencil: pencilIcon,
   pieChart: pieChartIcon,
   restore: restoreIcon,
+  trash: trashIcon,
 };
 
 const iconTemplateCache = new Map();
