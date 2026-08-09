@@ -17,13 +17,26 @@
   --inverse-surface-active: hsl(240, 0%, 24%);
 
   /* Background color of the navigation sidebar on the left */
-  --sidebar-background: hsl(240, 4%, 98%);
+  /* --sidebar-background: hsl(240, 4%, 98%); */
+
+  --sidebar-background: hsl(41, 35%, 95%);
+  --content-background: hsl(38, 70%, 98%);
+  --surface-background: hsl(30, 100%, 100%);
+
+  /* Shadows */
+  --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.03), 0 2px 6px hsl(0 0% 0% / 0.025);
+  --shadow-popover:
+    0 2px 4px hsl(0 0% 0% / 0.05), 0 8px 24px hsl(0 0% 0% / 0.08);
+
+  /* Borders */
+  --border: hsl(40 12% 90%);
+  --border-strong: hsl(37 13% 88%);
 
   /* Color of all standard borders */
-  --border: #e5e7e2;
+  /* --border: #e5e7e2; */
 
   /* Color of all thick borders */
-  --border-strong: #dfe2dc;
+  /* --border-strong: #dfe2dc; */
 
   /* Standard text color */
   --text: #171817;
@@ -130,6 +143,9 @@
   --surface-highlight: hsl(240, 8%, 95%);
   --surface-highlight-subtle: hsl(240, 8%, 98%);
   --surface-highlight-strong: hsl(240, 8%, 90%);
+
+  /* Height of  */
+  --button-height: 32px;
 
   /* Available fonts for text */
   font-family:
