@@ -6,15 +6,18 @@
       id="new-transaction-button"
       leading-icon="plus"
       label="Add transaction"
+      data-action="new-transaction"
     ></custom-button>
   </breadcrumbs-header>
-  <div class="content">
-    <page-title eyebrow="Overview" title="Transactions">
-      <button class="primary-button compact" type="button" data-action="new-transaction">
-        <span aria-hidden="true">+</span> Add transaction
-      </button>
-    </page-title>
-
+  <table-root grid-layout="40px repeat(4, max-content) 1fr max-content 40px">
+    <table-controller> </table-controller>
+    <table-list></table-list>
+    <table-footer></table-footer>
+  </table-root>
+  <!-- <table-root grid-layout="40px 1fr">
+    <table-controller></table-controller>
+  </table-root> -->
+  <!-- <div class="content">
     <date-range-picker preset="month"></date-range-picker>
     <div class="summary-grid" aria-label="Budget summary">
       <article class="summary-card balance-card">
@@ -126,5 +129,5 @@
         </button>
       </div>
     </div>
-  </div>
+  </div> -->
 </section>
