@@ -1,7 +1,7 @@
 .primary-button,
 .secondary-button,
 .ghost-button {
-  height: 32px;
+  height: var(--button-height);
   padding: 3.5px 10px 3.5px 8px;
   border-radius: var(--radius-xsmall);
   display: inline-flex;
