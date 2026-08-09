@@ -1,0 +1,99 @@
+table-root {
+  --column-gap: 40px;
+  --outer-padding: var(--horizontal-screen-padding);
+  --vertical-padding: 12px;
+
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+table-root table-controller {
+  display: flex;
+  padding: 8px var(--outer-padding);
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  gap: 8px;
+}
+
+table-root table-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0px;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+table-root table-list table {
+  width: 100%;
+  font-size: 14px;
+  border-collapse: collapse;
+}
+
+table-root table-list table col.shrink {
+  width: 1px;
+}
+
+table-root tr:not(:first-child) {
+  border-top: 1px dotted var(--border);
+}
+
+table-root tbody tr:hover {
+  background-color: var(--surface-highlight-subtle);
+}
+
+table-root th {
+  padding: 24px 12px 12px;
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+table-root td {
+  padding: 12px;
+  border-bottom: 0;
+  border-left: 0;
+  border-right: 0;
+}
+
+table-root th,
+table-root td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+th:first-child,
+td:first-child {
+  padding-left: var(--outer-padding);
+}
+
+th:last-child,
+td:last-child {
+  padding-right: var(--outer-padding);
+}
+
+table-root table-footer {
+  display: grid;
+  grid-template-columns: auto 40px;
+  border-top: 1px solid var(--border);
+  padding: 12px var(--outer-padding) 20px;
+}
+
+table-root tr {
+  padding: var(--vertical-padding) 0;
+  background-color: var(--surface);
+}
+
+table-root tr .options custom-button {
+  height: 20px;
+  opacity: 0.5;
+  border-width: 0;
+}
+
+table-root table-list span {
+  padding: 2px 16px;
+  border-radius: 999px;
+}
