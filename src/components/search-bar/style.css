@@ -1,0 +1,24 @@
+search-bar {
+  display: flex;
+  height: var(--button-height);
+  background-color: var(--surface-highlight-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xsmall);
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  margin-right: auto;
+  min-width: 30%;
+}
+
+search-bar svg {
+  height: 16px;
+  width: 16px;
+  stroke-width: 2px;
+}
+
+search-bar input {
+  font-size: 14px;
+  background-color: transparent;
+  border: 0;
+}
