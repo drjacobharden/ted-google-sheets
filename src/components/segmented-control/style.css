@@ -26,10 +26,10 @@ segmented-control .segmented-control__item {
   border: 0;
   background: transparent;
   color: var(--text);
+  font-size: 12px;
   font-weight: 450;
   opacity: 0.55;
   white-space: nowrap;
-  font-size: 13px;
   transition: opacity 240ms ease;
 }
 

@@ -49,7 +49,7 @@ export class DatePicker extends HTMLElement {
     this.#segmentedControl.items = [
       { key: "week", title: "Weekly" },
       { key: "month", title: "Monthly" },
-      { key: "year", title: "Yearly" },
+      { key: "year", title: "Yearly", isDefaultValue: true },
     ];
 
     this.#stepButtons =
@@ -69,7 +69,6 @@ export class DatePicker extends HTMLElement {
         break;
 
       case "segmented-control-selection":
-        console.log(event);
         this.#handleStepSelection(event);
         break;
 

@@ -3,6 +3,7 @@ import { createEventHandler } from "../../utilities/event-utilities";
 export interface SegmentedControlItem {
   key: string;
   title: string;
+  isDefaultValue?: boolean;
 }
 
 export interface SegmentedControlSelectionEvent extends CustomEvent {
@@ -84,17 +85,27 @@ export class SegmentedControl
   }
 
   set items(items: SegmentedControlItem[]) {
-    this.#items = items.map(({ key, title }) => ({ key, title }));
+    this.#items = items.map(({ key, title, isDefaultValue }) => ({
+      key,
+      title,
+      isDefaultValue,
+    }));
+
+    const defaultItem = this.#items.find((item) => item.isDefaultValue);
 
     if (!this.#items.some((item) => item.key === this.#selection)) {
-      this.#selection = this.#items[0]?.key ?? null;
+      this.#selection = defaultItem?.key ?? this.#items[0]?.key ?? null;
     }
 
     if (this.isConnected) this.#renderItems();
   }
 
   get items(): SegmentedControlItem[] {
-    return this.#items.map(({ key, title }) => ({ key, title }));
+    return this.#items.map(({ key, title, isDefaultValue }) => ({
+      key,
+      title,
+      isDefaultValue,
+    }));
   }
 
   set selection(key: string | null) {
