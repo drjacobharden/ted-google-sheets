@@ -9,12 +9,28 @@ export interface PopoverOptions {
 }
 
 export class Popover extends HTMLElement {
+  #handleScroll = () => {
+    if (!this.classList.contains("is-visible")) return;
+
+    this.hide();
+    this.dispatchEvent(
+      new CustomEvent("popover-dismiss", {
+        bubbles: true,
+        detail: { reason: "scroll" },
+      }),
+    );
+  };
+
   connectedCallback(): void {
     this.classList.add("popover");
 
     while (this.firstChild) {
       this.appendChild(this.firstChild);
     }
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener("scroll", this.#handleScroll, true);
   }
 
   show(anchor: HTMLElement, options: PopoverOptions = {}) {
@@ -44,10 +60,12 @@ export class Popover extends HTMLElement {
     this.style.transformOrigin = this.getTransformOrigin(side, align);
 
     this.style.visibility = "";
+    window.addEventListener("scroll", this.#handleScroll, true);
   }
 
   hide() {
     this.classList.remove("is-visible");
+    window.removeEventListener("scroll", this.#handleScroll, true);
   }
 
   private calculatePosition(
