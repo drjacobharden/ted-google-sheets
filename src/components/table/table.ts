@@ -31,7 +31,7 @@ interface TableData<T> {
   rows: T[];
   footer?: {};
   filters?: AvailableFilter<T>[];
-  rowActions?: DropdownMenuItem[];
+  rowActions?: (DropdownMenuItem & { selectionIcon: "none" })[];
 }
 
 type TableControlsArray = ("search" | "date" | "sort" | "filter" | "divider")[];

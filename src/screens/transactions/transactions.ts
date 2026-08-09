@@ -302,12 +302,18 @@ export class TransactionScreen
       ],
       rows: transactions,
       rowActions: [
-        { key: "edit", title: "Edit transaction", icon: "pencil" },
+        {
+          key: "edit",
+          title: "Edit transaction",
+          icon: "pencil",
+          selectionIcon: "none",
+        },
         {
           key: "delete",
           title: "Delete transaction",
           destructive: true,
-          icon: "settings",
+          icon: "trash",
+          selectionIcon: "none",
         },
       ],
     };
