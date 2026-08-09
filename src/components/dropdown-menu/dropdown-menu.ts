@@ -13,7 +13,8 @@ export interface DropdownMenuItem {
   key: string;
   title: string;
   icon?: IconKeys;
-  defaultValue?: boolean;
+  isDefaultValue?: boolean;
+  destructive?: boolean;
 }
 
 export interface DropdownSelectionEvent extends CustomEvent {
@@ -61,6 +62,7 @@ export class DropdownMenu extends HTMLElement {
 
     this.#trigger.addEventListener("click", this);
     this.#menu.addEventListener("click", this);
+    this.#menu.addEventListener("popover-dismiss", this);
     this.#unsubscribeFromState = appState.subscribe(
       "activeDropdownKey",
       (activeKey) => {
@@ -74,6 +76,7 @@ export class DropdownMenu extends HTMLElement {
     this.#listening = false;
     this.#trigger.removeEventListener("click", this);
     this.#menu.removeEventListener("click", this);
+    this.#menu.removeEventListener("popover-dismiss", this);
     this.#unsubscribeFromState?.();
     this.#unsubscribeFromState = null;
     if (appState.get("activeDropdownKey") === this.#menuKey) {
@@ -90,6 +93,7 @@ export class DropdownMenu extends HTMLElement {
   #renderTrigger() {
     const label = this.getAttribute("label")!;
     const icon = this.getAttribute("icon")! as IconKeys;
+
     const hideTrailingChevron =
       this.hasAttribute("hide-trailing-chevron") ?? false;
 
@@ -107,12 +111,18 @@ export class DropdownMenu extends HTMLElement {
   }
 
   #renderItems() {
+    const selectionIconAttr = this.getAttribute("selection-icon") as
+      | IconKeys
+      | "none";
+    const selectionIcon: IconKeys | null =
+      selectionIconAttr === "none" ? null : (selectionIconAttr ?? "checkmark");
+
     const items = JSON.parse(
       this.getAttribute("items") ?? "[]",
     ) as DropdownMenuItem[];
 
     const children = items.map((item) => {
-      const { key, title, icon, defaultValue } = item;
+      const { key, title, icon, isDefaultValue, destructive } = item;
 
       const option = document.createElement("div");
       option.classList.add("dropdown-menu-item");
@@ -127,15 +137,21 @@ export class DropdownMenu extends HTMLElement {
       label.textContent = title;
       option.append(label);
 
-      const checkmark = getIcon("checkmark");
-      checkmark.classList.add("selection-indicator");
-      option.append(checkmark);
+      if (selectionIcon) {
+        const icon = getIcon(selectionIcon);
+        icon.classList.add("selection-indicator");
+        option.append(icon);
+      }
 
-      if (defaultValue) {
+      if (isDefaultValue) {
         this.#selection?.classList.remove("is-selected");
         this.#selection = option;
         this.#selection.classList.add("is-selected");
         this.#value = key;
+      }
+
+      if (destructive) {
+        option.style.color = "var(--error-dark)";
       }
 
       return option;
@@ -156,6 +172,10 @@ export class DropdownMenu extends HTMLElement {
         this.#handleClick(event);
         break;
 
+      case "popover-dismiss":
+        this.close();
+        break;
+
       default:
         break;
     }
@@ -172,7 +192,11 @@ export class DropdownMenu extends HTMLElement {
         this.close();
       } else {
         appState.set("activeDropdownKey", this.#menuKey);
-        this.#menu.show(this.#trigger, { side: "bottom", align: "end" });
+        this.#menu.show(this.#trigger, {
+          side: "bottom",
+          align: "end",
+          gap: 4,
+        });
         this.toggleAttribute("is-open", true);
         this.#trigger.setAttribute("aria-expanded", "true");
       }
@@ -187,14 +211,19 @@ export class DropdownMenu extends HTMLElement {
 
   //   Emit an event to alert an item was selected and pass along its data
   #handleSelection(item: HTMLElement) {
+    const bubbles = this.hasAttribute("bubbles") ?? false;
+
     this.#selection?.classList.remove("is-selected");
     this.#selection = item;
     this.#selection?.classList.add("is-selected");
     this.#value = item.dataset.value ?? null;
-    this.#selectionListener.dispatch({
-      value: item.dataset.value!,
-      title: item.dataset.title!,
-    });
+    this.#events.dispatch(
+      {
+        value: item.dataset.value!,
+        title: item.dataset.title!,
+      },
+      { bubbles },
+    );
     this.close();
   }
 
@@ -228,6 +257,11 @@ export class DropdownMenu extends HTMLElement {
     }
   }
 
+  set selectionIcon(icon: IconKeys | "none") {
+    this.setAttribute("selection-icon", icon);
+    this.#renderItems();
+  }
+
   close() {
     if (appState.get("activeDropdownKey") === this.#menuKey) {
       appState.set("activeDropdownKey", null);
@@ -242,14 +276,11 @@ export class DropdownMenu extends HTMLElement {
     this.toggleAttribute("is-open", false);
   }
 
-  #selectionListener = createEventHandler<DropdownSelectionEvent>(
-    "dropdown-selection",
-    this,
-  );
+  #events = createEventHandler("dropdown-selection", this);
 
-  addListener = this.#selectionListener.addListener;
-  removeListener = this.#selectionListener.removeListener;
-  handleSelection = this.#selectionListener.handleEvent;
+  addListener = this.#events.addListener;
+  removeListener = this.#events.removeListener;
+  handleSelection = this.#events.handleEvent;
 }
 
 customElements.define("dropdown-menu", DropdownMenu);

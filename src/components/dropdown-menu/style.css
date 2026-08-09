@@ -6,6 +6,10 @@ dropdown-menu[is-open] {
   z-index: 1000;
 }
 
+dropdown-menu[is-open] > .popover.dropdown-menu-list {
+  z-index: 1000;
+}
+
 .popover.dropdown-menu-list {
   width: min(250px, 95vw);
   background-color: var(--surface);
