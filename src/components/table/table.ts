@@ -1,4 +1,5 @@
 import { DateUtils } from "../../utilities/date-utilities";
+import { getIcon, IconKeys } from "../../icons";
 import {
   addListener,
   handleCustomEvent,
@@ -32,9 +33,11 @@ interface TableData<T> {
   footer?: {};
   filters?: AvailableFilter<T>[];
   rowActions?: (DropdownMenuItem & { selectionIcon: "none" })[];
+  sort?: { key: keyof T; direction: SortDirection } | null;
 }
 
 type TableControlsArray = ("search" | "date" | "sort" | "filter" | "divider")[];
+type SortDirection = "ascending" | "descending";
 
 export class Table<T extends object> extends HTMLElement {
   #initialized = false;
@@ -46,6 +49,7 @@ export class Table<T extends object> extends HTMLElement {
   #visibleData: TableData<T>["rows"] = []; //  data visible in the table
 
   #sortKey: keyof T | null = null;
+  #sortDirection: SortDirection | null = null;
   #filters: AppliedFilter<T>[] = [];
 
   #controller: TableController<T> | null = null;
@@ -58,10 +62,12 @@ export class Table<T extends object> extends HTMLElement {
     }
 
     if (!this.#listening) {
+      this.#listening = true;
       addListener("date-range-changed", this, this);
       addListener("checkbox-selection", this, this);
       addListener("dropdown-selection", this, this);
       addListener("filters-changed", this, this);
+      this.addEventListener("table-sort-request", this);
     }
   }
 
@@ -87,8 +93,11 @@ export class Table<T extends object> extends HTMLElement {
         break;
 
       case "dropdown-selection":
-        console.log("run");
         this.#handleSort(event);
+        break;
+
+      case "table-sort-request":
+        this.#handleHeaderSort(event as CustomEvent<{ key: keyof T }>);
         break;
 
       case "filters-changed":
@@ -102,6 +111,14 @@ export class Table<T extends object> extends HTMLElement {
 
   set data(values: TableData<T>) {
     this.#data = values;
+
+    const sortColumnExists = values.columns.some(
+      (item) => typeof item === "object" && item.key === this.#sortKey,
+    );
+    if (!sortColumnExists) {
+      this.#sortKey = null;
+      this.#sortDirection = null;
+    }
 
     this.#filterByDate();
     this.#filterData();
@@ -141,9 +158,29 @@ export class Table<T extends object> extends HTMLElement {
   #handleSort(event: Event) {
     handleCustomEvent("dropdown-selection", event, ({ value, title }) => {
       this.#sortKey = value as keyof T;
+      this.#sortDirection = "descending";
+      this.#filterData();
       this.#sortData();
       this.#setTableData();
     });
+  }
+
+  #handleHeaderSort(event: CustomEvent<{ key: keyof T }>) {
+    const key = event.detail.key;
+
+    if (this.#sortKey !== key || this.#sortDirection === null) {
+      this.#sortKey = key;
+      this.#sortDirection = "descending";
+    } else if (this.#sortDirection === "descending") {
+      this.#sortDirection = "ascending";
+    } else {
+      this.#sortKey = null;
+      this.#sortDirection = null;
+    }
+
+    this.#filterData();
+    this.#sortData();
+    this.#setTableData();
   }
 
   #handleFiltersChanged(event: Event) {
@@ -157,8 +194,9 @@ export class Table<T extends object> extends HTMLElement {
 
   #sortData() {
     const key = this.#sortKey;
+    const direction = this.#sortDirection;
 
-    if (key === null) return this.#visibleData;
+    if (key === null || direction === null) return this.#visibleData;
 
     const colIndex = this.#data.columns.findIndex(
       (v) => typeof v === "object" && v.key === key,
@@ -166,6 +204,8 @@ export class Table<T extends object> extends HTMLElement {
     const col = this.#data.columns[colIndex];
 
     if (!col || typeof col === "string") return this.#visibleData;
+
+    const multiplier = direction === "ascending" ? 1 : -1;
 
     this.#visibleData.sort((a, b) => {
       const prev = a[key] as string | number;
@@ -175,14 +215,14 @@ export class Table<T extends object> extends HTMLElement {
         const normalizedPrev = col.sorter?.(a) ?? prev;
         const normalizedNext = col.sorter?.(b) ?? next;
 
-        return normalizedNext - normalizedPrev;
+        return (normalizedPrev - normalizedNext) * multiplier;
       }
 
       if (typeof prev === "string" && typeof next === "string") {
-        return prev.localeCompare(next);
+        return prev.localeCompare(next) * multiplier;
       }
 
-      return 0 - 1;
+      return 0;
     });
   }
 
@@ -259,14 +299,20 @@ export class Table<T extends object> extends HTMLElement {
       columns: this.#data.columns,
       rows: this.#visibleData,
       rowActions: this.#data.rowActions,
+      sort:
+        this.#sortKey !== null && this.#sortDirection !== null
+          ? { key: this.#sortKey, direction: this.#sortDirection }
+          : null,
     };
   }
 
   disconnectedCallback() {
+    this.#listening = false;
     removeListener("date-range-changed", this, this);
     removeListener("checkbox-selection", this, this);
     removeListener("dropdown-selection", this, this);
     removeListener("filters-changed", this, this);
+    this.removeEventListener("table-sort-request", this);
   }
 }
 
@@ -379,7 +425,7 @@ class TableList<T extends object> extends HTMLElement {
     }
   }
 
-  #renderHeader() {
+  #renderHeader(data: TableData<T>) {
     const colGroup = document.createElement("colgroup");
     const tHead = document.createElement("thead");
     const headerRow = document.createElement("tr");
@@ -392,8 +438,51 @@ class TableList<T extends object> extends HTMLElement {
       const th = document.createElement("th");
 
       if (typeof column === "object") {
-        th.textContent = column.title;
+        const activeDirection =
+          data.sort?.key === column.key ? data.sort.direction : null;
+        const iconName: IconKeys =
+          activeDirection === "descending"
+            ? "chevronDown"
+            : activeDirection === "ascending"
+              ? "chevronUp"
+              : "chevronSelect";
+        const button = document.createElement("button");
+        const icon = getIcon(iconName);
+
+        button.type = "button";
+        button.classList.add("table-sort-button");
+        button.append(document.createTextNode(column.title));
+        button.setAttribute(
+          "aria-label",
+          activeDirection === "descending"
+            ? `${column.title}: sorted descending. Activate to sort ascending.`
+            : activeDirection === "ascending"
+              ? `${column.title}: sorted ascending. Activate to clear sorting.`
+              : `${column.title}: not sorted. Activate to sort descending.`,
+        );
+        button.addEventListener("click", () => {
+          this.dispatchEvent(
+            new CustomEvent("table-sort-request", {
+              bubbles: true,
+              detail: { key: column.key },
+            }),
+          );
+        });
+
+        if (icon) {
+          icon.setAttribute("aria-hidden", "true");
+          button.append(icon);
+        }
+
+        th.append(button);
+        th.setAttribute("aria-sort", activeDirection ?? "none");
         th.style.textAlign = column.textAlign ?? "left";
+        button.style.justifyContent =
+          column.textAlign === "right"
+            ? "flex-end"
+            : column.textAlign === "center"
+              ? "center"
+              : "flex-start";
       }
 
       if (typeof column === "string" || column.sizing === "narrow") {
@@ -475,7 +564,7 @@ class TableList<T extends object> extends HTMLElement {
   set data(data: TableData<T>) {
     this.#columnHeaders = data.columns;
 
-    this.#renderHeader();
+    this.#renderHeader(data);
     this.#renderRows(data);
   }
 }

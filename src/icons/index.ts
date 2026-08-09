@@ -10,6 +10,9 @@ import syncIcon from "./sync.html" with { type: "text" };
 import settingsIcon from "./settings.html" with { type: "text" };
 import cartIcon from "./cart.html" with { type: "text" };
 import sidebarIcon from "./sidebar.html" with { type: "text" };
+import chevronSelectIcon from "./chevron-select.html" with { type: "text" };
+import chevronDownIcon from "./chevron-down.html" with { type: "text" };
+import chevronUpIcon from "./chevron-up.html" with { type: "text" };
 import chevronRightIcon from "./chevron-right.html" with { type: "text" };
 import chevronLeftIcon from "./chevron-left.html" with { type: "text" };
 import filterIcon from "./filter.html" with { type: "text" };
@@ -19,7 +22,6 @@ import checkmarkIcon from "./checkmark.html" with { type: "text" };
 import dotsHorizontalIcon from "./dots-horizontal.html" with { type: "text" };
 import dotsVerticalIcon from "./dots-vertical.html" with { type: "text" };
 import closeIcon from "./close.html" with { type: "text" };
-import chevronDownIcon from "./chevron-down.html" with { type: "text" };
 import pencilIcon from "./pencil.html" with { type: "text" };
 import pieChartIcon from "./pie-chart.html" with { type: "text" };
 import restoreIcon from "./restore.html" with { type: "text" };
@@ -54,6 +56,8 @@ const iconStrings = {
   pieChart: pieChartIcon,
   restore: restoreIcon,
   trash: trashIcon,
+  chevronSelect: chevronSelectIcon,
+  chevronUp: chevronUpIcon,
 };
 
 const iconTemplateCache = new Map();

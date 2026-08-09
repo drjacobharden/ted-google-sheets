@@ -262,7 +262,7 @@ export class TransactionScreen
           title: "Date",
           dataType: "string",
           formatter: (v: string) =>
-            DateUtils.longDateFormatter.format(DateUtils.fromDateId(v)),
+            DateUtils.shortDateFormatter.format(DateUtils.fromDateId(v)),
         },
         {
           key: "category",
