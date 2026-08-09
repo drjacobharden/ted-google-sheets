@@ -857,46 +857,7 @@ body.onboarding-open {
   padding: 18px 20px 22px;
   border-top: 1px solid var(--border);
 }
-table {
-  width: 100%;
-  min-width: 850px;
-  table-layout: fixed;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-th:nth-child(1) {
-  width: 13%;
-}
-th:nth-child(2) {
-  width: 22%;
-}
-th:nth-child(3) {
-  width: 16%;
-}
-th:nth-child(4) {
-  width: 15%;
-}
-th:nth-child(5) {
-  width: 21%;
-}
-th:nth-child(6) {
-  width: 13%;
-}
-th {
-  padding: 12px 18px;
-  background: #fafbf9;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-align: left;
-  text-transform: uppercase;
-}
-td {
-  padding: 15px 18px;
-  border-top: 1px solid var(--border);
-  vertical-align: middle;
-}
+
 .transaction-sync-badge {
   display: block;
   width: fit-content;
@@ -1942,10 +1903,7 @@ tbody tr:hover {
     left: 0;
     width: min(350px, calc(100vw - 72px));
   }
-  th,
-  td {
-    padding: 13px 12px;
-  }
+
   .onboarding-overlay {
     align-items: start;
     padding: 0;
