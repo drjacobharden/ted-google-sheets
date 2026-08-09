@@ -15,27 +15,24 @@ export type FilterOperator =
   | "Starts with"
   | "Equals"
   | "Greater than"
-  | "Less than";
+  | "Less than"
+  | "Does not equal";
 
-export interface AvailableFilter {
-  key: string;
+export interface AvailableFilter<T> {
+  key: keyof T;
   title: string;
   dataType: FilterDataType;
 }
 
-export interface AppliedFilter {
-  key: string;
+export interface AppliedFilter<T> {
+  key: keyof T;
   operator: FilterOperator;
   value: string | number;
 }
 
-export interface FiltersChangedEvent extends CustomEvent {
-  detail: AppliedFilter[];
-}
-
-interface FilterDraft {
+interface FilterDraft<T> {
   id: string;
-  key: string | null;
+  key: keyof T | null;
   operator: FilterOperator;
   value: string;
 }
@@ -43,24 +40,26 @@ interface FilterDraft {
 type DropdownRole = "field" | "operator" | "value";
 
 const STRING_OPERATORS: FilterOperator[] = [
+  "Equals",
+  "Does not equal",
   "Contains",
   "Starts with",
-  "Equals",
 ];
 const NUMBER_OPERATORS: FilterOperator[] = [
   "Equals",
+  "Does not equal",
   "Greater than",
   "Less than",
 ];
-const ENUM_OPERATORS: FilterOperator[] = ["Equals"];
+const ENUM_OPERATORS: FilterOperator[] = ["Equals", "Does not equal"];
 
 const template = document.createElement("template");
 template.innerHTML = filterBarTemplate;
 
-export class FilterBar extends HTMLElement {
-  #availableFilters: AvailableFilter[] = [];
-  #appliedFilters: AppliedFilter[] = [];
-  #drafts: FilterDraft[] = [];
+export class FilterBar<T> extends HTMLElement {
+  #availableFilters: AvailableFilter<T>[] = [];
+  #appliedFilters: AppliedFilter<T>[] = [];
+  #drafts: FilterDraft<T>[] = [];
   #trigger!: CustomButton;
   #popover!: Popover;
   #applyButton: CustomButton | null = null;
@@ -81,6 +80,7 @@ export class FilterBar extends HTMLElement {
     this.#listening = true;
     this.addEventListener("click", this);
     this.addEventListener("input", this);
+    this.#popover.addEventListener("popover-dismiss", this);
     document.addEventListener("pointerdown", this, true);
     document.addEventListener("keydown", this, true);
   }
@@ -90,6 +90,7 @@ export class FilterBar extends HTMLElement {
     this.#listening = false;
     this.removeEventListener("click", this);
     this.removeEventListener("input", this);
+    this.#popover.removeEventListener("popover-dismiss", this);
     document.removeEventListener("pointerdown", this, true);
     document.removeEventListener("keydown", this, true);
     this.#disconnectDropdowns();
@@ -115,12 +116,15 @@ export class FilterBar extends HTMLElement {
           this.close();
         }
         break;
+      case "popover-dismiss":
+        this.close();
+        break;
       default:
         break;
     }
   }
 
-  set availableFilters(filters: AvailableFilter[]) {
+  set availableFilters(filters: AvailableFilter<T>[]) {
     this.#availableFilters = filters.map((filter) => ({
       ...filter,
       dataType: Array.isArray(filter.dataType)
@@ -138,7 +142,7 @@ export class FilterBar extends HTMLElement {
     if (this.dataset.initialized) this.#render();
   }
 
-  get availableFilters(): AvailableFilter[] {
+  get availableFilters(): AvailableFilter<T>[] {
     return this.#availableFilters.map((filter) => ({
       ...filter,
       dataType: Array.isArray(filter.dataType)
@@ -147,7 +151,7 @@ export class FilterBar extends HTMLElement {
     }));
   }
 
-  set filters(filters: AppliedFilter[]) {
+  set filters(filters: AppliedFilter<T>[]) {
     this.#appliedFilters = filters.flatMap((filter) => {
       const available = this.#findAvailableFilter(filter.key);
       if (!available) return [];
@@ -176,11 +180,11 @@ export class FilterBar extends HTMLElement {
     if (this.dataset.initialized) this.#render();
   }
 
-  get filters(): AppliedFilter[] {
+  get filters(): AppliedFilter<T>[] {
     return this.#appliedFilters.map((filter) => ({ ...filter }));
   }
 
-  #completedDrafts(): AppliedFilter[] {
+  #completedDrafts(): AppliedFilter<T>[] {
     return this.#drafts.flatMap((draft) => {
       const available = this.#findAvailableFilter(draft.key);
       if (!available || !this.#isComplete(draft, available)) return [];
@@ -243,14 +247,20 @@ export class FilterBar extends HTMLElement {
       case "clear":
         this.#drafts = [];
         this.#appliedFilters = [];
-        this.#filtersChanged.dispatch(this.filters);
+        this.#filtersChanged.dispatch(
+          { filters: this.filters },
+          { bubbles: true },
+        );
         this.#render();
         break;
       case "apply":
         if (!this.#applyButton?.hasAttribute("disabled")) {
           this.#appliedFilters = this.#completedDrafts();
           this.#updateControls();
-          this.#filtersChanged.dispatch(this.filters);
+          this.#filtersChanged.dispatch(
+            { filters: this.filters },
+            { bubbles: true },
+          );
           this.close();
         }
         break;
@@ -276,7 +286,9 @@ export class FilterBar extends HTMLElement {
     if (!draft) return;
 
     if (role === "field") {
-      const available = this.#findAvailableFilter(event.detail.value);
+      const available = this.#findAvailableFilter(
+        event.detail.value as keyof T,
+      );
       if (!available) return;
       draft.key = available.key;
       draft.operator = this.#defaultOperator(available);
@@ -343,7 +355,7 @@ export class FilterBar extends HTMLElement {
     if (this.#open) this.open();
   }
 
-  #createRow(draft: FilterDraft, index: number): HTMLElement {
+  #createRow(draft: FilterDraft<T>, index: number): HTMLElement {
     const row = document.createElement("div");
     row.classList.add("filter-bar__row");
     row.dataset.filterId = draft.id;
@@ -361,7 +373,7 @@ export class FilterBar extends HTMLElement {
   }
 
   #createDropdown(
-    draft: FilterDraft,
+    draft: FilterDraft<T>,
     role: DropdownRole,
     label: string,
   ): DropdownMenu {
@@ -374,8 +386,8 @@ export class FilterBar extends HTMLElement {
   }
 
   #createValueControl(
-    draft: FilterDraft,
-    available: AvailableFilter | null,
+    draft: FilterDraft<T>,
+    available: AvailableFilter<T> | null,
   ): HTMLElement {
     if (available && this.#dataTypeKind(available) === "enum") {
       return this.#createDropdown(
@@ -446,11 +458,11 @@ export class FilterBar extends HTMLElement {
 
   #itemsForDropdown(
     role: DropdownRole,
-    draft: FilterDraft,
+    draft: FilterDraft<T>,
   ): DropdownMenuItem[] {
     if (role === "field") {
       return this.#availableFilters.map(({ key, title }) => ({
-        key,
+        key: key as string,
         title,
         defaultValue: key === draft.key,
       }));
@@ -488,7 +500,7 @@ export class FilterBar extends HTMLElement {
     this.#trigger.label = count > 0 ? `${label} (${count})` : label;
   }
 
-  #isComplete(draft: FilterDraft, available: AvailableFilter): boolean {
+  #isComplete(draft: FilterDraft<T>, available: AvailableFilter<T>): boolean {
     const value = draft.value.trim();
     if (value.length === 0) return false;
 
@@ -500,7 +512,7 @@ export class FilterBar extends HTMLElement {
     return true;
   }
 
-  #operatorsFor(filter: AvailableFilter): FilterOperator[] {
+  #operatorsFor(filter: AvailableFilter<T>): FilterOperator[] {
     switch (this.#dataTypeKind(filter)) {
       case "number":
         return NUMBER_OPERATORS;
@@ -511,29 +523,26 @@ export class FilterBar extends HTMLElement {
     }
   }
 
-  #defaultOperator(filter: AvailableFilter): FilterOperator {
+  #defaultOperator(filter: AvailableFilter<T>): FilterOperator {
     return this.#dataTypeKind(filter) === "string" ? "Contains" : "Equals";
   }
 
-  #dataTypeKind(filter: AvailableFilter): "string" | "number" | "enum" {
+  #dataTypeKind(filter: AvailableFilter<T>): "string" | "number" | "enum" {
     if (Array.isArray(filter.dataType)) return "enum";
     return typeof filter.dataType === "number" || filter.dataType === "number"
       ? "number"
       : "string";
   }
 
-  #findAvailableFilter(key: string | null): AvailableFilter | null {
+  #findAvailableFilter(key: keyof T | null): AvailableFilter<T> | null {
     return this.#availableFilters.find((filter) => filter.key === key) ?? null;
   }
 
-  #findDraft(id: string | undefined): FilterDraft | null {
+  #findDraft(id: string | undefined): FilterDraft<T> | null {
     return this.#drafts.find((draft) => draft.id === id) ?? null;
   }
 
-  #filtersChanged = createEventHandler<FiltersChangedEvent>(
-    "filters-changed",
-    this,
-  );
+  #filtersChanged = createEventHandler("filters-changed", this);
 
   addListener = this.#filtersChanged.addListener;
   removeListener = this.#filtersChanged.removeListener;

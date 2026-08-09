@@ -82,6 +82,7 @@ export class NewEntityPopover extends HTMLElement {
     this.#cancelButton.addEventListener("click", this);
     this.#saveButton.addEventListener("click", this);
     this.#backdrop.addEventListener("click", this);
+    this.#popover.addEventListener("popover-dismiss", this);
   }
   // Remove listeners from the component.
   #disconnectListeners() {
@@ -89,6 +90,7 @@ export class NewEntityPopover extends HTMLElement {
     this.#cancelButton.removeEventListener("click", this);
     this.#saveButton.removeEventListener("click", this);
     this.#backdrop.removeEventListener("click", this);
+    this.#popover.removeEventListener("popover-dismiss", this);
 
     this.#disconnectFormListeners();
   }
@@ -125,6 +127,10 @@ export class NewEntityPopover extends HTMLElement {
 
       case "segmented-control-selection":
         this.#handleTypeChange(event);
+        break;
+
+      case "popover-dismiss":
+        this.hideForm();
         break;
 
       default:
