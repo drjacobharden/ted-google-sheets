@@ -1,8 +1,11 @@
 import DatePickerTempString from "./template.html" with { type: "text" };
-import { DateRange, DateUtils } from "../../utilities/date-utilities";
+import {
+  DatePickerStep,
+  DateRange,
+  DateUtils,
+} from "../../utilities/date-utilities";
 import { CustomButton } from "../button/button";
-
-export type DatePickerStep = "week" | "month" | "year";
+import { createEventHandler } from "../../utilities/event-utilities";
 
 export interface DateRangeChangedEvent extends CustomEvent {
   detail: {
@@ -148,16 +151,24 @@ export class DatePicker extends HTMLElement {
   }
 
   #emitRangeChangeEvent() {
-    this.dispatchEvent(
-      new CustomEvent("date-range-changed", {
-        detail: { range: this.#range, step: this.#step },
-      }),
+    this.#events.dispatch(
+      { range: this.#range, step: this.#step },
+      { bubbles: true },
     );
   }
 
   disconnectedCallback() {
     this.removeEventListener("click", this);
   }
+
+  #events = createEventHandler<DateRangeChangedEvent>(
+    "date-range-changed",
+    this,
+  );
+
+  addListener = this.#events.addListener;
+  removeListener = this.#events.removeListener;
+  handleDateRangeChange = this.#events.handleEvent;
 }
 
 customElements.define("date-range-picker-2", DatePicker);
