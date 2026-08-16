@@ -14,6 +14,7 @@ export interface InvestmentAccount {
   id: string;
   name: string;
   source: InvestmentSource;
+  assignmentId: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -139,6 +140,8 @@ export interface InvestmentAPIContract {
 
 /** Builds the investment API and initializes its local persistence and sync state. */
 export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract): InvestmentAPIContract {
+  const sharedAssignmentId =
+    budget.SHARED_ASSIGNMENT_ID || "00000000-0000-4000-8000-000000000101";
   const KEYS = Object.freeze({
     accounts: "myFinance.investmentAccounts.v1",
     balances: "myFinance.investmentBalances.v1",
@@ -191,7 +194,7 @@ export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract):
 
   /** Handles the migrateAccount operation for the investment data layer. */
   function migrateAccount(account) {
-    return { id: account.id, name: account.name, source: ["paycheck", "manual"].includes(account.source) ? account.source : "manual", active: account.active !== false, createdAt: account.createdAt, updatedAt: account.updatedAt };
+    return { id: account.id, name: account.name, source: ["paycheck", "manual"].includes(account.source) ? account.source : "manual", assignmentId: account.assignmentId || sharedAssignmentId, active: account.active !== false, createdAt: account.createdAt, updatedAt: account.updatedAt };
   }
   /** Handles the migrateBalance operation for the investment data layer. */
   function migrateBalance(record) {
@@ -382,7 +385,10 @@ export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract):
   function validateAccount(input) {
     const name = String(input.name || "").trim(); if (!name) throw new Error("Enter an account name.");
     const source = String(input.source || "").toLowerCase(); if (!["paycheck", "manual"].includes(source)) throw new Error("Choose paycheck deduction or manual transfer.");
-    return { id: input.id || uuid(), name, source, active: input.active !== false, createdAt: input.createdAt || now(), updatedAt: now() };
+    const assignmentId = String(input.assignmentId || sharedAssignmentId);
+    const assignments = budget.listAllPeople?.() || budget.listPeople?.() || [];
+    if (assignments.length && !assignments.some((assignment) => assignment.id === assignmentId)) throw new Error("Choose a valid assignment.");
+    return { id: input.id || uuid(), name, source, assignmentId, active: input.active !== false, createdAt: input.createdAt || now(), updatedAt: now() };
   }
   /** Handles the addAccount operation for the investment data layer. */
   function addAccount(input) {
