@@ -29,6 +29,10 @@ import trashIcon from "./trash.html" with { type: "text" };
 import questionMarkIcon from "./question-mark.html" with { type: "text" };
 import infoIcon from "./info.html" with { type: "text" };
 import targetIcon from "./target.html" with { type: "text" };
+import slidersIcon from "./sliders.html" with { type: "text" };
+import calendarIcon from "./calendar.html" with { type: "text" };
+import dollarSignIcon from "./dollar-sign.html" with { type: "text" };
+import noteIcon from "./note.html" with { type: "text" };
 
 export type IconKeys = keyof typeof iconStrings;
 
@@ -64,6 +68,10 @@ const iconStrings = {
   chevronUp: chevronUpIcon,
   info: infoIcon,
   target: targetIcon,
+  sliders: slidersIcon,
+  calendar: calendarIcon,
+  dollarSign: dollarSignIcon,
+  note: noteIcon,
 };
 
 const iconTemplateCache = new Map();
