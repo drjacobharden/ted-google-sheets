@@ -672,16 +672,7 @@ body.onboarding-open {
   gap: 14px;
   margin-top: 24px;
 }
-.summary-card {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 14px;
-  padding: 20px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-medium);
-  background: white;
-}
+
 .balance-card {
   background: #fbfcfa;
 }
@@ -708,10 +699,6 @@ body.onboarding-open {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.summary-card strong {
-  font-size: clamp(20px, 2vw, 25px);
-  letter-spacing: -0.025em;
 }
 
 .ledger-card {
