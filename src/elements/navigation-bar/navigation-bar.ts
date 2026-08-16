@@ -18,6 +18,7 @@ const NAVIGATION_BUTTONS = [
     title: "Budgeting",
     action: "new-transaction",
     data: [
+      { label: "Overview", icon: "dashboard", tab: "budget-overview" },
       { label: "Transactions", icon: "transactions", tab: "transactions" },
       { label: "Categories", icon: "label", tab: "categories" },
       { label: "Vendors", icon: "cart", tab: "vendors" },

@@ -8,7 +8,7 @@ Sidebar wrapper around the whole component
 
 .sidebar {
   --sidebar-collapsed-width: 64px;
-  --sidebar-open-width: 240px;
+  --sidebar-open-width: 280px;
   --collapsed-buton-width: 36px;
   --sidebar-width: var(--sidebar-open-width);
 
@@ -16,8 +16,8 @@ Sidebar wrapper around the whole component
   flex-direction: column;
   height: 100dvh;
   width: var(--sidebar-width);
-  /* overflow: hidden; */
-  background: var(--sidebar-background);
+  overflow: hidden;
+  background: var(--navbar-background);
   transition: width 180ms ease-out;
   z-index: 100;
 }
@@ -57,6 +57,7 @@ Logo and sidebar toggle buttons
   font-size: 24px;
   text-align: center;
   width: var(--sidebar-collapsed-width);
+  color: var(--navbar-button-text);
 }
 
 #close-sidebar,
@@ -72,12 +73,12 @@ Logo and sidebar toggle buttons
 
 #close-sidebar:hover,
 #open-sidebar:hover {
-  background-color: var(--ghost-button-hover);
+  background-color: var(--navbar-button-hover);
 }
 
 #close-sidebar:active,
 #open-sidebar:active {
-  background-color: var(--ghost-button-pressed);
+  background-color: var(--navbar-button-active);
 }
 
 #close-sidebar svg,
@@ -85,6 +86,7 @@ Logo and sidebar toggle buttons
   height: 20px;
   width: 20px;
   stroke-width: 1px;
+  color: var(--navbar-button-text-inactive);
 }
 
 #close-sidebar {
@@ -159,7 +161,7 @@ Navigation section
   --divider-width: calc(var(--collapsed-buton-width) - 4px);
 
   position: absolute;
-  border: 0.5px solid var(--text);
+  border: 0.5px solid var(--navbar-section-title-text);
   width: var(--divider-width);
   margin: 0 auto;
   left: calc((var(--sidebar-collapsed-width) - var(--divider-width)) / 2);
@@ -170,12 +172,13 @@ Navigation section
 }
 
 .sidebar[collapsed] .sidebar-section-divider {
-  opacity: 0.2;
+  opacity: 0.5;
 }
 
 .sidebar-section-row span {
   opacity: 0.7;
   font-size: 0.75rem;
+  color: var(--navbar-section-title-text);
 }
 
 .sidebar[collapsed] .sidebar-section-row span {
@@ -183,7 +186,7 @@ Navigation section
 }
 
 .sidebar .sidebar-section-row button {
-  background-color: #292929;
+  background-color: var(--navbar-section-title-text);
   color: var(--inverse-text);
   border-radius: 100%;
   margin-left: auto;
@@ -198,6 +201,23 @@ Navigation section
 
 .sidebar[collapsed] .sidebar-section-row button {
   display: none;
+}
+
+.sidebar .navigation-button {
+  color: var(--navbar-button-text-inactive);
+}
+
+.sidebar .navigation-button span {
+  color: var(--navbar-button-text-inactive);
+}
+
+.sidebar .navigation-button:hover {
+  background-color: var(--navbar-button-hover);
+  color: var(--navbar-button-text);
+}
+
+.sidebar .navigation-button:hover span {
+  color: var(--navbar-button-text);
 }
 
 .sidebar[collapsed] .navigation-button {

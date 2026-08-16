@@ -122,8 +122,8 @@ export class OverlayManager extends HTMLElement {
     }
   }
 
-  showTooltip(anchor: HTMLElement, text: string, options: PopoverOptions) {
-    this.#tooltip.showTooltip(anchor, text, options);
+  showTooltip(anchor: HTMLElement, content: string | Node, options: PopoverOptions) {
+    this.#tooltip.showTooltip(anchor, content, options);
   }
 
   hideTooltip() {
