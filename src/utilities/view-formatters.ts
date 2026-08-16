@@ -3,6 +3,12 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
+const currencyNoCentsFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
 /** Escapes a value before it is interpolated into HTML markup. */
 export function escapeHTML(value: unknown): string {
   return String(value ?? "").replace(/[&<>'"]/g, (character) => {
@@ -18,8 +24,15 @@ export function escapeHTML(value: unknown): string {
 }
 
 /** Formats an unknown numeric value as US currency. */
-export function money(value: unknown): string {
+export function money(value: unknown, showCents = true): string {
   const amount = Number(value);
+
+  if (!showCents) {
+    return currencyNoCentsFormatter.format(
+      Number.isFinite(amount) ? amount : 0,
+    );
+  }
+
   return currencyFormatter.format(Number.isFinite(amount) ? amount : 0);
 }
 

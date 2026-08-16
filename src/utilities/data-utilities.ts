@@ -99,3 +99,7 @@ export async function requestJson(
   }
   return isRecord(payload) && "data" in payload ? payload.data : payload;
 }
+
+export function percentChange(prev: number, next: number) {
+  return (next - prev) / prev;
+}

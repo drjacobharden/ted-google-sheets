@@ -6,13 +6,14 @@ interface Listener extends EventListenerObject {
 }
 
 type EventNames = keyof EventDetails;
-type EventDetails = Readonly<{
+type EventDetails<T = any> = Readonly<{
   "date-range-changed": { range: DateRange; step: DatePickerStep };
   "checkbox-selection": { isOn: boolean };
-  "dropdown-selection": { value: string; title: string };
+  "dropdown-selection": { id: string; value: string; title: string };
   "filters-changed": { filters: AppliedFilter<any>[] };
   "table-sort-request": { key: string };
   "segmented-control-selection": { value: string; title: string };
+  "table-data-changed": { data: readonly T[] };
 }>;
 
 export const addListener = (
@@ -27,23 +28,23 @@ export const removeListener = (
   listener: Listener,
 ) => target.removeEventListener(eventName, listener);
 
-export const handleCustomEvent = <T extends EventNames>(
-  eventName: T,
+export const handleCustomEvent = <T extends any, K extends EventNames>(
+  eventName: K,
   event: Event,
-  fxn: (detail: EventDetails[T]) => void,
+  fxn: (detail: EventDetails<T>[K]) => void,
 ) => {
   const e = event as CustomEvent;
   fxn(e.detail);
 };
 
-export const createEventHandler = <T extends EventNames>(
-  eventName: T,
+export const createEventHandler = <T extends any, K extends EventNames>(
+  eventName: K,
   target: EventTarget,
 ) => ({
-  dispatch: (detail: EventDetails[T], bubbles = { bubbles: false }) =>
+  dispatch: (detail: EventDetails<T>[K], bubbles = { bubbles: false }) =>
     target.dispatchEvent(new CustomEvent(eventName, { detail, ...bubbles })),
   addListener: (fxn: Listener) => addListener(eventName, target, fxn),
   removeListener: (fxn: Listener) => removeListener(eventName, target, fxn),
-  handleEvent: (event: Event, handler: (details: EventDetails[T]) => void) =>
+  handleEvent: (event: Event, handler: (details: EventDetails<T>[K]) => void) =>
     handleCustomEvent(eventName, event, handler),
 });
