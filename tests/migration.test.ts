@@ -24,10 +24,40 @@ describe("TypeScript runtime migration", () => {
   });
 
   test("router encodes, parses, preserves, and removes hash parameters", () => {
+    expect(parseRoute("#/budget-overview").name).toBe("budget-overview");
     expect(routeHash("entity-detail", { kind: "vendor", id: "vendor 1" })).toBe("#/entity-detail?kind=vendor&id=vendor+1");
     expect(parseRoute("#/entity-detail?kind=vendor&id=vendor%201")).toEqual({ name: "entity-detail", params: { kind: "vendor", id: "vendor 1" } });
     expect(parseRoute("#/not-a-route?drawer=edit").name).toBe("transactions");
     expect(routeHash("transactions", { drawer: "edit", transactionId: null })).toBe("#/transactions?drawer=edit");
+  });
+
+  test("budget overview is available from budgeting navigation", () => {
+    const navigation = readFileSync("src/elements/navigation-bar/navigation-bar.ts", "utf8");
+    const html = readFileSync("index.html", "utf8");
+    const screen = readFileSync("src/screens/budget-overview-screen/budget-overview-screen.ts", "utf8");
+    const controller = readFileSync("src/state/app-controller.ts", "utf8");
+    const state = readFileSync("src/state/app-state.ts", "utf8");
+    expect(navigation).toContain('{ label: "Overview", icon: "dashboard", tab: "budget-overview" }');
+    expect(html).toContain('<template id="route-budget-overview">');
+    expect(html).toContain("<budget-overview-screen></budget-overview-screen>");
+    expect(screen).toContain('appState.get("budgetOverview").annualSpendTrendsByYear');
+    expect(screen).toContain('appState.subscribe("budgetOverview"');
+    expect(screen).toContain("this.#unsubscribeBudgetOverview?.()");
+    expect(screen).not.toContain("buildSpendTrendSeries(");
+    expect(state).toContain("spendTrends: Record<SpendTrendPeriod, SpendTrendSeries | null>");
+    expect(state).toContain("monthlyTransactionSummaries: MonthlyTransactionSummaries");
+    expect(state).toContain("annualSpendTrendsByYear: AnnualSpendTrendsByYear");
+    expect(state).toContain("annualBudgetOverviews: AnnualBudgetOverviews");
+    expect(state).toContain("annualSummaryCards: AnnualSummaryCards");
+    expect(state).toContain("hasPaycheckDeductionHistory: boolean");
+    expect(state).toContain("budgetOverview: BudgetOverviewDerivedState");
+    expect(screen).toContain("appController.setBudgetOverviewAssignment(");
+    expect(controller).toContain('window.addEventListener("budget:investments-changed"');
+    expect(controller).toContain('appState.set("spendTrends"');
+    expect(controller).toContain('appState.set("annualSpendTrendsByYear"');
+    expect(controller).toContain('"monthlyTransactionSummaries",');
+    expect(controller).toContain('weekly: buildSpendTrendSeries(transactions, "weekly")');
+    expect(controller).toContain('monthly: buildSpendTrendSeries(transactions, "monthly")');
   });
 
   test("overlay manager owns notices, toasts, onboarding, and all drawers", () => {

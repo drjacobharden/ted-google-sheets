@@ -20,7 +20,11 @@ class Range {
     for (let y = 0; y < this.rows; y += 1) for (let x = 0; x < this.columns; x += 1) this.sheet.setValue(this.row + y, this.column + x, "");
     return this;
   }
-  setNumberFormat() { this.sheet.formatCalls += 1; return this; }
+  setNumberFormat() {
+    this.sheet.formatCalls += 1;
+    if (this.sheet.numberFormatError) throw new Error(this.sheet.numberFormatError);
+    return this;
+  }
   createFilter() { this.sheet.filter = {}; return this.sheet.filter; }
 }
 
@@ -159,7 +163,7 @@ test("initializes the active copy, reports deployment status, and remains idempo
   assert.equal(initialized.initialized, true);
   assert.equal(initialized.spreadsheetId, "copy-id");
   assert.equal(runtime.properties.get("SPREADSHEET_ID"), "copy-id");
-  assert.equal(runtime.properties.get("SETUP_VERSION"), "7");
+  assert.equal(runtime.properties.get("SETUP_VERSION"), "8");
   assert.equal(runtime.properties.has("WEB_APP_URL"), false);
   assert.equal(template.sheets.size, 0);
   assert.equal(copy.getSheetByName("Categories").getLastRow(), 11);
@@ -213,6 +217,22 @@ test("setup and setupBudget create equivalent initialized state", () => {
     [...menuRuntime.spreadsheet.sheets].map(([name, sheet]) => [name, sheet.getLastRow()]),
     [...editorRuntime.spreadsheet.sheets].map(([name, sheet]) => [name, sheet.getLastRow()]),
   );
+});
+
+test("setup does not override number formatting on typed columns", () => {
+  const spreadsheet = new Spreadsheet();
+  spreadsheet.insertSheet("Transactions").numberFormatError =
+    "You can't set the number format of cells in a typed column.";
+  spreadsheet.insertSheet("Ledger").numberFormatError =
+    "You can't set the number format of cells in a typed column.";
+
+  const runtime = loadScript({ spreadsheet });
+  const status = runtime.context.setupBudget();
+
+  assert.equal(status.initialized, true);
+  assert.equal(runtime.ui.alerts[0][0], "Budget initialized");
+  assert.equal(spreadsheet.getSheetByName("Transactions").formatCalls, 0);
+  assert.equal(spreadsheet.getSheetByName("Ledger").formatCalls, 0);
 });
 
 test("removes sidebar and deployment URL registration dependencies", () => {
@@ -567,7 +587,7 @@ test("batch-adds mixed entities with grouped writes, retries, and name reconcili
   assert.equal(reconciled.data.saved.length, 0);
   assert.equal(reconciled.data.reconciled.length, 1);
   assert.equal(reconciled.data.reconciled[0].record.id, entities[1].record.id);
-  assert.equal(call({ action: "health" }).data.apiVersion, 11);
+  assert.equal(call({ action: "health" }).data.apiVersion, 12);
   assert.equal(call({ action: "health" }).data.features.includes("bootstrapArchives"), true);
   assert.equal(call({ action: "health" }).data.features.includes("batchEntities"), true);
 });
@@ -782,7 +802,8 @@ test("setup migrates legacy investment columns without overstating savings", () 
   runtime.context.setup();
   assert.equal(runtime.call({ action: "listInvestmentAccounts" }).data[0].source, "manual");
   assert.equal(runtime.call({ action: "listInvestmentSnapshots" }).data[0].contribution, 800);
-  assert.deepEqual(accounts.data[0].slice(0, 6), ["ID", "Name", "Source", "Active", "Created At", "Updated At"]);
+  assert.deepEqual(accounts.data[0].slice(0, 7), ["ID", "Name", "Source", "Assignment ID", "Active", "Created At", "Updated At"]);
+  assert.equal(accounts.data[1][3], "00000000-0000-4000-8000-000000000101");
   const balances = spreadsheet.getSheetByName("InvestmentBalances");
   const contributions = spreadsheet.getSheetByName("InvestmentContributions");
   assert.deepEqual(balances.data[0].slice(0, 9), ["ID", "Account ID", "Month", "Ending Balance", "Notes", "Created At", "Created By", "Updated At", "Updated By"]);
@@ -790,6 +811,31 @@ test("setup migrates legacy investment columns without overstating savings", () 
   assert.equal(contributions.data[1][3], 800);
   assert.equal(spreadsheet.getSheetByName("InvestmentSnapshots"), null);
   assert.equal(spreadsheet.getSheetByName("InvestmentSnapshots_Legacy_v5").hidden, true);
+});
+
+test("setup assigns existing investment accounts to Shared", () => {
+  const spreadsheet = new Spreadsheet();
+  const accounts = spreadsheet.insertSheet("InvestmentAccounts");
+  accounts.data = [
+    ["ID", "Name", "Source", "Active", "Created At", "Updated At"],
+    [
+      "223e4567-e89b-42d3-a456-426614174099",
+      "401(k)",
+      "paycheck",
+      true,
+      "2026-06-01T00:00:00.000Z",
+      "2026-06-01T00:00:00.000Z",
+    ],
+  ];
+  const runtime = loadScript({ spreadsheet });
+  runtime.context.setup();
+
+  const account = runtime.call({ action: "listInvestmentAccounts" }).data[0];
+  assert.equal(account.source, "paycheck");
+  assert.equal(
+    account.assignmentId,
+    "00000000-0000-4000-8000-000000000101",
+  );
 });
 
 test("setup migrates signed and zero monthly aggregates into separate flow records", () => {
