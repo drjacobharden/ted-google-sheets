@@ -20,15 +20,17 @@
   </head>
   <body>
     <overlay-manager></overlay-manager>
-
     <main class="app-shell">
-      <navigation-bar></navigation-bar>
-
+      <!-- <navigation-bar></navigation-bar> -->
+      <top-nav></top-nav>
       <div id="route-outlet"></div>
-
       <!-- Dashboard tab -->
       <template id="route-dashboard">
         <dashboard-screen></dashboard-screen>
+      </template>
+      <!-- Budget overview tab -->
+      <template id="route-budget-overview">
+        <budget-overview-screen-2></budget-overview-screen-2>
       </template>
       <!-- Import tab -->
       <template id="route-import">
