@@ -1,0 +1,245 @@
+<!-- Page header -->
+<div class="content-container">
+  <div class="page-header-wrapper align-base">
+    <h1 class="text-500 push-left fw-regular mt-32">Budgeting</h1>
+    <div class="horizontal-center gap-12 push-right">
+      <dropdown-menu
+        id="overview-assignment-filter"
+        label="All assignments"
+        aria-label="Filter overview by assignment"
+      ></dropdown-menu>
+      <div class="year-controls">
+        <custom-button
+          class="secondary-button square"
+          leading-icon="chevronLeft"
+          data-action="prevYear"
+          aria-label="Show previous year"
+        ></custom-button>
+        <span data-id="summary-year"></span>
+        <custom-button
+          class="secondary-button square"
+          leading-icon="chevronRight"
+          data-action="nextYear"
+          aria-label="Show next year"
+        ></custom-button>
+      </div>
+    </div>
+  </div>
+  <!-- Summary cards -->
+  <section
+    id="annual-summary-cards"
+    class="summary-card-row"
+    aria-label="Annual financial summary"
+  ></section>
+  <!-- Trend chart -->
+  <section class="trend-card" aria-labelledby="weekly-spend-title">
+    <header>
+      <h2 id="weekly-spend-title" class="text-200 fw-regular">
+        Spending trend
+      </h2>
+      <segmented-control
+        id="spend-trend-period"
+        aria-label="Spending trend period"
+      ></segmented-control>
+    </header>
+    <div
+      id="spend-trend-metrics"
+      class="metrics"
+      aria-label="Spending trend summary"
+    >
+      <div class="current-trend">
+        <strong id="weekly-spend-average" class="text-400">—</strong>
+        <small id="spend-trend-average-caption">Current weekly trend</small>
+      </div>
+      <div class="trend-change">
+        <strong id="weekly-spend-change" class="text-200">—</strong>
+        <small id="weekly-spend-change-label">From 12 weeks ago</small>
+      </div>
+      <div id="weekly-spend-legend" class="legend" aria-label="Chart legend">
+        <span>
+          <i class="line" aria-hidden="true"></i>
+          <span id="spend-trend-legend-trend">Trend</span>
+        </span>
+        <span>
+          <i class="dot" aria-hidden="true"></i>
+          <span id="spend-trend-legend-total">Weekly spend</span>
+        </span>
+        <span id="spend-trend-previous-legend">
+          <i class="line is-previous" aria-hidden="true"></i>
+          <span id="spend-trend-legend-prev-trend">Prev year Trend</span>
+        </span>
+      </div>
+    </div>
+    <div id="weekly-spend-chart" class="chart"></div>
+    <div id="weekly-spend-empty" class="empty-state" hidden>
+      <h3 id="weekly-spend-empty-title" class="text-200 fw-medium">
+        No spending history yet
+      </h3>
+      <p id="weekly-spend-empty-copy">
+        Completed weeks will appear here after you add expense transactions.
+      </p>
+    </div>
+  </section>
+  <!-- Insights -->
+  <div class="insights-grid gap-12">
+    <section class="ranking-card" aria-labelledby="top-categories-title">
+      <header>
+        <h2 id="top-categories-title" class="text-200 fw-regular">
+          Top Categories
+        </h2>
+        <div
+          class="budget-overview-screen__help"
+          data-insight-help="categories"
+          aria-label="About top categories"
+        ></div>
+      </header>
+      <div class="table-header" aria-hidden="true">
+        <span>#</span>
+        <span>Category</span>
+        <span>Total spend</span>
+        <span id="top-categories-comparison-label">vs previous year</span>
+      </div>
+      <ol id="top-categories-list" class="ranking-list"></ol>
+      <p id="top-categories-empty" class="empty-state" hidden>
+        No category spending for this year.
+      </p>
+    </section>
+    <section class="savings-card" aria-labelledby="savings-rate-title">
+      <header>
+        <h2 id="savings-rate-title" class="text-200 fw-regular">
+          Savings Rate
+        </h2>
+        <div
+          type="button"
+          class="budget-overview-screen__help"
+          data-insight-help="savings"
+          aria-label="About savings rate"
+        ></div>
+      </header>
+      <div class="savings-rate-metric">
+        <div>
+          <strong id="savings-rate-value" class="text-300">—</strong>
+          <span id="savings-rate-change" class="text-80" hidden></span>
+        </div>
+        <small id="savings-rate-subtitle" class="text-80">—</small>
+      </div>
+      <div class="savings-visual">
+        <div class="donut" id="savings-rate-donut">
+          <svg
+            viewBox="0 0 180 100"
+            role="img"
+            aria-labelledby="savings-rate-chart-title savings-rate-chart-description"
+          >
+            <title id="savings-rate-chart-title">Savings rate</title>
+            <desc id="savings-rate-chart-description">
+              No income data for the selected year.
+            </desc>
+            <path
+              class="donut-track"
+              d="M 20 90 A 70 70 0 0 1 160 90"
+              pathLength="100"
+            ></path>
+            <path
+              id="savings-rate-spent-ring"
+              class="donut-segment is-spent"
+              data-donut-segment="spent"
+              d="M 20 90 A 70 70 0 0 1 160 90"
+              pathLength="100"
+              tabindex="0"
+              role="button"
+            ></path>
+            <path
+              id="savings-rate-paycheck-ring"
+              class="donut-segment is-paycheck"
+              data-donut-segment="paycheck"
+              d="M 20 90 A 70 70 0 0 1 160 90"
+              pathLength="100"
+              tabindex="0"
+              role="button"
+            ></path>
+            <path
+              id="savings-rate-budget-ring"
+              class="donut-segment is-budget"
+              data-donut-segment="budget"
+              d="M 20 90 A 70 70 0 0 1 160 90"
+              pathLength="100"
+              tabindex="0"
+              role="button"
+            ></path>
+          </svg>
+        </div>
+        <div class="donut-legend" aria-label="Savings rate chart legend">
+          <div>
+            <i class="is-budget" aria-hidden="true"></i>
+            <span
+              ><strong>Savings</strong
+              ><small id="savings-legend-rate" class="text-80">0%</small></span
+            >
+          </div>
+          <div>
+            <i class="is-paycheck" aria-hidden="true"></i>
+            <span
+              ><strong>Deductions</strong
+              ><small id="deductions-legend-rate" class="text-80"
+                >0%</small
+              ></span
+            >
+          </div>
+          <div>
+            <i class="is-spent" aria-hidden="true"></i>
+            <span
+              ><strong>Spend</strong
+              ><small id="spend-legend-rate" class="text-80">0%</small></span
+            >
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="ranking-card" aria-labelledby="top-vendors-title">
+      <header>
+        <h2 id="top-vendors-title" class="text-200 fw-regular">Top Vendors</h2>
+        <div
+          type="button"
+          class="budget-overview-screen__help"
+          data-insight-help="vendors"
+          aria-label="About top vendors"
+        ></div>
+      </header>
+      <div class="table-header" aria-hidden="true">
+        <span>#</span>
+        <span>Vendor</span>
+        <span>Total spend</span>
+        <span id="top-vendors-comparison-label">vs previous year</span>
+      </div>
+      <ol id="top-vendors-list" class="ranking-list"></ol>
+      <p id="top-vendors-empty" class="empty-state" hidden>
+        No vendor spending for this year.
+      </p>
+    </section>
+  </div>
+  <!-- Table -->
+  <section class="monthly-table-card" aria-labelledby="monthly-summary-title">
+    <header>
+      <h2 id="monthly-summary-title" class="text-200 fw-regular">
+        Monthly summary
+      </h2>
+    </header>
+    <div class="table-wrapper">
+      <table>
+        <caption id="monthly-summary-caption" class="sr-only"></caption>
+        <thead>
+          <tr>
+            <th scope="col">Month</th>
+            <th scope="col">Spend</th>
+            <th scope="col">Income</th>
+            <th scope="col">Net balance</th>
+            <th id="monthly-summary-comparison-label" scope="col">
+              vs previous year
+            </th>
+          </tr>
+        </thead>
+        <tbody id="monthly-summary-body"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
