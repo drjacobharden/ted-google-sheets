@@ -1,11 +1,3 @@
-@font-face {
-  font-family: "Chewy";
-  src: url("../assets/fonts/Chewy-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  letter-spacing: 0.2em;
-}
-
 *,
 *::before,
 *::after {
@@ -19,6 +11,7 @@ h1,
 h2,
 h3 {
   color: var(--text);
+  margin: 0;
 }
 
 html,
@@ -57,29 +50,25 @@ APP HIERARCHY
 
 .app-shell {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 1fr;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   width: 100vw;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: var(--sidebar-background);
+  background: var(--background);
 }
 
 #route-outlet {
+  grid-area: 1 / 1;
   position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  margin: 8px 8px 8px 8px;
-  overflow: hidden;
-  background: var(--content-background);
-  box-shadow: var(--shadow-card);
-  border-radius: var(--radius-medium);
-  border: 1px solid var(--border);
+  background: var(--background);
 }
 
 .screen {
@@ -88,6 +77,14 @@ APP HIERARCHY
   flex: 1;
   min-height: 0;
   max-width: none;
+  padding-inline: var(--horizontal-screen-padding);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+#route-outlet > .screen {
+  padding-top: 60px;
 }
 
 .content {
@@ -95,9 +92,6 @@ APP HIERARCHY
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .vertical {
@@ -139,4 +133,15 @@ APP HIERARCHY
   border-bottom: 1px solid var(--border);
   width: 100%;
   gap: 8px;
+}
+
+.scroll-container {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  flex: 1;
 }
