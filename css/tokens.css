@@ -1,4 +1,31 @@
 :root {
+  --background: hsl(197, 12%, 88%);
+  --elevation-1: hsl(197, 12%, 92%);
+  --elevation-2: hsl(197, 12%, 97%);
+
+  --object-extra-light: hsl(197, 12%, 89%);
+  --object-light: hsl(197, 12%, 85%);
+  --object-dark: hsl(300, 1%, 20%);
+
+  --negative-accent-dark: hsl(33, 70%, 30%);
+  --positive-accent-dark: hsl(194, 50%, 36%);
+
+  --border: hsl(300, 1%, 85%);
+
+  /* Styles for the charts on the main background */
+  --main-chart-inactive: hsl(197, 12%, 80%);
+  --main-chart-active: hsl(197, 12%, 65%);
+  --main-chart-selected: hsl(300, 1%, 20%);
+  --main-chart-gridline: hsl(300, 1%, 80%);
+
+  /* Navbar styles */
+  --navbar-background: hsl(30, 0%, 5%);
+  --navbar-button-hover: hsl(30, 0%, 18%);
+  --navbar-button-active: hsl(30, 0%, 20%);
+  --navbar-button-text: hsl(30, 0%, 100%);
+  --navbar-button-text-inactive: hsl(30, 0%, 75%);
+  --navbar-section-title-text: hsl(30, 0%, 65%);
+
   /* Hover color for transparent buttons */
   --ghost-button-hover: hsl(240, 4%, 93%);
 
@@ -29,7 +56,7 @@
     0 2px 4px hsl(0 0% 0% / 0.05), 0 8px 24px hsl(0 0% 0% / 0.08);
 
   /* Borders */
-  --border: hsl(40 12% 90%);
+
   --border-strong: hsl(37 13% 88%);
 
   /* Color of all standard borders */
@@ -39,13 +66,13 @@
   /* --border-strong: #dfe2dc; */
 
   /* Standard text color */
-  --text: #171817;
+  --text: hsl(120, 2%, 6%);
 
   /* Inverse text color */
   --inverse-text: #ffffff;
 
   /* Muted text color */
-  --muted: #7a7d78;
+  --muted: hsl(96, 2%, 48%);
 
   /* Standard accent color */
   --accent: hsl(240, 0%, 8%);
@@ -96,8 +123,11 @@
   --gap-medium: 8px;
 
   /* Semantic colors */
+  --positive-number: hsl(150, 70%, 24%);
+  --negative-number: hsl(0, 70%, 35%);
+
   --success: hsl(120, 30%, 95%);
-  --success-dark: hsl(120, 20%, 30%);
+  --success-dark: hsl(150, 100%, 24%);
 
   --archived: hsl(50, 50%, 80%);
   --archived-dark: hsl(50, 90%, 40%);
