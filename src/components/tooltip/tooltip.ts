@@ -8,8 +8,9 @@ export class Tooltip extends Popover {
     this.setAttribute("role", "tooltip");
   }
 
-  showTooltip(anchor: HTMLElement, text: string, options: PopoverOptions) {
-    this.textContent = text;
+  showTooltip(anchor: HTMLElement, content: string | Node, options: PopoverOptions) {
+    if (typeof content === "string") this.textContent = content;
+    else this.replaceChildren(content);
     this.show(anchor, options);
   }
 }

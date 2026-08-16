@@ -27,3 +27,14 @@
   transform: scale(1);
   transition-delay: 0s;
 }
+
+/* Tooltips should respond immediately; menus retain the standard popover motion. */
+.popover.tooltip,
+.popover.tooltip.is-visible {
+  width: max-content;
+  max-width: min(350px, calc(100vw - 16px));
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transform: none;
+  transition: none;
+}

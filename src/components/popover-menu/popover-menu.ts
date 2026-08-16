@@ -45,7 +45,7 @@ export class Popover extends HTMLElement {
 
     const anchorRect = anchor.getBoundingClientRect();
 
-    const { x, y } = this.calculatePosition(
+    const position = this.calculatePosition(
       anchorRect,
       this.offsetWidth,
       this.offsetHeight,
@@ -53,6 +53,17 @@ export class Popover extends HTMLElement {
       align,
       gap,
       offset,
+    );
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    const viewportMargin = 8;
+    const x = Math.min(
+      Math.max(viewportMargin, position.x),
+      Math.max(viewportMargin, viewportWidth - this.offsetWidth - viewportMargin),
+    );
+    const y = Math.min(
+      Math.max(viewportMargin, position.y),
+      Math.max(viewportMargin, viewportHeight - this.offsetHeight - viewportMargin),
     );
 
     this.style.left = `${x}px`;

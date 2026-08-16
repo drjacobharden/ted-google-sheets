@@ -33,6 +33,10 @@ export class DatePicker extends HTMLElement {
   #nextButton!: CustomButton;
   #prevButton!: CustomButton;
 
+  get range() {
+    return this.#range;
+  }
+
   connectedCallback(): void {
     const clone = DatePickerTemp.content.cloneNode(true) as DocumentFragment;
     this.append(clone);

@@ -1,140 +1,111 @@
-table-root {
+table-list {
   --column-gap: 40px;
   --outer-padding: var(--horizontal-screen-padding);
   --vertical-padding: 20px;
+  --table-row-height: 57px;
 
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-table-root table-controller {
-  display: flex;
-  padding: 8px var(--outer-padding);
-  border-bottom: 1px solid var(--border);
-  width: 100%;
-  gap: 8px;
-  align-items: center;
-}
-
-table-root table-controller .date-title {
-  font-size: 18px;
-  font-weight: 700;
-  margin-right: auto;
-}
-
-table-root table-list {
   display: flex;
   flex-direction: column;
   min-height: 0px;
   flex: 1;
-  overflow-y: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
 
-table-root table-list table {
-  width: 100%;
-  font-size: 14px;
-  border-collapse: collapse;
-}
+  table {
+    width: 100%;
+    font-size: 14px;
+    border-collapse: collapse;
 
-table-root table-list table col.shrink {
-  width: 1px;
-}
+    col.shrink {
+      width: 1px;
+    }
 
-table-root tr:not(:first-child) {
-  border-top: 1px dotted var(--border);
-}
+    .table-sort-button {
+      display: inline-flex;
+      width: 100%;
+      align-items: center;
+      gap: 4px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      white-space: nowrap;
+      cursor: pointer;
 
-table-root tbody tr:hover {
-  background-color: var(--surface-highlight-subtle);
-}
+      &:hover {
+        color: var(--text);
+      }
 
-table-root th {
-  padding: 24px 12px 12px;
-  opacity: 0.5;
-  font-weight: 400;
-}
+      &:focus-visible {
+        border-radius: var(--radius-xsmall);
+        outline: 2px solid var(--row-selection-border);
+        outline-offset: 3px;
+      }
 
-table-root th[aria-sort]:not([aria-sort="none"]) {
-  opacity: 1;
-}
+      svg {
+        width: 12px;
+        height: 12px;
+        flex: 0 0 auto;
+        stroke-width: 2px;
+      }
+    }
 
-table-root .table-sort-button {
-  display: inline-flex;
-  width: 100%;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  white-space: nowrap;
-  cursor: pointer;
-}
+    td {
+      padding: var(--vertical-padding) 12px;
+      border-bottom: 0;
+      border-left: 0;
+      border-right: 0;
+    }
 
-table-root .table-sort-button:hover {
-  color: var(--text);
-}
+    th,
+    td {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
 
-table-root .table-sort-button:focus-visible {
-  border-radius: var(--radius-xsmall);
-  outline: 2px solid var(--row-selection-border);
-  outline-offset: 3px;
-}
+      &:first-child {
+        padding-left: var(--outer-padding);
+      }
 
-table-root .table-sort-button svg {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-  stroke-width: 2px;
-}
+      &:last-child {
+        padding-right: var(--outer-padding);
+      }
+    }
 
-table-root td {
-  padding: var(--vertical-padding) 12px;
-  border-bottom: 0;
-  border-left: 0;
-  border-right: 0;
-}
+    th {
+      padding: 24px 12px 12px;
+      opacity: 0.5;
+      font-weight: 400;
 
-table-root th,
-table-root td {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+      &[aria-sort]:not([aria-sort="none"]) {
+        opacity: 1;
+      }
+    }
 
-th:first-child,
-td:first-child {
-  padding-left: var(--outer-padding);
-}
+    tr:not(:first-child) {
+      border-top: 1px dotted var(--border);
+    }
 
-th:last-child,
-td:last-child {
-  padding-right: var(--outer-padding);
-}
+    tbody tr:hover {
+      background-color: var(--surface-highlight-subtle);
+    }
 
-table-root table-footer {
-  display: grid;
-  grid-template-columns: auto 40px;
-  border-top: 1px solid var(--border);
-  padding: 12px var(--outer-padding) 20px;
-}
+    span {
+      padding: 2px 16px;
+      border-radius: 999px;
+    }
 
-table-root tr {
-  background-color: var(--surface);
-}
+    tr {
+      background-color: var(--surface);
 
-table-root tr .options custom-button {
-  height: 20px;
-  opacity: 0.5;
-  border-width: 0;
-}
-
-table-root table-list span {
-  padding: 2px 16px;
-  border-radius: 999px;
+      .options custom-button {
+        height: 20px;
+        opacity: 0.5;
+        border-width: 0;
+        background-color: transparent;
+      }
+    }
+  }
 }

@@ -215,6 +215,7 @@ export class DropdownMenu extends HTMLElement {
     this.#value = item.dataset.value ?? null;
     this.#events.dispatch(
       {
+        id: this.#menuKey,
         value: item.dataset.value!,
         title: item.dataset.title!,
       },

@@ -17,8 +17,9 @@ dropdown-menu[is-open] > .popover.dropdown-menu-list {
   box-shadow: var(--shadow-prominent);
   pointer-events: all;
   border: 1px solid var(--border-strong);
-  padding-left: 4px;
-  padding-right: 4px;
+  padding-left: 8px;
+  padding-right: 8px;
+  border-radius: var(--radius-large);
 }
 
 .dropdown-trigger span {
@@ -29,7 +30,7 @@ dropdown-menu[is-open] > .popover.dropdown-menu-list {
   display: flex;
   width: 100%;
   gap: 12px;
-  border-radius: var(--radius-xsmall);
+  border-radius: calc(var(--radius-large) - 8px);
   padding: 0px 12px;
   height: 40px;
   align-items: center;

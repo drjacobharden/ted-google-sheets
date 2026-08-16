@@ -1,26 +1,12 @@
-import { DateRange, DateUtils } from "../../utilities/date-utilities";
-import { getIcon, IconKeys } from "../../icons";
-import {
-  addListener,
-  createEventHandler,
-  handleCustomEvent,
-  removeListener,
-} from "../../utilities/event-utilities";
+import { getIcon, type IconKeys } from "../../icons";
 import { Checkbox } from "../checkbox/checkbox";
-import { DatePicker } from "../date-range-picker/date-range-picker-2";
-import { DropdownMenu, DropdownMenuItem } from "../dropdown-menu/dropdown-menu";
-import {
-  AppliedFilter,
-  AvailableFilter,
-  FilterBar,
-} from "../filter-bar/filter-bar";
-import { SearchBar } from "../search-bar/search-bar";
+import { DropdownMenu, type DropdownMenuItem } from "../dropdown-menu/dropdown-menu";
 
-interface Column<T> {
+export interface TableColumn<T> {
   key: keyof T;
   title: string;
   dataType: "string" | "number" | string[];
-  formatter?: (v: any, row: T) => string;
+  formatter?: (value: any, row: T) => string;
   textAlign?: "right" | "left" | "center";
   prominence?: "bold" | "background" | "none";
   sizing?: "narrow" | number;
@@ -28,429 +14,63 @@ interface Column<T> {
   sorter?: (row: T) => number;
 }
 
-interface TableData<T> {
-  columns: (Column<T> | "checkbox" | "options")[];
-  rows: T[];
-  footer?: {};
-  filters?: AvailableFilter<T>[];
+export type SortDirection = "ascending" | "descending";
+
+export interface TableData<T> {
+  columns: (TableColumn<T> | "checkbox" | "options")[];
+  rows: readonly T[];
   rowActions?: (DropdownMenuItem & { selectionIcon: "none" })[];
   sort?: { key: keyof T; direction: SortDirection } | null;
 }
 
-type TableControlsArray = (
-  | "search"
-  | "date"
-  | "sort"
-  | "filter"
-  | "divider"
-  | "dateTitle"
-)[];
-type SortDirection = "ascending" | "descending";
-
+/**
+ * A presentation-only table. Filtering, sorting, and pagination belong to the
+ * owning screen; assigning `data` repaints exactly the supplied rows.
+ */
 export class Table<T extends object> extends HTMLElement {
   #initialized = false;
-  #listening = false;
-  #dateRange = DateUtils.defaultRange;
-
-  #data: TableData<T> = { columns: [], rows: [] }; //  all the data available to use
-  #dateData: TableData<T>["rows"] | null = null; //  data available for the current date range
-  #visibleData: TableData<T>["rows"] = []; //  data visible in the table
-
-  #sortKey: keyof T | null = null;
-  #sortDirection: SortDirection | null = null;
-  #filters: AppliedFilter<T>[] = [];
-
-  #controller: TableController<T> | null = null;
-  #list!: TableList<T>;
-  #footer: HTMLElement | null = null;
+  #table!: HTMLTableElement;
+  #tableBody!: HTMLTableSectionElement;
+  #columns: TableData<T>["columns"] = [];
 
   connectedCallback(): void {
-    if (!this.#initialized) {
-      this.#initialize();
-    }
-
-    if (!this.#listening) {
-      this.#listening = true;
-      addListener("date-range-changed", this, this);
-      addListener("checkbox-selection", this, this);
-      addListener("filters-changed", this, this);
-      addListener("table-sort-request", this, this);
-    }
-  }
-
-  // Capture elements and set initial states
-  #initialize() {
-    this.#controller = this.querySelector("table-controller");
-    this.#list = this.querySelector("table-list")!;
-    this.#footer = this.querySelector("table-footer");
-
-    if (!this.#list) throw new Error("Table list is not defined");
-
+    if (this.#initialized) return;
     this.#initialized = true;
+    this.classList.add("table-list");
+    this.#table = document.createElement("table");
+    this.append(this.#table);
   }
 
-  handleEvent(event: Event) {
-    switch (event.type) {
-      case "date-range-changed":
-        this.#handleDateChange(event);
-        break;
-
-      case "checkbox-selection":
-        this.#handleCheckboxSelection(event);
-        break;
-
-      case "table-sort-request":
-        this.#handleHeaderSort(event as CustomEvent<{ key: keyof T }>);
-        break;
-
-      case "filters-changed":
-        this.#handleFiltersChanged(event);
-        break;
-
-      default:
-        break;
-    }
+  set data(data: TableData<T>) {
+    if (!this.#initialized) this.connectedCallback();
+    this.#columns = data.columns;
+    this.#renderHeader(data);
+    this.#renderRows(data);
   }
 
-  set data(values: TableData<T>) {
-    this.#data = values;
+  /** Number of body rows that fit in the current list without vertical scroll. */
+  get visibleRowCapacity(): number {
+    const availableHeight = this.clientHeight;
+    if (availableHeight <= 0) return 0;
 
-    const sortColumnExists = values.columns.some(
-      (item) => typeof item === "object" && item.key === this.#sortKey,
+    const headerHeight = this.#table.tHead?.getBoundingClientRect().height ?? 0;
+    const sampleRow = this.#tableBody?.rows.item(0);
+    const configuredRowHeight = Number.parseFloat(
+      getComputedStyle(this).getPropertyValue("--table-row-height"),
     );
-    if (!sortColumnExists) {
-      this.#sortKey = null;
-      this.#sortDirection = null;
-    }
+    const rowHeight =
+      sampleRow?.getBoundingClientRect().height || configuredRowHeight || 57;
 
-    this.#filterByDate();
-    this.#filterData();
-    this.#sortData();
-    this.#setTableData();
-
-    if (this.#controller) {
-      this.#controller.sort = values.columns;
-      this.#controller.filters = values.filters;
-    }
+    return Math.max(1, Math.floor((availableHeight - headerHeight) / rowHeight));
   }
 
-  set controls(values: TableControlsArray) {
-    if (this.#controller) {
-      this.#controller.controls = values;
-    } else {
-      throw new Error("Table controller is not attached");
-    }
-  }
-
-  #handleDateChange(event: Event) {
-    handleCustomEvent("date-range-changed", event, ({ range, step }) => {
-      if (this.#controller) {
-        this.#controller.dateTitle = DateUtils.formatDateRange(
-          range.start,
-          range.end,
-          {
-            showDays: step === "week",
-            showMonth: step !== "year",
-            monthFormat: "long",
-          },
-        );
-      }
-
-      this.#dateRange = range;
-      this.#filterByDate();
-      this.#filterData();
-      this.#sortData();
-      this.#setTableData();
-    });
-  }
-
-  #handleCheckboxSelection(event: Event) {
-    handleCustomEvent("checkbox-selection", event, ({ isOn }) => {
-      console.log({ isOn });
-    });
-  }
-
-  #handleHeaderSort(event: CustomEvent<{ key: keyof T }>) {
-    handleCustomEvent("table-sort-request", event, ({ key }) => {
-      if (this.#sortKey !== key || this.#sortDirection === null) {
-        this.#sortKey = key as keyof T;
-        this.#sortDirection = "descending";
-      } else if (this.#sortDirection === "descending") {
-        this.#sortDirection = "ascending";
-      } else {
-        this.#sortKey = null;
-        this.#sortDirection = null;
-      }
-
-      this.#filterData();
-      this.#sortData();
-      this.#setTableData();
-    });
-  }
-
-  #handleFiltersChanged(event: Event) {
-    handleCustomEvent("filters-changed", event, ({ filters }) => {
-      this.#filters = filters;
-      this.#filterData();
-      this.#sortData();
-      this.#setTableData();
-    });
-  }
-
-  #sortData() {
-    const key = this.#sortKey;
-    const direction = this.#sortDirection;
-
-    if (key === null || direction === null) return this.#visibleData;
-
-    const colIndex = this.#data.columns.findIndex(
-      (v) => typeof v === "object" && v.key === key,
-    );
-    const col = this.#data.columns[colIndex];
-
-    if (!col || typeof col === "string") return this.#visibleData;
-
-    const multiplier = direction === "ascending" ? 1 : -1;
-
-    this.#visibleData.sort((a, b) => {
-      const prev = a[key] as string | number;
-      const next = b[key] as string | number;
-
-      if (typeof prev === "number" && typeof next === "number") {
-        const normalizedPrev = col.sorter?.(a) ?? prev;
-        const normalizedNext = col.sorter?.(b) ?? next;
-
-        return (normalizedPrev - normalizedNext) * multiplier;
-      }
-
-      if (typeof prev === "string" && typeof next === "string") {
-        return prev.localeCompare(next) * multiplier;
-      }
-
-      return 0;
-    });
-  }
-
-  #filterData() {
-    const data = this.#data.rows;
-    const filteredByDate = this.#dateData ?? data;
-
-    const filtered = filteredByDate.filter((item) => {
-      const row = item;
-
-      return this.#filters.every((filter) => {
-        const filterKey = filter.key as keyof T;
-
-        const filterValue =
-          typeof filter.value === "string"
-            ? filter.value.toLowerCase()
-            : filter.value;
-
-        const value =
-          typeof row[filterKey] === "string"
-            ? row[filterKey].toLowerCase()
-            : (row[filterKey] as number);
-
-        if (filter.operator === "Equals") {
-          return value === filterValue;
-        }
-
-        if (filter.operator === "Does not equal") {
-          return value !== filterValue;
-        }
-
-        if (filter.operator === "Greater than") {
-          return value > filter.value;
-        }
-
-        if (filter.operator === "Less than") {
-          return value < filter.value;
-        }
-
-        if (filter.operator === "Contains") {
-          const val = value as string;
-          return val.includes(filterValue as string);
-        }
-
-        if (filter.operator === "Starts with") {
-          const val = value as string;
-          return val.startsWith(filterValue as string);
-        }
-      });
-    });
-
-    this.#visibleData = filtered;
-  }
-
-  #filterByDate() {
-    const data = this.#data.rows;
-    if (data.length === 0) return data;
-    if (!("date" in data[0])) return data;
-
-    const filtered = data.filter((row) => {
-      if ("date" in row) {
-        const date = row.date as string;
-        return DateUtils.isInRange(date, this.#dateRange);
-      }
-
-      return false;
-    });
-
-    this.#dateData = filtered;
-  }
-
-  #setTableData() {
-    this.#list.data = {
-      columns: this.#data.columns,
-      rows: this.#visibleData,
-      rowActions: this.#data.rowActions,
-      sort:
-        this.#sortKey !== null && this.#sortDirection !== null
-          ? { key: this.#sortKey, direction: this.#sortDirection }
-          : null,
-    };
-  }
-
-  disconnectedCallback() {
-    this.#listening = false;
-    removeListener("date-range-changed", this, this);
-    removeListener("checkbox-selection", this, this);
-    removeListener("filters-changed", this, this);
-    removeListener("table-sort-request", this, this);
-  }
-}
-
-class TableController<T extends object> extends HTMLElement {
-  #columnHeaders: TableData<T>["columns"] = [];
-  #initialized = false;
-  #filterBar: FilterBar<T> | null = null;
-  #sort: DropdownMenu | null = null;
-  #searchBar: SearchBar | null = null;
-  #datePicker: DatePicker | null = null;
-  #dateTitle: HTMLElement | null = null;
-
-  connectedCallback() {
-    if (!this.#initialized) {
-      this.classList.add("table-controller");
-    }
-  }
-
-  set controls(values: TableControlsArray) {
-    const children = values.map((item) => {
-      switch (item) {
-        case "dateTitle":
-          const span = document.createElement("span");
-          span.classList.add("date-title");
-          this.#dateTitle = span;
-          return span;
-
-        case "search":
-          const searchbar = document.createElement("search-bar") as SearchBar;
-          this.#searchBar = searchbar;
-          return searchbar;
-
-        case "date":
-          const datePicker = document.createElement(
-            "date-range-picker-2",
-          ) as DatePicker;
-          this.#datePicker = datePicker;
-          return datePicker;
-
-        case "filter":
-          const filterButton = document.createElement(
-            "filter-bar",
-          ) as FilterBar<T>;
-          filterButton.dataset.action = "filter";
-          this.#filterBar = filterButton;
-          return filterButton;
-
-        case "sort":
-          const sortButton = document.createElement(
-            "dropdown-menu",
-          ) as DropdownMenu;
-          sortButton.label = "Sort";
-          sortButton.icon = "sort";
-          sortButton.dataset.action = "sort";
-          sortButton.toggleAttribute("hide-trailing-chevron", true);
-          sortButton.toggleAttribute("bubbles", true);
-          this.#sort = sortButton;
-          return sortButton;
-
-        case "divider":
-          const div = document.createElement("div");
-          div.classList.add("vertical-divider");
-          return div;
-      }
-    });
-
-    this.replaceChildren(...children);
-  }
-
-  set filters(values: TableData<T>["filters"]) {
-    if (this.#filterBar) {
-      this.#filterBar.availableFilters = values ?? [];
-    }
-  }
-
-  set sort(values: TableData<T>["columns"]) {
-    if (this.#sort) {
-      this.#sort.items = values.filter(
-        (item) => typeof item !== "string",
-      ) as DropdownMenuItem[];
-    }
-  }
-
-  set dateTitle(value: string) {
-    if (this.#dateTitle) {
-      this.#dateTitle.textContent = value;
-    }
-  }
-
-  disconnectedCallback() {}
-}
-
-class TableFooter extends HTMLElement {
-  #initialized = false;
-
-  connectedCallback() {
-    if (!this.#initialized) {
-      this.classList.add("table-footer");
-
-      while (this.firstChild) {
-        this.append(this.firstChild);
-      }
-    }
-  }
-
-  disconnectedCallback() {}
-}
-
-class TableList<T extends object> extends HTMLElement {
-  #initialized = false;
-  #columnHeaders: TableData<T>["columns"] = [];
-  #header: HTMLElement | null = null;
-
-  #table!: HTMLTableElement;
-  #tableBody!: HTMLElement;
-
-  connectedCallback() {
-    if (!this.#initialized) {
-      this.classList.add("table-list");
-      const table = document.createElement("table");
-      this.append(table);
-      this.#table = table;
-    }
-  }
-
-  #renderHeader(data: TableData<T>) {
+  #renderHeader(data: TableData<T>): void {
     const colGroup = document.createElement("colgroup");
-    const tHead = document.createElement("thead");
+    const head = document.createElement("thead");
     const headerRow = document.createElement("tr");
-    const tbody = document.createElement("tbody");
+    this.#tableBody = document.createElement("tbody");
 
-    for (let i = 0, l = this.#columnHeaders.length; i < l; i++) {
-      const column = this.#columnHeaders[i];
-
+    for (const column of this.#columns) {
       const col = document.createElement("col");
       const th = document.createElement("th");
 
@@ -467,7 +87,7 @@ class TableList<T extends object> extends HTMLElement {
         const icon = getIcon(iconName);
 
         button.type = "button";
-        button.classList.add("table-sort-button");
+        button.className = "table-sort-button";
         button.append(document.createTextNode(column.title));
         button.setAttribute(
           "aria-label",
@@ -478,12 +98,13 @@ class TableList<T extends object> extends HTMLElement {
               : `${column.title}: not sorted. Activate to sort descending.`,
         );
         button.addEventListener("click", () => {
-          this.#events.dispatch(
-            { key: column.key as string },
-            { bubbles: true },
+          this.dispatchEvent(
+            new CustomEvent("table-sort-request", {
+              bubbles: true,
+              detail: { key: column.key },
+            }),
           );
         });
-
         if (icon) {
           icon.setAttribute("aria-hidden", "true");
           button.append(icon);
@@ -510,83 +131,57 @@ class TableList<T extends object> extends HTMLElement {
       headerRow.append(th);
     }
 
-    this.#header = tHead;
-    this.#tableBody = tbody;
-    this.#header.append(headerRow);
-    this.#table.replaceChildren(colGroup, this.#header, this.#tableBody);
+    head.append(headerRow);
+    this.#table.replaceChildren(colGroup, head, this.#tableBody);
   }
 
-  // Renders the data row for the table
-  #renderRows(data: TableData<T>) {
-    const rows = data.rows;
-    const frag = document.createDocumentFragment();
+  #renderRows(data: TableData<T>): void {
+    const fragment = document.createDocumentFragment();
 
-    for (let i = 0, l = rows.length; i < l; i++) {
-      const row = rows[i];
+    for (const row of data.rows) {
       const tr = document.createElement("tr");
-
-      const children = this.#columnHeaders.map((col) => {
+      const cells = this.#columns.map((column) => {
         const td = document.createElement("td");
 
-        if (col === "checkbox") {
-          const checkbox = document.createElement("check-box") as Checkbox;
-          td.append(checkbox);
+        if (column === "checkbox") {
+          td.append(document.createElement("check-box") as Checkbox);
           td.classList.add("shrink");
-        }
-        //
-        else if (col === "options") {
-          const button = document.createElement(
-            "dropdown-menu",
-          ) as DropdownMenu;
-          button.icon = "dotsHorizontal";
-          button.toggleAttribute("hide-trailing-chevron");
-          button.classList.add("options");
-          button.items = data.rowActions ?? [];
-          td.append(button);
+        } else if (column === "options") {
+          const menu = document.createElement("dropdown-menu") as DropdownMenu;
+          menu.icon = "dotsHorizontal";
+          menu.toggleAttribute("hide-trailing-chevron");
+          menu.classList.add("options");
+          menu.items = data.rowActions ?? [];
+          td.append(menu);
           td.classList.add("shrink");
-        }
-        //
-        else {
-          const value = row[col.key];
+        } else {
+          const value = row[column.key];
+          const text = column.formatter?.(value, row) ?? String(value);
 
-          if (col.prominence === "background") {
-            const text = document.createElement("span");
-            text.textContent = col.formatter?.(value, row) ?? String(value);
-            text.style.backgroundColor =
-              col.color?.(row) ?? "var(--syncing-dark)";
-            text.style.color = "var(--inverse-text)";
-            td.append(text);
+          if (column.prominence === "background") {
+            const badge = document.createElement("span");
+            badge.textContent = text;
+            badge.style.backgroundColor =
+              column.color?.(row) ?? "var(--syncing-dark)";
+            badge.style.color = "var(--inverse-text)";
+            td.append(badge);
           } else {
-            td.textContent = col.formatter?.(value, row) ?? String(value);
-            td.style.textAlign = col.textAlign ?? "left";
-            td.style.fontWeight = col.prominence === "bold" ? "500" : "400";
-            td.style.color = col.color?.(row) ?? "var(--text)";
+            td.textContent = text;
+            td.style.textAlign = column.textAlign ?? "left";
+            td.style.fontWeight = column.prominence === "bold" ? "500" : "400";
+            td.style.color = column.color?.(row) ?? "var(--text)";
           }
         }
 
         return td;
       });
 
-      tr.replaceChildren(...children);
-      frag.append(tr);
+      tr.replaceChildren(...cells);
+      fragment.append(tr);
     }
 
-    this.#tableBody.replaceChildren(frag);
+    this.#tableBody.replaceChildren(fragment);
   }
-
-  disconnectedCallback() {}
-
-  set data(data: TableData<T>) {
-    this.#columnHeaders = data.columns;
-
-    this.#renderHeader(data);
-    this.#renderRows(data);
-  }
-
-  #events = createEventHandler("table-sort-request", this);
 }
 
-customElements.define("table-root", Table);
-customElements.define("table-controller", TableController);
-customElements.define("table-footer", TableFooter);
-customElements.define("table-list", TableList);
+if (!customElements.get("table-list")) customElements.define("table-list", Table);
