@@ -91,7 +91,10 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
       return;
     }
     this.#heading.title = account.name;
-    this.#heading.subtitle = `${InvestmentView.sourceLabel(account.source)} · Monthly balance history`;
+    const assignment = APIs.budget.listAllPeople().find(
+      (item) => item.id === account.assignmentId,
+    );
+    this.#heading.subtitle = `${InvestmentView.sourceLabel(account.source)} · ${assignment?.name ?? "Shared"} · Monthly balance history`;
     this.#editButton.disabled = false;
     const rows = APIs.investment.balances().filter((item) => item.accountId === this.#accountId).sort((left, right) => right.month.localeCompare(left.month));
     this.#count.textContent = `${rows.length} ${rows.length === 1 ? "balance" : "balances"}`;

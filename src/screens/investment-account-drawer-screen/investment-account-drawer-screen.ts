@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return JSON.stringify({
       name: form.elements.name.value.trim(),
       source: form.elements.source.value,
+      assignmentId: form.elements.assignmentId.value,
     });
   }
 
@@ -102,6 +103,16 @@ document.addEventListener("DOMContentLoaded", () => {
     returnFocus = document.activeElement;
     form.elements.name.value = account.name;
     form.elements.source.value = account.source;
+    form.elements.assignmentId.replaceChildren(
+      ...APIs.budget.listAllPeople().map((assignment) => {
+        const option = document.createElement("option");
+        option.value = assignment.id;
+        option.textContent = assignment.name;
+        return option;
+      }),
+    );
+    form.elements.assignmentId.value =
+      account.assignmentId || APIs.budget.SHARED_ASSIGNMENT_ID;
     message.textContent = "";
     message.className = "form-message";
     submit.disabled = false;
@@ -169,6 +180,7 @@ document.addEventListener("DOMContentLoaded", () => {
         id: accountId,
         name: form.elements.name.value,
         source: form.elements.source.value,
+        assignmentId: form.elements.assignmentId.value,
       });
       initialState = formState();
       close(true);

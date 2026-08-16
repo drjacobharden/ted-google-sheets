@@ -36,6 +36,7 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
     this.#list.addEventListener("keydown", this);
     window.addEventListener("budget:investments-changed", this);
     window.addEventListener("budget:investments-loaded", this);
+    window.addEventListener("budget:people-changed", this);
     this.#render();
   }
 
@@ -48,6 +49,7 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
     this.#list.removeEventListener("keydown", this);
     window.removeEventListener("budget:investments-changed", this);
     window.removeEventListener("budget:investments-loaded", this);
+    window.removeEventListener("budget:people-changed", this);
   }
 
   /** Routes form, row, and application events to the corresponding behavior. */
@@ -55,7 +57,10 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
     if (event.type === "submit") this.#handleSubmit(event);
     else if (event.type === "click") this.#handleListClick(event);
     else if (event.type === "keydown") this.#handleListKeydown(event);
-    else this.#render();
+    else {
+      this.#populateAssignments();
+      this.#render();
+    }
   }
 
   /** Captures the typed elements cloned from the screen template. */
@@ -64,6 +69,22 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
     this.#message = this.querySelector<HTMLElement>(".investment-accounts-screen__message")!;
     this.#list = this.querySelector<HTMLElement>("#investment-account-list")!;
     this.#count = this.querySelector<HTMLElement>("#investment-account-count")!;
+    this.#populateAssignments();
+  }
+
+  #populateAssignments(): void {
+    const select = this.#form.elements.namedItem("assignmentId");
+    if (!(select instanceof HTMLSelectElement)) return;
+    const assignments = APIs.budget.listPeople();
+    select.replaceChildren(
+      ...assignments.map((assignment) => {
+        const option = document.createElement("option");
+        option.value = assignment.id;
+        option.textContent = assignment.name;
+        option.selected = assignment.id === APIs.budget.SHARED_ASSIGNMENT_ID;
+        return option;
+      }),
+    );
   }
 
   /** Renders all active investment accounts and their latest balances. */
@@ -88,7 +109,10 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
     row.tabIndex = 0;
     row.setAttribute("role", "button");
     row.setAttribute("aria-label", `View ${account.name} balance history`);
-    row.innerHTML = `<span class="investment-accounts-screen__avatar" aria-hidden="true">${escapeHTML(account.name.charAt(0).toUpperCase())}</span><div class="investment-accounts-screen__details"><strong>${escapeHTML(account.name)}</strong><p>${InvestmentView.sourceLabel(account.source)}</p></div><strong class="investment-accounts-screen__balance">${money(balance)}</strong>`;
+    const assignment = APIs.budget.listAllPeople().find(
+      (item) => item.id === account.assignmentId,
+    );
+    row.innerHTML = `<span class="investment-accounts-screen__avatar" aria-hidden="true">${escapeHTML(account.name.charAt(0).toUpperCase())}</span><div class="investment-accounts-screen__details"><strong>${escapeHTML(account.name)}</strong><p>${InvestmentView.sourceLabel(account.source)} · ${escapeHTML(assignment?.name ?? "Shared")}</p></div><strong class="investment-accounts-screen__balance">${money(balance)}</strong>`;
     return row;
   }
 
@@ -123,10 +147,18 @@ export class InvestmentAccountsScreen extends HTMLElement implements EventListen
     const data = new FormData(this.#form);
     const name = data.get("name");
     const source = data.get("source");
-    if (typeof name !== "string" || !isInvestmentSource(source)) return;
+    const assignmentId = data.get("assignmentId");
+    if (
+      typeof name !== "string"
+      || !isInvestmentSource(source)
+      || typeof assignmentId !== "string"
+    ) return;
     try {
-      const account = APIs.investment.addAccount({ name, source });
+      const account = APIs.investment.addAccount({ name, source, assignmentId });
       this.#form.reset();
+      const assignmentSelect = this.#form.elements.namedItem("assignmentId");
+      if (assignmentSelect instanceof HTMLSelectElement)
+        assignmentSelect.value = APIs.budget.SHARED_ASSIGNMENT_ID;
       const nameInput = this.#form.elements.namedItem("name");
       if (nameInput instanceof HTMLInputElement) nameInput.focus();
       this.#setMessage(`${account.name} added. Syncing…`, "success");

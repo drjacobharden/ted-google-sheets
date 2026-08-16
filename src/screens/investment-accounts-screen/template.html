@@ -9,6 +9,7 @@
     <p>Create a record of the accounts you invest into.</p>
     <label class="form-field"><span>Name</span><input name="name" type="text" maxlength="80" placeholder="e.g. Roth IRA" required /></label>
     <label class="form-field"><span>Source</span><select name="source" required><option value="manual">Manual transfer</option><option value="paycheck">Paycheck deduction</option></select></label>
+    <label class="form-field"><span>Assignment</span><select name="assignmentId" required></select></label>
     <p class="investment-accounts-screen__footnote">Paycheck deductions are considered when calculating your total savings. Manual transfers are not because they come from savings already counted in income minus spending.</p>
     <button class="primary-button" type="submit">Add account</button>
     <p class="investment-accounts-screen__message" role="status"></p>
