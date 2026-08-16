@@ -2,7 +2,7 @@ import type { NavigationGuard, ParsedRoute, RouteChangedEventDetail, RouteName, 
 
 export const DEFAULT_ROUTE: RouteName = "transactions";
 export const ROUTES = new Set<RouteName>([
-  "dashboard", "transactions", "categories", "vendors", "people", "import",
+  "dashboard", "budget-overview", "transactions", "categories", "vendors", "people", "import",
   "entity-detail", "entity-archive", "sync", "settings", "investment-overview",
   "investment-accounts", "investment-account-detail",
 ]);
