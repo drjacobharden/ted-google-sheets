@@ -1,3 +1,27 @@
+import type { SpendTrendPeriod, SpendTrendSeries } from "../utilities/spend-trend";
+import type { MonthlyTransactionSummaries } from "../utilities/monthly-transaction-summary";
+import type { AnnualBudgetOverviews } from "../utilities/annual-budget-overview";
+import type { AnnualSummaryCards } from "../utilities/annual-summary-cards";
+import type { AnnualSpendTrendSeries } from "../utilities/annual-spend-trend";
+
+export type SpendTrendsByYear = Record<
+  number,
+  Record<SpendTrendPeriod, SpendTrendSeries>
+>;
+
+export type AnnualSpendTrendsByYear = Record<
+  number,
+  Record<SpendTrendPeriod, AnnualSpendTrendSeries>
+>;
+
+export interface BudgetOverviewDerivedState {
+  assignmentId: string | null;
+  annualSpendTrendsByYear: AnnualSpendTrendsByYear;
+  monthlyTransactionSummaries: MonthlyTransactionSummaries;
+  annualBudgetOverviews: AnnualBudgetOverviews;
+  annualSummaryCards: AnnualSummaryCards;
+}
+
 export type StorageScope = "local" | "session";
 
 export interface StateStorage {
@@ -114,11 +138,35 @@ export class StateStore<State extends object> {
 
 export interface AppState {
   activeDropdownKey: string | null;
+  spendTrends: Record<SpendTrendPeriod, SpendTrendSeries | null>;
+  spendTrendsByYear: SpendTrendsByYear;
+  annualSpendTrendsByYear: AnnualSpendTrendsByYear;
+  monthlyTransactionSummaries: MonthlyTransactionSummaries;
+  annualBudgetOverviews: AnnualBudgetOverviews;
+  annualSummaryCards: AnnualSummaryCards;
+  hasPaycheckDeductionHistory: boolean;
+  budgetOverview: BudgetOverviewDerivedState;
 }
 
 const APP_STATE_PERSISTENCE: PersistenceConfig<AppState> = {};
 
 export const appState = new StateStore<AppState>(
-  { activeDropdownKey: null },
+  {
+    activeDropdownKey: null,
+    spendTrends: { weekly: null, monthly: null },
+    spendTrendsByYear: {},
+    annualSpendTrendsByYear: {},
+    monthlyTransactionSummaries: {},
+    annualBudgetOverviews: {},
+    annualSummaryCards: {},
+    hasPaycheckDeductionHistory: false,
+    budgetOverview: {
+      assignmentId: null,
+      annualSpendTrendsByYear: {},
+      monthlyTransactionSummaries: {},
+      annualBudgetOverviews: {},
+      annualSummaryCards: {},
+    },
+  },
   APP_STATE_PERSISTENCE,
 );
