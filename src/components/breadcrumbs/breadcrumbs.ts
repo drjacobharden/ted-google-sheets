@@ -18,6 +18,11 @@ export class Breadcrumbs extends HTMLElement {
     this.#pathWrapper.setAttribute("class", "breadcrumb-path-wrapper");
 
     this.#buttonWrapper = document.createElement("div");
+    this.#buttonWrapper.classList.add(
+      "horizontal-center",
+      "push-right",
+      "gap-8",
+    );
     this.#buttonWrapper.append(...existingChildren);
 
     const path = JSON.parse(this.dataset.path ?? "[]");
@@ -47,6 +52,7 @@ export class Breadcrumbs extends HTMLElement {
       } else {
         element = document.createElement("span");
         element.textContent = item.title;
+        element.classList.add("text");
       }
 
       children.push(element);

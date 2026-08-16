@@ -8,6 +8,7 @@ export class CustomButton extends HTMLElement {
   connectedCallback(): void {
     this.setAttribute("role", "button");
     this.style.cursor = "pointer";
+    this.classList.add("button");
 
     const label = this.getAttribute("label");
     const leadingIcon = this.getAttribute("leading-icon") as IconKeys;
@@ -53,7 +54,7 @@ export class CustomButton extends HTMLElement {
   #createLabel(label: string) {
     const span = document.createElement("span");
     span.textContent = label;
-    span.setAttribute("class", "custom-button-label");
+    span.setAttribute("class", "button");
     this.#label = span;
     this.append(span);
   }

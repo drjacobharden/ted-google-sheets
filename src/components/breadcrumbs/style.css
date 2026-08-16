@@ -5,36 +5,37 @@ breadcrumbs-header {
   padding: 12px var(--horizontal-screen-padding);
   width: 100%;
   border-bottom: 1px solid var(--border);
-}
-
-breadcrumbs-header div {
   display: flex;
-  gap: 12px;
-  align-items: center;
-}
 
-breadcrumbs-header span {
-  opacity: 0.5;
-}
+  .breadcrumb-path-wrapper {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
 
-breadcrumbs-header button {
-  background-color: transparent;
-  border: 0;
-  border-radius: var(--radius-xsmall);
-  padding: 4px 8px;
-  margin: 0px -8px;
-}
+  [data-tab] {
+    background-color: transparent;
+    border: 0;
+    border-radius: var(--radius-xsmall);
+    padding: 4px 8px;
+    margin: 0px -8px;
+  }
 
-breadcrumbs-header button:hover {
-  background-color: var(--ghost-button-hover);
-}
+  [data-tab]:hover {
+    text-decoration: underline;
+  }
 
-breadcrumbs-header button:active {
-  opacity: 0.2;
-}
+  [data-tab]:active {
+    opacity: 0.3;
+  }
 
-.breadcrumb-slash {
-  height: 16px;
-  width: 16px;
-  opacity: 0.5;
+  .breadcrumb-slash {
+    height: 16px;
+    width: 16px;
+    opacity: 0.5;
+  }
+
+  .text {
+    opacity: 0.5;
+  }
 }
