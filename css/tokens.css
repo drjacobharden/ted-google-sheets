@@ -1,7 +1,7 @@
 :root {
-  --background: hsl(197, 12%, 88%);
-  --elevation-1: hsl(197, 12%, 92%);
-  --elevation-2: hsl(197, 12%, 97%);
+  --background: hsl(197, 12%, 94%);
+  --elevation-1: hsl(197, 12%, 95%);
+  --elevation-2: hsl(197, 12%, 100%);
 
   --object-extra-light: hsl(197, 12%, 89%);
   --object-light: hsl(197, 12%, 85%);
@@ -17,6 +17,8 @@
   --main-chart-active: hsl(197, 12%, 65%);
   --main-chart-selected: hsl(300, 1%, 20%);
   --main-chart-gridline: hsl(300, 1%, 80%);
+
+  --on-bg-border: hsl(300, 1%, 70%);
 
   /* Navbar styles */
   --navbar-background: hsl(30, 0%, 5%);
