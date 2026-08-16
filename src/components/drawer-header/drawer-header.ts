@@ -1,87 +1,71 @@
-// @ts-nocheck
 import { APIs } from "../../api/api";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
 import { DateUtils } from "../../utilities/date-utilities";
+import { createEventHandler } from "../../utilities/event-utilities";
+import { CustomButton } from "../button/button";
 import { SelectCreateController } from "../select-create-controller/select-create-controller";
 import { showToast } from "../toast-stack/toast-service";
-(function () {
-  class DrawerHeader extends HTMLElement {
-    #title = null;
-    #eyebrow = null;
-    #backButton = null;
 
-    set title(value) {
-      if (this.#title) {
-        this.#title.textContent = value;
-      }
-    }
+class DrawerHeader extends HTMLElement {
+  #initialized = false;
 
-    set eyebrow(value) {
-      if (this.#eyebrow) {
-        this.#eyebrow.textContent = value;
-      }
-    }
+  #title: HTMLElement | null = null;
+  #backButton!: CustomButton;
 
-    connectedCallback() {
-      if (this.dataset.initialized) return;
-      this.dataset.initialized = "true";
-
-      const eyebrow = this.getAttribute("eyebrow");
-      const title = this.getAttribute("title");
-
-      const section = document.createElement("header");
-      section.className = "transaction-drawer-header";
-
-      const textColumn = document.createElement("div");
-      section.appendChild(textColumn);
-
-      if (eyebrow) {
-        const text = document.createElement("p");
-        this.#eyebrow = text;
-        text.textContent = eyebrow;
-        text.className = "eyebrow";
-        textColumn.appendChild(text);
-      }
-
-      if (title) {
-        const text = document.createElement("h2");
-        this.#title = text;
-        text.textContent = title;
-        textColumn.appendChild(text);
-      }
-
-      const backButton = document.createElement("close-button");
-      backButton.className = "drawer-close";
-      section.appendChild(backButton);
-
-      this.#backButton = backButton;
-      this.#backButton.addEventListener("click", this);
-
-      this.appendChild(section);
-    }
-
-    handleEvent(event) {
-      switch (event.type) {
-        case "click":
-          this.#handleClose(event);
-          break;
-
-        default:
-          break;
-      }
-    }
-
-    #handleClose() {
-      this.dispatchEvent(
-        new CustomEvent("drawer:close-requested", { bubbles: true }),
-      );
-    }
-
-    disconnectedCallback() {
-      this.#backButton.removeEventListener("click", this);
+  set title(value: string) {
+    if (this.#title) {
+      this.#title.textContent = value;
     }
   }
 
-  customElements.define("drawer-header", DrawerHeader);
-})();
+  connectedCallback() {
+    if (this.#initialized) return;
+
+    const title = this.getAttribute("title");
+
+    const section = document.createElement("header");
+    section.classList.add("horizontal-center", "justify-between", "width-100");
+
+    if (title) {
+      const text = document.createElement("h2");
+      this.#title = text;
+      text.textContent = title;
+      text.classList.add("text-300");
+      section.appendChild(text);
+    }
+
+    const backButton = document.createElement("custom-button") as CustomButton;
+    this.#backButton = backButton;
+    backButton.classList.add("tertiary", "circle");
+    backButton.leadingIcon = "close";
+    section.appendChild(backButton);
+
+    this.#backButton.addEventListener("click", this);
+
+    this.appendChild(section);
+  }
+
+  handleEvent(event: Event) {
+    switch (event.type) {
+      case "click":
+        this.#handleClose();
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  #handleClose() {
+    this.#events.dispatch({}, { bubbles: true });
+  }
+
+  disconnectedCallback() {
+    this.#backButton.removeEventListener("click", this);
+  }
+
+  #events = createEventHandler("drawer:close-requested", this);
+}
+
+customElements.define("drawer-header", DrawerHeader);
