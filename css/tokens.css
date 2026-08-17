@@ -20,6 +20,9 @@
 
   --on-bg-border: hsl(300, 1%, 70%);
 
+  --muted-opacity: 0.6;
+  --muted-opacity-extra-light: 0.4;
+
   /* Navbar styles */
   --navbar-background: hsl(30, 0%, 5%);
   --navbar-button-hover: hsl(30, 0%, 18%);
