@@ -14,6 +14,7 @@ type EventDetails<T = any> = Readonly<{
   "table-sort-request": { key: string };
   "segmented-control-selection": { value: string; title: string };
   "table-data-changed": { data: readonly T[] };
+  "drawer:close-requested": {};
 }>;
 
 export const addListener = (

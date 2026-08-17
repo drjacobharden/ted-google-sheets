@@ -147,30 +147,36 @@ month-picker,
 .date-picker-trigger {
   display: flex;
   width: 100%;
-  height: 50px;
+  height: 42px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
   background: var(--surface);
   color: var(--text);
   text-align: left;
   transition: 160ms ease;
-}
 
-.month-picker-trigger:hover,
-.date-picker-trigger:hover {
-  border-color: #c7cec4;
+  span {
+    margin-right: auto;
+    font-size: var(--text-size-100);
+    font-weight: 400;
+    margin-left: 4px;
+  }
+
+  svg {
+    height: 18px;
+    width: 18px;
+  }
 }
 
 .month-picker-trigger:focus-visible,
 .month-picker-trigger[aria-expanded="true"],
 .date-picker-trigger:focus-visible,
 .date-picker-trigger[aria-expanded="true"] {
-  border-color: #adc2a8;
+  border-color: var(--text);
   outline: 0;
-  box-shadow: 0 0 0 4px rgba(111, 157, 102, 0.12);
 }
 .date-picker-trigger[aria-invalid="true"] {
   border-color: #d49898;

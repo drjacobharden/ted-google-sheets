@@ -10,7 +10,7 @@ TopNavBarTemp.innerHTML = TopNavBarTempString;
 
 // Add new navigation items here
 const NAVIGATION_BUTTONS = [
-  { title: "Budget", icon: "transactions", tab: "budget-overview" },
+  { title: "Budgeting", icon: "transactions", tab: "budget-overview" },
   { title: "Investments", icon: "chart", tab: "investment-overview" },
   { title: "Goals", icon: "target", tab: "transactions" },
 ];

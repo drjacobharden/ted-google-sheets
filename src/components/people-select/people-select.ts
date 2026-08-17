@@ -8,36 +8,38 @@ import { showToast } from "../toast-stack/toast-service";
 const peopleSelectTemplate = () => `
   <div class="form-field people-form-field">
     <span class="people-select-label">Assignment</span>
-    <div class="people-select-menu">
-      <input class="assignment-id-input" name="assignmentId" type="hidden" />
-      <button
-        class="people-select-trigger select-create-trigger"
-        type="button"
-        role="combobox"
+    <div class="select-menu">
+      <input class="id-input" name="assignmentId" type="hidden" />
+       <custom-button 
+        class="people-select-trigger select-trigger" 
+        label="Select an assignment" 
+        leading-icon="people" 
+        trailing-icon="chevronDown"
         aria-haspopup="listbox"
         aria-expanded="false"
-      >
-        <span>Select an assignment</span>
-      </button>
-      <div class="select-create-popup" hidden>
-        <div class="select-create-search-row">
+        role="combobox"
+        >
+      </custom-button>
+      
+      <div class="select-popup" hidden>
+        <div class="search-row">
           <input
-            class="select-create-search"
-            type="search"
+            class="search"
+            type="text"
             maxlength="80"
             autocomplete="off"
             placeholder="Search or add person"
             aria-autocomplete="list"
           />
-          <button class="select-create-add" type="button" hidden>Add</button>
+          <button class="add" type="button" hidden>Add</button>
         </div>
         <p
-          class="select-create-message"
+          class="message"
           role="alert"
           aria-live="polite"
           hidden
         ></p>
-        <div class="people-select-list select-create-list" role="listbox"></div>
+        <div class="people-select-list list" role="listbox"></div>
       </div>
     </div>
   </div>
@@ -57,7 +59,7 @@ const peopleSelectTemplate = () => `
     get value() {
       return (
         this.#controller?.value ||
-        this.querySelector(".assignment-id-input")?.value ||
+        this.querySelector(".id-input")?.value ||
         this.getAttribute("value") ||
         ""
       );
@@ -103,8 +105,8 @@ const peopleSelectTemplate = () => `
       const initialValue = this.hasAttribute("allow-empty")
         ? String(this.getAttribute("value") || "")
         : Object.prototype.hasOwnProperty.call(this, "value")
-        ? String(this.value || "")
-        : this.getAttribute("value") || APIs.budget.SHARED_ASSIGNMENT_ID;
+          ? String(this.value || "")
+          : this.getAttribute("value") || APIs.budget.SHARED_ASSIGNMENT_ID;
       if (Object.prototype.hasOwnProperty.call(this, "value")) {
         delete this.value;
       }
@@ -118,8 +120,8 @@ const peopleSelectTemplate = () => `
       const listId = `${controlId}-list`;
       const label = this.querySelector(".people-select-label");
       const trigger = this.querySelector(".people-select-trigger");
-      const search = this.querySelector(".select-create-search");
-      const popup = this.querySelector(".select-create-popup");
+      const search = this.querySelector(".search");
+      const popup = this.querySelector(".select-popup");
       const list = this.querySelector(".people-select-list");
 
       label.id = labelId;
@@ -133,14 +135,14 @@ const peopleSelectTemplate = () => `
 
       this.#controller = new SelectCreateController({
         host: this,
-        idInput: this.querySelector(".assignment-id-input"),
+        idInput: this.querySelector(".id-input"),
         trigger,
         triggerText: trigger.querySelector("span"),
         popup,
         search,
-        addButton: this.querySelector(".select-create-add"),
+        addButton: this.querySelector(".add"),
         list,
-        message: this.querySelector(".select-create-message"),
+        message: this.querySelector(".message"),
         getOptions: () => APIs.budget.listPeople(),
         createOption: (name) => APIs.budget.addPerson({ name }),
         onSelect: (person, state) => this.#handleSelection(person, state),

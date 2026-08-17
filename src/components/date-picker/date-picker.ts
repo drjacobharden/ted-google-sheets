@@ -10,18 +10,18 @@ const datePickerTemplate = () => `
     <span>Date</span>
     <div class="date-picker-container">
       <input type="hidden" />
-      <button
+
+      <custom-button  
         class="date-picker-trigger"
         type="button"
         aria-haspopup="dialog"
         aria-expanded="false"
-      >
-        <span class="date-display">Select a date</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="3.5" y="5" width="17" height="15" rx="2" />
-          <path d="M7.5 3v4M16.5 3v4M3.5 9h17" />
-        </svg>
-      </button>
+        label="Select a date"
+        leading-icon="calendar"
+        trailing-icon="chevronDown"
+      ></custom-button>
+
+     
       <div
         class="calendar-popover"
         role="dialog"
@@ -110,7 +110,7 @@ const datePickerTemplate = () => `
 
       // Set references to the elements so we only query once
       this.#triggerElement = this.querySelector(".date-picker-trigger");
-      this.#displayElement = this.querySelector(".date-display");
+      this.#displayElement = this.#triggerElement.querySelector("span");
       this.#popoverElement = this.querySelector(".calendar-popover");
       this.#gridElement = this.querySelector(".calendar-grid");
       this.#monthHeaderElement = this.querySelector(".calendar-month");

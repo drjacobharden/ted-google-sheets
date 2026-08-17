@@ -78,9 +78,6 @@ custom-button {
   svg {
     height: calc(var(--button-height) / 2.5);
     width: calc(var(--button-height) / 2.5);
-    stroke-width: 0.5px;
-    stroke-linecap: round;
-    stroke-linejoin: round;
   }
 
   &.square {

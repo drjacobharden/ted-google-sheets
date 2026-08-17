@@ -72,3 +72,28 @@ test("segmented control supports radio semantics and keyboard selection", () => 
   assert.match(component, /["']Home["']/);
   assert.match(component, /["']End["']/);
 });
+
+test("text variant stays isolated and is shared by dashboards and drawer", () => {
+  const dashboard2 = fs.readFileSync(
+    "src/screens/budget-overview-screen-2/template.html",
+    "utf8",
+  );
+  const dashboard3 = fs.readFileSync(
+    "src/screens/budget-overview-screen-3/template.html",
+    "utf8",
+  );
+  const drawer = fs.readFileSync(
+    "src/screens/transaction-drawer-screen/template.html",
+    "utf8",
+  );
+
+  assert.match(styles, /segmented-control\s*\{[\s\S]*&\[variant="text"\]\s*\{/);
+  assert.match(styles, /&\[variant="text"\][\s\S]*\.segmented-control__indicator/);
+  assert.match(dashboard2, /<segmented-control[\s\S]*variant="text"/);
+  assert.match(dashboard3, /<segmented-control[\s\S]*variant="text"/);
+  assert.match(
+    drawer,
+    /id="transaction-type-control"[\s\S]*variant="text"/,
+  );
+  assert.match(drawer, /<input type="hidden" name="type" value="expense"/);
+});

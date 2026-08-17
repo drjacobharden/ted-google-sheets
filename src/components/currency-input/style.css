@@ -1,18 +1,4 @@
 currency-input {
-  display: grid;
-  min-width: 0;
-  gap: 8px;
-
-  > span {
-    font-size: var(--text-size-90);
-
-    > small {
-      margin-left: 8px;
-      color: var(--muted);
-      font-size: var(--text-size-80);
-    }
-  }
-
   .input-shell {
     display: flex;
     align-items: center;
@@ -25,6 +11,15 @@ currency-input {
     color: var(--text);
     transition: 160ms ease;
 
+    custom-icon {
+      margin-left: 12px;
+
+      svg {
+        height: 18px;
+        width: 18px;
+      }
+    }
+
     &:focus-within {
       border-color: var(--object-dark);
     }
@@ -36,9 +31,10 @@ currency-input {
     input {
       border: 0;
       box-shadow: none !important;
-      height: 48px;
+      height: 42px;
       padding: 0 12px;
       flex: 1;
+      font-variant-numeric: tabular-nums;
 
       &:user-invalid {
         border-color: #d49898;

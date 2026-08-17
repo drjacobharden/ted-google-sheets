@@ -10,61 +10,109 @@ segmented-control {
   border-radius: 999px;
   background: var(--secondary-button);
   isolation: isolate;
-}
 
-.segmented-control__list {
-  position: relative;
-  display: flex;
-  width: max-content;
-}
+  .segmented-control__list {
+    position: relative;
+    display: flex;
+    width: max-content;
+  }
 
-segmented-control .segmented-control__item {
-  position: relative;
-  z-index: 1;
-  height: calc(var(--button-height) - (var(--padding) * 2));
-  padding: 0 14px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 450;
-  opacity: 0.55;
-  white-space: nowrap;
-  transition: opacity 240ms ease;
-}
+  .segmented-control__item {
+    position: relative;
+    z-index: 1;
+    height: calc(var(--button-height) - (var(--padding) * 2));
+    padding: 0 14px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 450;
+    opacity: 0.55;
+    white-space: nowrap;
+    transition: opacity 240ms ease;
+  }
 
-.segmented-control__item.is-selected {
-  opacity: 1;
-}
+  .segmented-control__item.is-selected {
+    opacity: 1;
+  }
 
-.segmented-control__item:focus-visible {
-  outline: 2px solid var(--primary-button);
-  outline-offset: -2px;
-}
+  .segmented-control__item:focus-visible {
+    outline: 2px solid var(--primary-button);
+    outline-offset: -2px;
+  }
 
-.segmented-control__indicator {
-  position: absolute;
-  z-index: 0;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 0;
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: var(--shadow-subtle, 0 1px 3px rgb(0 0 0 / 12%));
-  pointer-events: none;
-  will-change: width, transform;
-}
+  .segmented-control__indicator {
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow-subtle, 0 1px 3px rgb(0 0 0 / 12%));
+    pointer-events: none;
+    will-change: width, transform;
+  }
 
-segmented-control[indicator-ready] .segmented-control__indicator {
-  transition:
-    width 240ms ease,
-    transform 240ms ease;
+  &[indicator-ready] .segmented-control__indicator {
+    transition:
+      width 240ms ease,
+      transform 240ms ease;
+  }
+
+  &[variant="text"] {
+    --padding: 0px;
+
+    overflow: visible;
+    border-radius: 0;
+    background: transparent;
+
+    .segmented-control__list {
+      gap: 22px;
+      padding-bottom: 8px;
+    }
+
+    .segmented-control__item {
+      height: auto;
+      padding: 0;
+      color: var(--muted);
+      font-size: var(--text-size-90);
+      line-height: 1;
+      opacity: 1;
+      transition: color 160ms ease;
+    }
+
+    .segmented-control__item.is-selected {
+      color: var(--text);
+    }
+
+    .segmented-control__item:focus-visible {
+      outline-color: var(--accent);
+      outline-offset: 4px;
+    }
+
+    .segmented-control__indicator {
+      top: auto;
+      height: 1px;
+      border-radius: 0;
+      background: var(--text);
+      box-shadow: none;
+    }
+
+    &[indicator-ready] .segmented-control__indicator {
+      transition:
+        width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .segmented-control__item,
-  segmented-control[indicator-ready] .segmented-control__indicator {
-    transition: none;
+  segmented-control {
+    .segmented-control__item,
+    &[indicator-ready] .segmented-control__indicator {
+      transition: none;
+    }
   }
 }

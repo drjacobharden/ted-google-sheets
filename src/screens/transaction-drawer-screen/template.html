@@ -1,89 +1,75 @@
-    <div class="drawer-overlay" id="transaction-drawer-backdrop" hidden>
-      <aside
-        class="transaction-drawer"
-        id="transaction-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="transaction-drawer-title"
-        tabindex="-1"
-      >
-        <drawer-header
-          id="transaction-drawer-header"
-          title="Edit transaction"
-          eyebrow="Transaction details"
-        ></drawer-header>
-        <!-- <header class="transaction-drawer-header">
-          <div>
-            <p class="eyebrow">Transaction details</p>
-            <h2 id="transaction-drawer-title">Edit transaction</h2>
-          </div>
-          <close-button id="close-transaction-drawer"></close-button>
-        </header> -->
-        <form
-          id="transaction-edit-form"
-          class="transaction-edit-form"
-          novalidate
-        >
-          <fieldset class="type-toggle">
-            <legend>Transaction type</legend>
-            <label
-              ><input type="radio" name="type" value="expense" /><span
-                >Expense</span
-              ></label
-            >
-            <label
-              ><input type="radio" name="type" value="income" /><span
-                >Income</span
-              ></label
-            >
-          </fieldset>
-
-          <div class="drawer-form-grid">
-            <currency-input></currency-input>
-            <date-picker name="date"></date-picker>
-            <category-select></category-select>
-            <vendor-input></vendor-input>
-            <people-select></people-select>
-            <label class="form-field">
-              <span>Note <small>(optional)</small></span>
-              <textarea name="notes" maxlength="1000" rows="3"></textarea>
-            </label>
-          </div>
-          <p
-            class="form-message"
-            id="transaction-edit-message"
-            aria-live="polite"
-          ></p>
-          <div class="transaction-drawer-controls">
-            <footer class="transaction-drawer-actions">
-              <button
-                class="secondary-button"
-                id="cancel-transaction-edit"
-                type="button"
-              >
-                Cancel
-              </button>
-              <button class="primary-button" type="submit">Save changes</button>
-            </footer>
-            <label class="batch-entry-toggle" id="batch-entry-toggle">
-              <span>
-                <strong>Batch input</strong>
-                <small
-                  >Keep the drawer open and preserve the date after
-                  adding</small
-                >
-              </span>
-              <input type="checkbox" name="batchEntry" role="switch" />
-            </label>
-            <div class="transaction-metadata">
-              <p>
-                <span>Transaction ID</span><code id="transaction-edit-id"></code
-                ><button id="copy-transaction-id" type="button">Copy</button>
-              </p>
-              <p id="transaction-created-footnote"></p>
-            </div>
-          </div>
-        </form>
-      </aside>
+<div class="drawer-overlay" id="transaction-drawer-backdrop" hidden>
+  <aside
+    class="transaction-drawer top-16 right-16 height-minus-32 corner-medium"
+    id="transaction-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="transaction-drawer-title"
+    tabindex="-1"
+  >
+    <div class="horizontal-center">
+      <h1></h1>
     </div>
-    <!-- Entity editor sidebar -->
+    <drawer-header
+      id="transaction-drawer-header"
+      title="Edit transaction"
+      eyebrow="Transaction details"
+    ></drawer-header>
+
+    <form id="transaction-edit-form" class="transaction-edit-form" novalidate>
+      <segmented-control
+        id="transaction-type-control"
+        variant="text"
+        aria-label="Transaction type"
+        class="mt-24"
+      ></segmented-control>
+      <input type="hidden" name="type" value="expense" />
+
+      <div class="drawer-form-grid">
+        <currency-input></currency-input>
+        <date-picker name="date"></date-picker>
+        <category-select></category-select>
+        <vendor-input></vendor-input>
+        <people-select></people-select>
+        <label class="form-field">
+          <span>Note<small>(optional)</small></span>
+          <textarea name="notes" maxlength="500" rows="2"></textarea>
+        </label>
+      </div>
+      <p
+        class="form-message"
+        id="transaction-edit-message"
+        aria-live="polite"
+      ></p>
+      <div class="transaction-drawer-controls">
+        <footer class="transaction-drawer-actions">
+          <custom-button
+            class="secondary-button"
+            id="cancel-transaction-edit"
+            type="button"
+            label="Cancel"
+          ></custom-button>
+          <custom-button
+            label="Save changes"
+            class="primary-button"
+            type="submit"
+          ></custom-button>
+        </footer>
+        <label class="batch-entry-toggle" id="batch-entry-toggle">
+          <span>
+            <strong>Batch input</strong>
+            <small>Create multiple entries without leaving</small>
+          </span>
+          <input type="checkbox" name="batchEntry" role="switch" />
+        </label>
+        <div class="transaction-metadata">
+          <p>
+            <strong class="text-90">Transaction ID: </strong>
+            <code class="text-90" id="transaction-edit-id"></code>
+          </p>
+          <p class="text-80 muted" id="transaction-created-footnote"></p>
+        </div>
+      </div>
+    </form>
+  </aside>
+</div>

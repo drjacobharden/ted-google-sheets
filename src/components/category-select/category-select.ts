@@ -5,40 +5,43 @@ import { appController } from "../../state/app-controller";
 import { DateUtils } from "../../utilities/date-utilities";
 import { SelectCreateController } from "../select-create-controller/select-create-controller";
 import { showToast } from "../toast-stack/toast-service";
+
 const categorySelectTemplate = () => `
   <div class="form-field category-form-field">
     <span class="category-select-label">Category</span>
-    <div class="category-select-menu">
-      <input class="category-id-input" name="categoryId" type="hidden" />
-      <button
-        class="category-select-trigger select-create-trigger"
-        type="button"
-        role="combobox"
+    <div class="select-menu">
+      <input class="id-input" name="categoryId" type="hidden" />
+      <custom-button 
+        class="category-select-trigger select-trigger" 
+        label="Select a category" 
+        leading-icon="label" 
+        trailing-icon="chevronDown"
         aria-haspopup="listbox"
         aria-expanded="false"
-      >
-        <span>Select a category</span>
-      </button>
-      <div class="select-create-popup" hidden>
-        <div class="select-create-search-row">
+        role="combobox"
+        >
+      </custom-button>
+     
+      <div class="select-popup" hidden>
+        <div class="search-row">
           <input
-            class="select-create-search"
-            type="search"
+            class="search"
+            type="text"
             maxlength="50"
             autocomplete="off"
             placeholder="Search or add category"
             aria-autocomplete="list"
           />
-          <button class="select-create-add" type="button" hidden>Add</button>
+          <button class="add" type="button" hidden>Add</button>
         </div>
         <p
-          class="select-create-message"
+          class="message"
           role="alert"
           aria-live="polite"
           hidden
         ></p>
         <div
-          class="category-select-list select-create-list"
+          class="category-select-list list"
           role="listbox"
         ></div>
       </div>
@@ -62,7 +65,7 @@ const categorySelectTemplate = () => `
     get value() {
       return (
         this.#controller?.value ||
-        this.querySelector(".category-id-input")?.value ||
+        this.querySelector(".id-input")?.value ||
         this.getAttribute("value") ||
         ""
       );
@@ -142,8 +145,8 @@ const categorySelectTemplate = () => `
       const listId = `${controlId}-list`;
       const label = this.querySelector(".category-select-label");
       const trigger = this.querySelector(".category-select-trigger");
-      const search = this.querySelector(".select-create-search");
-      const popup = this.querySelector(".select-create-popup");
+      const search = this.querySelector(".search");
+      const popup = this.querySelector(".select-popup");
       const list = this.querySelector(".category-select-list");
 
       label.id = labelId;
@@ -156,25 +159,32 @@ const categorySelectTemplate = () => `
       search.setAttribute("aria-controls", listId);
 
       this.#type =
-        initialType === "income" || initialType === "expense" || initialType === "all"
+        initialType === "income" ||
+        initialType === "expense" ||
+        initialType === "all"
           ? initialType
           : this.#getFormType();
-      this.#createType = this.getAttribute("create-type") === "income" ? "income" : "expense";
+      this.#createType =
+        this.getAttribute("create-type") === "income" ? "income" : "expense";
       this.#controller = new SelectCreateController({
         host: this,
-        idInput: this.querySelector(".category-id-input"),
+        idInput: this.querySelector(".id-input"),
         trigger,
         triggerText: trigger.querySelector("span"),
         popup,
         search,
-        addButton: this.querySelector(".select-create-add"),
+        addButton: this.querySelector(".add"),
         list,
-        message: this.querySelector(".select-create-message"),
-        getOptions: () => this.#type === "all"
-          ? APIs.budget.listCategories()
-          : APIs.budget.listCategories({ type: this.#type }),
+        message: this.querySelector(".message"),
+        getOptions: () =>
+          this.#type === "all"
+            ? APIs.budget.listCategories()
+            : APIs.budget.listCategories({ type: this.#type }),
         createOption: (name) =>
-          APIs.budget.addCategory({ name, type: this.#type === "all" ? this.#createType : this.#type }),
+          APIs.budget.addCategory({
+            name,
+            type: this.#type === "all" ? this.#createType : this.#type,
+          }),
         onSelect: (category, state) => this.#handleSelection(category, state),
         onCreate: (category) => {
           this.dispatchEvent(
@@ -215,11 +225,13 @@ const categorySelectTemplate = () => `
       if (name === "value") this.#controller.setValue(newValue || "");
 
       if (name === "type") {
-        this.#type = newValue === "income" || newValue === "all" ? newValue : "expense";
+        this.#type =
+          newValue === "income" || newValue === "all" ? newValue : "expense";
         this.#controller.refresh(this.value, { resetSearch: true });
       }
 
-      if (name === "create-type") this.#createType = newValue === "income" ? "income" : "expense";
+      if (name === "create-type")
+        this.#createType = newValue === "income" ? "income" : "expense";
     }
 
     handleEvent(event) {
@@ -245,7 +257,9 @@ const categorySelectTemplate = () => `
         '[name="type"]:checked',
       )?.value;
       const requestedType = this.getAttribute("type") || selectedType;
-      return requestedType === "income" || requestedType === "all" ? requestedType : "expense";
+      return requestedType === "income" || requestedType === "all"
+        ? requestedType
+        : "expense";
     }
 
     #handleSelection(category, { announce }) {
