@@ -124,7 +124,8 @@ APP HIERARCHY
 
 .vertical-divider {
   height: 100%;
-  border-right: 1px solid var(--border);
+  width: 1px;
+  background-color: var(--on-bg-border);
 }
 
 .table-accessory-row {
@@ -144,4 +145,12 @@ APP HIERARCHY
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
   flex: 1;
+}
+
+svg {
+  height: 16px;
+  width: 16px;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
