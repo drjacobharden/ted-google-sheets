@@ -30,14 +30,13 @@ function loadAPI(seed = {}, fetchImpl, runtimeOptions = {}) {
     fetch: fetchImpl || (() => { throw new Error("Unexpected network request"); }),
     navigator,
     URL,
+    AbortController,
+    setTimeout: runtimeOptions.timers ? setTimeout : () => 0,
+    clearTimeout: runtimeOptions.timers ? clearTimeout : () => {},
     console,
   };
-  if (runtimeOptions.timers) {
-    context.setTimeout = setTimeout;
-    context.clearTimeout = clearTimeout;
-  }
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("js/api.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("src/api/budget-api.ts", "utf8"), context);
   return {
     api: context.window.BudgetAPI, localStorage, values, events,
     dispatchWindowEvent: (type) => context.window.dispatchEvent({ type }),
@@ -274,6 +273,58 @@ test("loads and caches all app data with one bootstrap request while preserving 
   assert.equal(cached.endpoint, seed.values["myFinance.config.v1"].endpoint);
   assert.equal(cached.transactions[0].amount, 10, "only confirmed server data is cached");
   assert.equal(runtime.api.getCachedTransactions()[0].amount, 25, "the local outbox is reapplied over the cache");
+});
+
+test("retries a transient bootstrap failure once and announces the retry", async () => {
+  const seed = connectedSeed();
+  const requests = [];
+  const bootstrap = {
+    transactions: [],
+    categories: seed.values["myFinance.categories.v1"],
+    vendors: seed.values["myFinance.vendors.v1"],
+    assignments: seed.values["myFinance.people.v1"],
+    users: seed.values["myFinance.users.v1"],
+    importProfiles: [],
+    investmentAccounts: [],
+    investmentBalances: [],
+    investmentContributions: [],
+  };
+  const runtime = loadAPI(seed.values, async (url) => {
+    requests.push(String(url));
+    if (requests.length === 1) return { ok: false, status: 404 };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: bootstrap }),
+    };
+  });
+
+  const result = await runtime.api.loadAppData();
+  assert.equal(result.transactions.length, 0);
+  assert.equal(requests.length, 2);
+  assert.equal(
+    runtime.events.some(
+      (event) =>
+        event.type === "budget:data-refresh-retrying" &&
+        event.detail.attempt === 2,
+    ),
+    true,
+  );
+});
+
+test("does not transport-retry writes", async () => {
+  const seed = connectedSeed();
+  let requests = 0;
+  const runtime = loadAPI(seed.values, async () => {
+    requests += 1;
+    return { ok: false, status: 503 };
+  });
+
+  await assert.rejects(
+    () => runtime.api.addUser({ firstName: "Grace", lastName: "Hopper" }),
+    /Request failed \(503\)/,
+  );
+  assert.equal(requests, 1);
 });
 
 test("ignores another endpoint cache and replaces remote edits and deletions after refresh", async () => {
@@ -801,6 +852,129 @@ test("falls back to compatible single-entity actions on an older deployment", as
   assert.equal(runtime.api.getEntitySyncStatus("vendor", vendor.id), null);
 });
 
+test("archives and reactivates entities optimistically through the durable outbox", async () => {
+  const seed = connectedSeed();
+  const categoryId = seed.values["myFinance.categories.v1"][0].id;
+  const actions = [];
+  const runtime = loadAPI(seed.values, async (_url, options) => {
+    const body = JSON.parse(options.body);
+    actions.push(body.action);
+    if (body.action === "archiveCategory") {
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          data: { ...seed.values["myFinance.categories.v1"][0], active: false },
+        }),
+      };
+    }
+    if (body.action === "addEntities") {
+      return {
+        ok: true,
+        json: async () => ({ ok: false, error: "Unknown action." }),
+      };
+    }
+    if (body.action === "addCategory") {
+      return {
+        ok: true,
+        json: async () => ({ ok: true, data: { ...body.category, active: true } }),
+      };
+    }
+    throw new Error(`Unexpected action: ${body.action}`);
+  });
+
+  await runtime.api.archiveCategory(categoryId);
+  assert.equal(runtime.api.getEntity("category", categoryId).active, false);
+  assert.equal(runtime.api.getSyncItems()[0].operation, "archive");
+  assert.deepEqual(actions, []);
+
+  runtime.api.discardEntityChange("category", categoryId);
+  assert.equal(runtime.api.getEntity("category", categoryId).active, true);
+  assert.equal(runtime.api.getSyncItems().length, 0);
+
+  await runtime.api.archiveCategory(categoryId);
+
+  await runtime.api.syncEntityOutbox();
+  assert.deepEqual(actions, ["archiveCategory"]);
+  assert.equal(runtime.api.getEntitySyncStatus("category", categoryId), null);
+
+  await runtime.api.reactivateCategory({ id: categoryId });
+  assert.equal(runtime.api.getEntity("category", categoryId).active, true);
+  assert.equal(runtime.api.getSyncItems()[0].operation, "reactivate");
+
+  runtime.api.discardEntityChange("category", categoryId);
+  assert.equal(runtime.api.getEntity("category", categoryId).active, false);
+  assert.equal(runtime.api.getSyncItems().length, 0);
+
+  await runtime.api.reactivateCategory({ id: categoryId });
+
+  await runtime.api.syncEntityOutbox();
+  assert.deepEqual(actions, ["archiveCategory", "addEntities", "addCategory"]);
+  assert.equal(runtime.api.getEntitySyncStatus("category", categoryId), null);
+});
+
+test("reconciles reactivation when the Sheet category is already active", async () => {
+  const seed = connectedSeed();
+  const categoryId = seed.values["myFinance.categories.v1"][0].id;
+  seed.values["myFinance.categories.v1"][0].active = false;
+  const serverCategory = {
+    ...seed.values["myFinance.categories.v1"][0],
+    active: true,
+    updatedAt: "2026-08-05T12:00:00.000Z",
+  };
+  const actions = [];
+  const runtime = loadAPI(seed.values, async (url, options) => {
+    if (!options?.body) {
+      const action = new URL(String(url)).searchParams.get("action");
+      actions.push(action);
+      return {
+        ok: true,
+        json: async () => ({ ok: true, data: [serverCategory] }),
+      };
+    }
+    const body = JSON.parse(options.body);
+    actions.push(body.action);
+    return {
+      ok: true,
+      json: async () => ({
+        ok: true,
+        data: {
+          saved: [],
+          reconciled: [],
+          failed: [{
+            kind: "category",
+            id: categoryId,
+            error: "That entity ID is already used by different data.",
+          }],
+        },
+      }),
+    };
+  });
+
+  await runtime.api.reactivateCategory({ id: categoryId });
+  await runtime.api.syncEntityOutbox();
+
+  assert.deepEqual(actions, ["addEntities", "listCategories"]);
+  assert.equal(runtime.api.getEntitySyncStatus("category", categoryId), null);
+  assert.equal(
+    runtime.api.getEntity("category", categoryId).updatedAt,
+    serverCategory.updatedAt,
+  );
+});
+
+test("collapses an unsynced archive followed by restore into a no-op", async () => {
+  const seed = connectedSeed();
+  const categoryId = seed.values["myFinance.categories.v1"][0].id;
+  const runtime = loadAPI(seed.values);
+
+  await runtime.api.archiveCategory(categoryId);
+  assert.equal(runtime.api.getSyncItems()[0].operation, "archive");
+  await runtime.api.reactivateCategory({ id: categoryId });
+
+  assert.equal(runtime.api.getEntity("category", categoryId).active, true);
+  assert.equal(runtime.api.getSyncItems().length, 0);
+});
+
 test("preserves an in-flight optimistic entity while reference data refreshes", async () => {
   const seed = connectedSeed();
   const record = { id: "623e4567-e89b-42d3-a456-426614174000", name: "In Flight", active: true, createdAt: "2026-07-13T12:00:00.000Z", updatedAt: "2026-07-13T12:00:00.000Z" };
@@ -982,6 +1156,27 @@ test("archived entities are listed and matching additions preserve their IDs", a
   assert.equal(renamed.id, archivedId);
   assert.equal(renamed.name, "Neighborhood Market");
   assert.equal(renamed.active, true);
+});
+
+test("connected archived entity lists are served from bootstrap cache without a request", async () => {
+  const archivedId = "223e4567-e89b-42d3-a456-426614174000";
+  const requests = [];
+  const seed = connectedSeed();
+  seed.values["myFinance.vendors.v1"] = [{
+    id: archivedId,
+    name: "Old Market",
+    active: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  }];
+  const { api } = loadAPI(seed.values, async (url) => {
+    requests.push(String(url));
+    throw new Error("Archived cache reads must not reach the network.");
+  });
+
+  const archived = await api.listArchivedEntities({ refresh: true });
+  assert.equal(archived.vendors[0].id, archivedId);
+  assert.deepEqual(requests, []);
 });
 
 test("awaiting imported transactions returns only after their outbox records are confirmed", async () => {

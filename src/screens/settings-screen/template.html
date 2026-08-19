@@ -1,0 +1,20 @@
+<page-title eyebrow="Preferences" title="Settings" subtitle="Manage your profile and connect this app to Google Sheets."></page-title>
+<div class="settings-screen__grid">
+  <user-form></user-form>
+  <url-form></url-form>
+  <aside class="settings-screen__contract">
+    <p class="eyebrow">Expected API</p>
+    <h2>Apps Script contract</h2>
+    <p>The frontend sends normalized transaction and entity actions:</p>
+    <dl>
+      <div><dt>GET</dt><dd><code>?action=health</code></dd></div>
+      <div><dt>GET</dt><dd><code>?action=listTransactions</code></dd></div>
+      <div><dt>POST</dt><dd><code>add/update Transactions</code></dd></div>
+      <div><dt>GET</dt><dd><code>?action=listUsers</code></dd></div>
+      <div><dt>POST</dt><dd><code>addUser / updateUser</code></dd></div>
+      <div><dt>GET</dt><dd><code>listCategories / listVendors / listAssignments</code></dd></div>
+      <div><dt>POST</dt><dd><code>addEntities / update / archive entity</code></dd></div>
+    </dl>
+    <p class="settings-screen__note">List responses can be a JSON array or <code>{ "data": [...] }</code>.</p>
+  </aside>
+</div>

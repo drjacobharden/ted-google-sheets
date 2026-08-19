@@ -1,7 +1,20 @@
 {
-  "name": "budget-wrapper",
+  "name": "ted-google-sheets",
+  "module": "index.ts",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
   "private": true,
   "scripts": {
-    "test": "node --test tests/*.test.js"
-  }
+    "build": "bun run build.ts",
+    "types": "bun x tsc --watch --noEmit",
+    "dev": "bun run build & bun run types",
+    "css": "cat src/main.css src/utilities.css src/elements.css src/components/**/*.css src/elements/**/*.css src/screens/**/*.css > dist/bundle.css",
+    "go": "bun run build & bun run css",
+    "test": "bun test tests/app-state.test.ts tests/migration.test.ts tests/currency-axis-scale.test.ts tests/spend-trend.test.ts tests/annual-spend-trend.test.ts tests/monthly-transaction-summary.test.ts tests/annual-budget-overview.test.ts tests/annual-summary-cards.test.ts"
+  },
+  "type": "module"
 }

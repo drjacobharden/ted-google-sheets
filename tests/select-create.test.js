@@ -7,7 +7,7 @@ function loadUtils() {
   const context = { window: {} };
   vm.createContext(context);
   vm.runInContext(
-    fs.readFileSync("js/components/select-create-controller.js", "utf8"),
+    fs.readFileSync("src/components/select-create-controller/select-create-controller.ts", "utf8"),
     context,
   );
   return context.window.SelectCreateUtils;
@@ -37,7 +37,7 @@ test("select-create ranks exact, prefix, word-prefix, and substring matches", ()
 
 test("an open select stays closed when its trigger is clicked", () => {
   const controller = fs.readFileSync(
-    "js/components/select-create-controller.js",
+    "src/components/select-create-controller/select-create-controller.ts",
     "utf8",
   );
 
@@ -52,9 +52,9 @@ test("an open select stays closed when its trigger is clicked", () => {
 });
 
 test("category adapter keeps creation explicit and form-readable", () => {
-  const source = fs.readFileSync("js/components/category-select.js", "utf8");
+  const source = fs.readFileSync("src/components/category-select/category-select.ts", "utf8");
   const controller = fs.readFileSync(
-    "js/components/select-create-controller.js",
+    "src/components/select-create-controller/select-create-controller.ts",
     "utf8",
   );
   assert.match(source, /name="categoryId"/);
@@ -76,8 +76,8 @@ test("category adapter keeps creation explicit and form-readable", () => {
 });
 
 test("vendor and people adapters use searchable select-create fields", () => {
-  const vendor = fs.readFileSync("js/components/vendor-input.js", "utf8");
-  const people = fs.readFileSync("js/components/people-select.js", "utf8");
+  const vendor = fs.readFileSync("src/components/vendor-input/vendor-input.ts", "utf8");
+  const people = fs.readFileSync("src/components/people-select/people-select.ts", "utf8");
   const html = fs.readFileSync("index.html", "utf8");
 
   assert.match(vendor, /name="vendorId"/);
@@ -96,7 +96,7 @@ test("vendor and people adapters use searchable select-create fields", () => {
 });
 
 test("searchable selectors expose import-only deferred option providers", () => {
-  const controller = fs.readFileSync("js/components/select-create-controller.js", "utf8");
+  const controller = fs.readFileSync("src/components/select-create-controller/select-create-controller.ts", "utf8");
   assert.match(controller, /configure\(\{ getOptions, createOption, onCreate \}/);
   ["vendor-input.js", "category-select.js", "people-select.js"].forEach((file) => {
     assert.match(fs.readFileSync(`js/components/${file}`, "utf8"), /configureOptions\(options\)/);
@@ -105,7 +105,7 @@ test("searchable selectors expose import-only deferred option providers", () => 
 
 test("transaction drawer reads custom component values directly", () => {
   const drawer = fs.readFileSync(
-    "js/routes/transaction-drawer.js",
+    "src/screens/transaction-drawer-screen/transaction-drawer-screen.ts",
     "utf8",
   );
 
@@ -119,7 +119,7 @@ test("transaction drawer reads custom component values directly", () => {
 });
 
 test("transaction drawer preserves an expense draft across type changes", () => {
-  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
+  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
 
   assert.match(drawer, /let expenseDraft = \{ categoryId: "", vendorId: "" \}/);
   assert.match(
@@ -134,7 +134,7 @@ test("transaction drawer preserves an expense draft across type changes", () => 
 });
 
 test("transaction drawer branches synchronously between create and edit", () => {
-  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
+  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
 
   assert.match(drawer, /if \(mode === "create"\) \{\s*createTransaction\(draft\)/);
   assert.match(drawer, /queueTransaction\(draft\)/);
@@ -145,7 +145,7 @@ test("transaction drawer branches synchronously between create and edit", () => 
 
 test("transaction drawer validates custom fields and owns both create buttons", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
+  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
 
   assert.equal((html.match(/data-new-transaction/g) || []).length, 2);
   assert.match(drawer, /if \(!datePickerElement\.value\)/);
@@ -157,9 +157,9 @@ test("transaction drawer validates custom fields and owns both create buttons", 
 
 test("transaction drawer supports signed refunds and create-only batch entry", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const currency = fs.readFileSync("js/components/currency-input.js", "utf8");
-  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
-  const row = fs.readFileSync("js/utils/transaction-row.js", "utf8");
+  const currency = fs.readFileSync("src/components/currency-input/currency-input.ts", "utf8");
+  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
+  const row = fs.readFileSync("src/utilities/transaction-row.ts", "utf8");
 
   assert.match(html, /id="batch-entry-toggle"/);
   assert.match(html, /name="batchEntry" role="switch"/);
@@ -175,7 +175,7 @@ test("transaction drawer supports signed refunds and create-only batch entry", (
 test("transaction drawer anchors controls and fully removes the income vendor row", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const css = fs.readFileSync("styles.css", "utf8");
-  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
+  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
 
   assert.match(html, /class="transaction-drawer-controls"/);
   assert.match(
@@ -190,13 +190,13 @@ test("transaction drawer anchors controls and fully removes the income vendor ro
 
 test("select-create supports session-scoped archived fallback selections", () => {
   const controller = fs.readFileSync(
-    "js/components/select-create-controller.js",
+    "src/components/select-create-controller/select-create-controller.ts",
     "utf8",
   );
   const components = [
-    "js/components/category-select.js",
-    "js/components/vendor-input.js",
-    "js/components/people-select.js",
+    "src/components/category-select/category-select.ts",
+    "src/components/vendor-input/vendor-input.ts",
+    "src/components/people-select/people-select.ts",
   ].map((path) => fs.readFileSync(path, "utf8"));
 
   assert.match(controller, /setFallbackSelection\(selection\)/);

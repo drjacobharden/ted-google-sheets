@@ -1,0 +1,95 @@
+custom-button {
+  height: var(--button-height);
+  padding: 3.5px 15px 3.5px 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE 10 and IE 11 */
+
+  &.primary-button {
+    background-color: var(--primary-button);
+    color: var(--inverse-text);
+
+    span {
+      color: var(--inverse-text);
+    }
+
+    &:hover {
+      background-color: var(--primary-button-hover);
+    }
+
+    &:active {
+      background-color: var(--primary-button-active);
+    }
+  }
+
+  &.secondary-button {
+    background-color: var(--secondary-button);
+    color: var(--text);
+
+    &:hover {
+      background-color: var(--secondary-button-hover);
+    }
+
+    &:active {
+      background-color: var(--secondary-button-active);
+    }
+
+    &[active] {
+      background-color: var(--surface-highlight);
+    }
+  }
+
+  &.ghost-button {
+    background-color: transparent;
+    color: var(--text);
+
+    &:hover {
+      background-color: var(--secondary-button-hover);
+    }
+
+    &:active {
+      background-color: var(--secondary-button-active);
+      opacity: 0.6;
+    }
+  }
+
+  &.tertiary {
+    background-color: transparent;
+    border: 1px solid var(--main-chart-gridline);
+    color: var(--text);
+
+    &:hover {
+      background-color: var(--main-chart-inactive);
+    }
+
+    &:active {
+      background-color: var(--main-chart-active);
+      opacity: 0.6;
+    }
+  }
+
+  svg {
+    height: calc(var(--button-height) / 2.5);
+    width: calc(var(--button-height) / 2.5);
+  }
+
+  &.square {
+    height: var(--button-height);
+    width: var(--button-height);
+    padding: 0;
+    border-radius: calc(var(--button-height) * 0.25);
+  }
+
+  &.circle {
+    height: var(--button-height);
+    width: var(--button-height);
+    padding: 0;
+  }
+}

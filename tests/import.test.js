@@ -5,7 +5,7 @@ const vm = require("node:vm");
 
 function loadUtils() {
   const window = {};
-  vm.runInNewContext(fs.readFileSync("js/utils/import-utils.js", "utf8"), {
+  vm.runInNewContext(fs.readFileSync("src/utilities/import-utilities.ts", "utf8"), {
     window, String, Number, Date, Math, JSON, Map, Set, Error,
   });
   return window.ImportUtils;
@@ -234,13 +234,16 @@ test("investment staging breaks balance ties by later CSV row and leaves missing
 test("import route and scripts are wired for direct index loading", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const navigationTemplate = fs.readFileSync("html templates/navigation-bar.html", "utf8");
-  const router = fs.readFileSync("js/router.js", "utf8");
-  const api = fs.readFileSync("js/import-api.js", "utf8");
-  assert.match(html, /data-tab="import"/);
+  const router = fs.readFileSync("src/router/router.ts", "utf8");
+  const api = fs.readFileSync("src/api/import-api.ts", "utf8");
+  assert.match(navigationTemplate, /data-tab="import"/);
   assert.match(html, /id="route-import"/);
-  assert.match(html, /js\/utils\/import-utils\.js[\s\S]*js\/api\.js[\s\S]*js\/import-api\.js/);
+  assert.match(html, /<import-screen><\/import-screen>/);
+  assert.doesNotMatch(html, /js\/routes\/import\.js/);
+  assert.match(html, /js\/utils\/import-utils\.js/);
+  assert.doesNotMatch(html, /js\/(?:api|investments-api|import-api)\.js/);
   assert.match(router, /"import"/);
-  const route = fs.readFileSync("js/routes/import.js", "utf8");
+  const route = fs.readFileSync("src/screens/import-screen/import-screen.ts", "utf8");
   assert.match(route, /Step 1 of 6 · Date/);
   assert.match(route, /Step 4 of 6 · Category/);
   assert.match(route, /Step 1 of 3 · Activity date/);
@@ -260,14 +263,14 @@ test("import route and scripts are wired for direct index loading", () => {
   assert.doesNotMatch(route, /type="month"/);
   assert.doesNotMatch(route, /data-contribution-index/);
   assert.match(route, /notes: row\.existing\?\.balance\?\.notes \|\| ""/);
-  const datePicker = fs.readFileSync("js/components/date-picker.js", "utf8");
+  const datePicker = fs.readFileSync("src/components/date-picker/date-picker.ts", "utf8");
   assert.match(datePicker, /!this\.#value && !this\.hasAttribute\("allow-empty"\)/);
   assert.match(route, /Match or create vendors using these values/);
   assert.match(route, /Match or create categories using these values/);
   assert.match(route, /Match or create people using these values/);
   assert.match(route, /data-import-action="commit"/);
   assert.doesNotMatch(route, /data-import-action="save-mappings"/);
-  assert.equal((route.match(/ImportAPI\.saveProfile\(/g) || []).length, 1);
+  assert.equal((route.match(/APIs\.imports\.saveProfile\(/g) || []).length, 1);
   assert.doesNotMatch(route, /listProfiles\(\{ refresh: true \}\)/);
   assert.match(api, /function applyBootstrapData/);
   assert.match(api, /request\("getImportProfileBundle"/);
@@ -283,13 +286,13 @@ test("import route and scripts are wired for direct index loading", () => {
   assert.match(route, /include-column[\s\S]*date-column[\s\S]*vendor-column[\s\S]*category-column[\s\S]*person-column[\s\S]*amount-column[\s\S]*notes-column/);
   assert.match(route, /number\.toFixed\(2\)/);
 
-  const budgetingStart = html.indexOf('data-nav-section="budgeting"');
-  const budgetingEnd = html.indexOf('data-nav-section="investments"');
-  const footerStart = html.indexOf('class="nav-footer"');
-  const importPosition = html.indexOf('data-tab="import"');
-  const syncPosition = html.indexOf('data-tab="sync"', footerStart);
-  assert.equal((html.match(/data-tab="import"/g) || []).length, 1);
-  assert.equal(html.slice(budgetingStart, budgetingEnd).includes('data-tab="import"'), false);
+  const budgetingStart = navigationTemplate.indexOf('data-nav-section="budgeting"');
+  const budgetingEnd = navigationTemplate.indexOf('data-nav-section="investments"');
+  const footerStart = navigationTemplate.indexOf('class="nav-footer"');
+  const importPosition = navigationTemplate.indexOf('data-tab="import"');
+  const syncPosition = navigationTemplate.indexOf('data-tab="sync"', footerStart);
+  assert.equal((navigationTemplate.match(/data-tab="import"/g) || []).length, 1);
+  assert.equal(navigationTemplate.slice(budgetingStart, budgetingEnd).includes('data-tab="import"'), false);
   assert.equal(importPosition > footerStart && importPosition < syncPosition, true);
   assert.match(navigationTemplate, /class="nav-footer"[\s\S]*data-tab="import"[\s\S]*data-tab="sync"[\s\S]*data-tab="settings"/);
 });

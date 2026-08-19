@@ -20,7 +20,11 @@ class Range {
     for (let y = 0; y < this.rows; y += 1) for (let x = 0; x < this.columns; x += 1) this.sheet.setValue(this.row + y, this.column + x, "");
     return this;
   }
-  setNumberFormat() { this.sheet.formatCalls += 1; return this; }
+  setNumberFormat() {
+    this.sheet.formatCalls += 1;
+    if (this.sheet.numberFormatError) throw new Error(this.sheet.numberFormatError);
+    return this;
+  }
   createFilter() { this.sheet.filter = {}; return this.sheet.filter; }
 }
 
@@ -159,7 +163,7 @@ test("initializes the active copy, reports deployment status, and remains idempo
   assert.equal(initialized.initialized, true);
   assert.equal(initialized.spreadsheetId, "copy-id");
   assert.equal(runtime.properties.get("SPREADSHEET_ID"), "copy-id");
-  assert.equal(runtime.properties.get("SETUP_VERSION"), "7");
+  assert.equal(runtime.properties.get("SETUP_VERSION"), "8");
   assert.equal(runtime.properties.has("WEB_APP_URL"), false);
   assert.equal(template.sheets.size, 0);
   assert.equal(copy.getSheetByName("Categories").getLastRow(), 11);
@@ -213,6 +217,22 @@ test("setup and setupBudget create equivalent initialized state", () => {
     [...menuRuntime.spreadsheet.sheets].map(([name, sheet]) => [name, sheet.getLastRow()]),
     [...editorRuntime.spreadsheet.sheets].map(([name, sheet]) => [name, sheet.getLastRow()]),
   );
+});
+
+test("setup does not override number formatting on typed columns", () => {
+  const spreadsheet = new Spreadsheet();
+  spreadsheet.insertSheet("Transactions").numberFormatError =
+    "You can't set the number format of cells in a typed column.";
+  spreadsheet.insertSheet("Ledger").numberFormatError =
+    "You can't set the number format of cells in a typed column.";
+
+  const runtime = loadScript({ spreadsheet });
+  const status = runtime.context.setupBudget();
+
+  assert.equal(status.initialized, true);
+  assert.equal(runtime.ui.alerts[0][0], "Budget initialized");
+  assert.equal(spreadsheet.getSheetByName("Transactions").formatCalls, 0);
+  assert.equal(spreadsheet.getSheetByName("Ledger").formatCalls, 0);
 });
 
 test("removes sidebar and deployment URL registration dependencies", () => {
@@ -311,12 +331,13 @@ test("validates normalized references, rebuilds Ledger, and batch-renames 1,000 
 
 });
 
-test("bootstraps all top-level data with one spreadsheet open and one read per sheet", () => {
+test("bootstraps all top-level data with one Sheets API batch request", () => {
   const runtime = loadScript();
   runtime.context.setup();
   const { call, spreadsheet } = runtime;
   const userId = "123e4567-e89b-42d3-a456-426614174000";
   const vendorId = "223e4567-e89b-42d3-a456-426614174000";
+  const accountId = "723e4567-e89b-42d3-a456-426614174000";
   call({ action: "addUser", user: { id: userId, firstName: "Ada", lastName: "Byron" } });
   call({ action: "addVendor", vendor: { id: vendorId, name: "Cafe" } });
   const categoryId = call({ action: "listCategories" }).data.find((item) => item.name === "Dining").id;
@@ -327,6 +348,10 @@ test("bootstraps all top-level data with one spreadsheet open and one read per s
     categoryId, vendorId, assignmentId, notes: "Historical",
   } });
   call({ action: "archiveVendor", id: vendorId });
+  call({ action: "addInvestmentAccount", account: {
+    id: accountId, name: "Old 401k", source: "manual",
+  } });
+  call({ action: "archiveInvestmentAccount", id: accountId });
 
   const transactions = spreadsheet.getSheetByName("Transactions");
   const bulkRows = Array.from({ length: 2000 }, (_, index) => [
@@ -341,22 +366,57 @@ test("bootstraps all top-level data with one spreadsheet open and one read per s
   ];
   topLevelSheets.forEach((name) => { spreadsheet.getSheetByName(name).reads = []; });
   runtime.resetOpenCalls();
+  let batchCalls = 0;
+  runtime.context.Sheets = {
+    Spreadsheets: {
+      Values: {
+        batchGet(_id, options) {
+          batchCalls += 1;
+          return {
+            valueRanges: options.ranges.map((range) => {
+              const name = range.match(/^'(.+)'!/)[1].replace(/''/g, "'");
+              return { values: spreadsheet.getSheetByName(name).data.map((row) => row.slice()) };
+            }),
+          };
+        },
+      },
+    },
+  };
 
   const result = call({ action: "bootstrap" });
   assert.equal(result.ok, true);
-  assert.equal(runtime.getOpenCalls(), 1);
+  assert.equal(batchCalls, 1);
+  assert.equal(runtime.getOpenCalls(), 0);
   assert.equal(result.data.transactions.length, 2001);
   assert.equal(result.data.transactions[0].date, "2024-01-15");
   assert.equal(result.data.transactions[0].vendor, "Cafe");
-  assert.equal(result.data.vendors.some((item) => item.id === vendorId), false);
+  assert.equal(result.data.vendors.find((item) => item.id === vendorId).active, false);
+  assert.equal(result.data.investmentAccounts.find((item) => item.id === accountId).active, false);
   assert.deepEqual(Object.keys(result.data), [
     "transactions", "categories", "vendors", "assignments", "users", "importProfiles",
     "investmentAccounts", "investmentBalances", "investmentContributions",
   ]);
   topLevelSheets.forEach((name) => {
-    assert.ok(spreadsheet.getSheetByName(name).reads.length <= 1, `${name} was read more than once`);
+    assert.equal(spreadsheet.getSheetByName(name).reads.length, 0, `${name} used the SpreadsheetApp fallback`);
   });
   assert.equal(call({ action: "health" }).data.features.includes("bootstrap"), true);
+});
+
+test("fails bootstrap instead of falling back when the Sheets API is unavailable", () => {
+  const runtime = loadScript();
+  runtime.context.setup();
+  [...runtime.spreadsheet.sheets.values()].forEach((sheet) => { sheet.reads = []; });
+  runtime.resetOpenCalls();
+
+  const result = runtime.call({ action: "bootstrap" });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Bootstrap batch read failed: The Advanced Sheets service is not available/);
+  assert.equal(runtime.getOpenCalls(), 0);
+  assert.equal(
+    [...runtime.spreadsheet.sheets.values()].reduce((sum, sheet) => sum + sheet.reads.length, 0),
+    0,
+  );
 });
 
 test("bootstraps through one Sheets API batchGet and normalizes unformatted dates", () => {
@@ -527,7 +587,8 @@ test("batch-adds mixed entities with grouped writes, retries, and name reconcili
   assert.equal(reconciled.data.saved.length, 0);
   assert.equal(reconciled.data.reconciled.length, 1);
   assert.equal(reconciled.data.reconciled[0].record.id, entities[1].record.id);
-  assert.equal(call({ action: "health" }).data.apiVersion, 10);
+  assert.equal(call({ action: "health" }).data.apiVersion, 12);
+  assert.equal(call({ action: "health" }).data.features.includes("bootstrapArchives"), true);
   assert.equal(call({ action: "health" }).data.features.includes("batchEntities"), true);
 });
 
@@ -741,7 +802,8 @@ test("setup migrates legacy investment columns without overstating savings", () 
   runtime.context.setup();
   assert.equal(runtime.call({ action: "listInvestmentAccounts" }).data[0].source, "manual");
   assert.equal(runtime.call({ action: "listInvestmentSnapshots" }).data[0].contribution, 800);
-  assert.deepEqual(accounts.data[0].slice(0, 6), ["ID", "Name", "Source", "Active", "Created At", "Updated At"]);
+  assert.deepEqual(accounts.data[0].slice(0, 7), ["ID", "Name", "Source", "Assignment ID", "Active", "Created At", "Updated At"]);
+  assert.equal(accounts.data[1][3], "00000000-0000-4000-8000-000000000101");
   const balances = spreadsheet.getSheetByName("InvestmentBalances");
   const contributions = spreadsheet.getSheetByName("InvestmentContributions");
   assert.deepEqual(balances.data[0].slice(0, 9), ["ID", "Account ID", "Month", "Ending Balance", "Notes", "Created At", "Created By", "Updated At", "Updated By"]);
@@ -749,6 +811,31 @@ test("setup migrates legacy investment columns without overstating savings", () 
   assert.equal(contributions.data[1][3], 800);
   assert.equal(spreadsheet.getSheetByName("InvestmentSnapshots"), null);
   assert.equal(spreadsheet.getSheetByName("InvestmentSnapshots_Legacy_v5").hidden, true);
+});
+
+test("setup assigns existing investment accounts to Shared", () => {
+  const spreadsheet = new Spreadsheet();
+  const accounts = spreadsheet.insertSheet("InvestmentAccounts");
+  accounts.data = [
+    ["ID", "Name", "Source", "Active", "Created At", "Updated At"],
+    [
+      "223e4567-e89b-42d3-a456-426614174099",
+      "401(k)",
+      "paycheck",
+      true,
+      "2026-06-01T00:00:00.000Z",
+      "2026-06-01T00:00:00.000Z",
+    ],
+  ];
+  const runtime = loadScript({ spreadsheet });
+  runtime.context.setup();
+
+  const account = runtime.call({ action: "listInvestmentAccounts" }).data[0];
+  assert.equal(account.source, "paycheck");
+  assert.equal(
+    account.assignmentId,
+    "00000000-0000-4000-8000-000000000101",
+  );
 });
 
 test("setup migrates signed and zero monthly aggregates into separate flow records", () => {

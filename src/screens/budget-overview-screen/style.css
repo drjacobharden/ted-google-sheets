@@ -1,0 +1,1157 @@
+budget-overview-screen {
+  --overview-card-padding-block: 22px;
+  --card-background: var(--elevation-1);
+  --card-radius: var(--radius-medium);
+  --chart-bar-bg: var(--object-light);
+  --chart-bar-hover: var(--object-dark);
+  --negative-dark: var(--negative-accent-dark);
+  --positive-dark: var(--positive-accent-dark);
+  --gridlines: var(--border);
+  --donut-track: 12;
+  --row-spacing: 24px;
+
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+
+  .page-header-wrapper {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .page-header-wrapper[hidden] {
+    display: none;
+  }
+
+  .content-container {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .page-header-wrapper {
+    margin-bottom: var(--row-spacing);
+
+    .tertiary {
+      border: 1px solid var(--main-chart-gridline);
+      border-radius: 8px;
+    }
+  }
+
+  .year-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    > span {
+      min-width: 38px;
+      text-align: center;
+    }
+  }
+
+  .summary-card-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    overflow: visible;
+    margin-bottom: var(--row-spacing);
+
+    &.has-paycheck-deductions {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .summary-card {
+      --grid-cols: minmax(0, 1fr) 116px;
+
+      position: relative;
+      display: grid;
+      min-width: 0;
+      grid-template-columns: var(--grid-cols);
+      grid-template-rows: auto auto;
+      align-items: center;
+      gap: 12px;
+      margin-top: 0;
+      padding: var(--overview-card-padding-block);
+      background-color: var(--card-background);
+      border-radius: var(--card-radius);
+
+      .mini-chart {
+        position: relative;
+        display: grid;
+        height: 82px;
+        grid-template-columns: repeat(12, minmax(4px, 1fr));
+        gap: 0;
+        align-self: end;
+
+        .baseline {
+          position: absolute;
+          z-index: 0;
+          top: 78%;
+          right: 0;
+          left: 0;
+          height: 1px;
+          background-color: var(--chart-bar-bg);
+        }
+
+        .slot {
+          position: relative;
+          min-width: 0;
+          height: 100%;
+          padding: 0;
+          border: 0;
+          background-color: transparent;
+          cursor: default;
+
+          &:focus-visible {
+            z-index: 2;
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+          }
+
+          .bar {
+            position: absolute;
+            right: 1.5px;
+            left: 1.5px;
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 3px 3px 0 0;
+            background-color: var(--chart-bar-bg);
+            pointer-events: none;
+
+            &.is-future {
+              background-color: transparent;
+            }
+
+            &.is-current {
+              background-color: var(--positive-dark);
+            }
+
+            &.is-negative {
+              border-radius: 0 0 3px 3px;
+              background-color: var(--negative-dark);
+              opacity: 0.72;
+
+              &:hover {
+                background-color: var(--chart-bar-hover);
+              }
+            }
+          }
+        }
+      }
+
+      h2 {
+        text-overflow: ellipsis;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      strong {
+        display: block;
+        overflow: hidden;
+        margin-bottom: 4px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      small {
+        display: block;
+        min-height: 17px;
+        color: var(--muted);
+
+        &.is-favorable {
+          color: var(--positive-dark);
+        }
+
+        &.is-unfavorable {
+          color: var(--negative-dark);
+        }
+      }
+    }
+  }
+
+  .trend-card {
+    --inactive: var(--main-chart-inactive);
+    --active: var(--main-chart-active);
+    --hover: var(--main-chart-hover);
+    --gridline: var(--main-chart-gridline);
+
+    min-height: 0;
+    margin-bottom: calc(var(--row-spacing) * 2);
+    border-radius: var(--card-radius);
+
+    .trend-card-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 10px;
+      padding: 0;
+    }
+
+    .trend-balance {
+      display: grid;
+      justify-items: center;
+      padding: 10px 0 0;
+      text-align: center;
+
+      .trend-balance-controller {
+        display: grid;
+        width: 100%;
+        grid-template-columns: 25% 1fr 25%;
+        align-items: end;
+
+        .legend-wrapper {
+          width: 100%;
+          align-items: start;
+          justify-content: start;
+
+          .title {
+            text-transform: uppercase;
+            opacity: 0.5;
+            text-align: left;
+            margin-right: auto;
+            margin-bottom: 24px;
+          }
+        }
+
+        > strong {
+          width: 100%;
+          text-align: center;
+          overflow: hidden;
+          font-size: clamp(48px, 7vw, 96px);
+          font-variant-numeric: tabular-nums;
+          font-weight: 500;
+          letter-spacing: -0.01em;
+          line-height: 1;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .controls {
+          margin-left: auto;
+        }
+      }
+
+      > small {
+        margin-top: 10px;
+        color: var(--muted);
+      }
+
+      > span {
+        margin-top: 10px;
+        color: var(--muted);
+      }
+    }
+
+    .metrics {
+      display: grid;
+      width: min(100%, 720px);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 26px 0 2px;
+      padding: 0;
+
+      > div {
+        min-width: 0;
+
+        + div {
+          border-left: 1px solid var(--on-bg-border);
+        }
+      }
+
+      dt {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: var(--text-size-80);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      dd {
+        overflow: hidden;
+        margin: 7px 0 0;
+        font-size: var(--text-size-200);
+        font-variant-numeric: tabular-nums;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+      justify-content: start;
+      margin-top: 12px;
+      padding: 0 0 2px;
+      color: var(--muted);
+
+      span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: var(--text-size-90);
+      }
+
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        background: var(--active);
+      }
+
+      .line {
+        position: relative;
+        width: 28px;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--negative-dark);
+
+        &.is-previous {
+          height: 0;
+          border-top: 2px dashed var(--positive-dark);
+          background: transparent;
+        }
+      }
+    }
+
+    .chart {
+      position: relative;
+      min-height: 330px;
+      padding: 14px 0 0;
+
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+      }
+
+      .grid line {
+        stroke: var(--gridline);
+        stroke-width: 1px;
+        stroke-dasharray: 3 3;
+      }
+
+      .labels text {
+        fill: var(--muted);
+        font-size: 12px;
+      }
+
+      .spend-bar {
+        fill: var(--active);
+        pointer-events: none;
+        transition: fill 120ms ease;
+
+        &.is-outside-range {
+          fill: var(--inactive);
+        }
+
+        &.is-active {
+          fill: var(--hover);
+        }
+      }
+
+      .average-line {
+        fill: none;
+        stroke: var(--negative-dark);
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .previous-line {
+        fill: none;
+        stroke: var(--positive-dark);
+        stroke-width: 1.5;
+        stroke-dasharray: 3 6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0.72;
+      }
+
+      .scrub-guide {
+        stroke: var(--chart-bar-hover);
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+      }
+
+      .scrub-average {
+        fill: var(--negative-dark);
+        height: 6px;
+        width: 6px;
+      }
+
+      .hitbox:focus {
+        outline: none;
+      }
+
+      .tooltip-anchor {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        pointer-events: none;
+      }
+    }
+
+    .chart-range {
+      position: relative;
+      height: 48px;
+      margin: -3px 0 0 68px;
+      touch-action: none;
+      user-select: none;
+
+      &[hidden] {
+        display: none;
+      }
+
+      .chart-range-track {
+        position: absolute;
+        top: 12px;
+        right: 0;
+        left: 0;
+        height: 24px;
+        border-radius: 3px;
+        background: var(--object-extra-light);
+      }
+
+      .chart-range-selection {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        min-width: 24px;
+        border-radius: 4px;
+        background: var(--chart-bar-hover);
+        transition:
+          left 360ms cubic-bezier(0.2, 1.35, 0.45, 1),
+          width 360ms cubic-bezier(0.2, 1.35, 0.45, 1);
+      }
+
+      &.is-dragging .chart-range-selection {
+        transition: none;
+      }
+
+      button {
+        position: absolute;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+
+        &:focus-visible {
+          z-index: 2;
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
+      }
+
+      .chart-range-handle {
+        top: -4px;
+        bottom: -4px;
+        width: 16px;
+        border: 2px solid var(--card-background);
+        border-radius: 6px;
+        background: var(--chart-bar-hover);
+        cursor: ew-resize;
+
+        &::after {
+          position: absolute;
+          top: 4px;
+          bottom: 4px;
+          left: 50%;
+          width: 1px;
+          background: color-mix(
+            in srgb,
+            var(--card-background) 78%,
+            transparent
+          );
+          content: "";
+          transform: translateX(-50%);
+        }
+
+        &.is-start {
+          left: 0;
+        }
+
+        &.is-end {
+          right: 0;
+        }
+      }
+
+      .chart-range-window {
+        inset: 0 16px;
+        cursor: grab;
+
+        &:active {
+          cursor: grabbing;
+        }
+      }
+
+      .chart-range-tooltip {
+        position: absolute;
+        z-index: 3;
+        top: -27px;
+        width: max-content;
+        min-width: 48px;
+        padding: 5px 8px;
+        border-radius: 6px;
+        background: var(--inverse-surface);
+        color: var(--inverse-text);
+        font-size: var(--text-size-80);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        opacity: 0;
+        pointer-events: none;
+        text-align: center;
+        transform: translateX(-50%) translateY(3px) scale(0.96);
+        transform-origin: center bottom;
+        visibility: hidden;
+        white-space: nowrap;
+        transition:
+          opacity 100ms ease,
+          transform 100ms ease,
+          visibility 0s linear 100ms;
+
+        &::after {
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          width: 7px;
+          height: 7px;
+          background: var(--inverse-surface);
+          content: "";
+          transform: translate(-50%, -50%) rotate(45deg);
+        }
+      }
+
+      &.is-dragging .chart-range-tooltip {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+        visibility: visible;
+        transition-delay: 0s;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .trend-card-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .trend-balance {
+        padding-inline: 0;
+
+        > strong {
+          font-size: clamp(42px, 15vw, 68px);
+        }
+      }
+
+      .metrics {
+        gap: 8px;
+
+        dd {
+          font-size: var(--text-size-100);
+        }
+      }
+
+      .legend {
+        justify-content: flex-start;
+      }
+    }
+
+    .empty-state {
+      display: grid;
+      min-height: 310px;
+      place-items: center;
+      align-content: center;
+      padding: 36px 24px;
+      color: var(--muted);
+      text-align: center;
+
+      &[hidden] {
+        display: none;
+      }
+
+      h3 {
+        margin: 16px 0 7px;
+        color: var(--text);
+      }
+
+      p {
+        max-width: 360px;
+        margin: 0;
+        color: var(--muted);
+      }
+    }
+  }
+
+  .insights-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr) minmax(0, 1fr);
+    margin-bottom: var(--row-spacing);
+
+    .ranking-card,
+    .savings-card {
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
+      padding: var(--overview-card-padding-block);
+      background-color: var(--card-background);
+      border-radius: var(--card-radius);
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 32px;
+
+        h2 {
+          margin: 0;
+          letter-spacing: -0.02em;
+        }
+      }
+
+      .table-header,
+      .ranking-list li {
+        display: grid;
+        grid-template-columns:
+          28px
+          minmax(90px, 1fr)
+          repeat(2, minmax(90px, auto));
+        gap: 12px;
+        align-items: center;
+
+        strong,
+        span {
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: var(--text-size-90);
+          font-variant-numeric: tabular-nums;
+          font-weight: 400;
+
+          &:nth-child(n + 3) {
+            text-align: right;
+          }
+          &:last-child {
+            white-space: nowrap;
+          }
+        }
+      }
+
+      .table-header {
+        padding: 0 0 12px;
+        color: var(--muted);
+
+        span {
+          font-weight: 500 !important;
+        }
+      }
+
+      .ranking-list {
+        display: grid;
+        gap: 0;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+
+        &[hidden] {
+          display: none;
+        }
+
+        li {
+          height: 49px;
+          border-top: 1px solid var(--gridlines);
+        }
+
+        .rank-number {
+          color: var(--muted);
+        }
+
+        .rank-total,
+        .rank-inflation {
+          text-align: right;
+        }
+
+        .rank-inflation {
+          color: var(--muted);
+
+          &.is-increase {
+            color: var(--negative-dark);
+          }
+
+          &.is-decrease {
+            color: var(--positive-dark);
+          }
+        }
+
+        .rank-name {
+          min-width: 0;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+
+      .empty-state {
+        display: grid;
+        min-height: 260px;
+        margin: 0;
+        place-items: center;
+        padding: 24px;
+        color: var(--muted);
+        text-align: center;
+
+        &[hidden] {
+          display: none;
+        }
+      }
+
+      .savings-rate-metric {
+        > div {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+
+          > span {
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: color-mix(
+              in srgb,
+              var(--positive-accent-dark) 12%,
+              transparent
+            );
+            color: var(--positive-accent-dark);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+
+            &.is-negative {
+              background: color-mix(
+                in srgb,
+                var(--negative-dark) 10%,
+                transparent
+              );
+              color: var(--negative-dark);
+            }
+          }
+        }
+
+        strong {
+          font-weight: 500;
+          font-variant-numeric: tabular-nums;
+        }
+
+        small {
+          display: block;
+          margin-top: 5px;
+          color: var(--muted);
+        }
+      }
+
+      .savings-visual {
+        display: grid;
+        grid-template-columns: minmax(135px, 1.45fr) minmax(92px, 0.75fr);
+        gap: 20px;
+        align-items: center;
+        margin-top: 27px;
+
+        .donut {
+          min-width: 0;
+
+          svg {
+            display: block;
+            width: 100%;
+            height: auto;
+            overflow: visible;
+
+            .donut-track {
+              fill: none;
+              stroke-width: var(--donut-track);
+            }
+
+            .donut-segment {
+              stroke: none;
+              cursor: default;
+              pointer-events: fill;
+              transition: opacity 0.2s ease;
+
+              &:focus {
+                outline: none;
+              }
+
+              &:focus-visible {
+                filter: drop-shadow(0 0 2px var(--text));
+              }
+
+              &.is-spent {
+                fill: var(--chart-bar-bg);
+              }
+
+              &.is-paycheck {
+                fill: var(--chart-bar-hover);
+              }
+
+              &.is-budget {
+                fill: var(--positive-dark);
+              }
+            }
+          }
+        }
+
+        .donut-legend {
+          display: grid;
+          gap: 14px;
+
+          > div {
+            display: grid;
+            grid-template-columns: 9px minmax(0, 1fr);
+            gap: 8px;
+            align-items: start;
+          }
+
+          i {
+            width: 9px;
+            height: 9px;
+            margin-top: 3px;
+            border-radius: 50%;
+
+            &.is-spent {
+              background: var(--chart-bar-bg);
+            }
+
+            &.is-paycheck {
+              background: var(--chart-bar-hover);
+            }
+
+            &.is-budget {
+              background: var(--positive-dark);
+            }
+          }
+
+          span,
+          strong,
+          small {
+            display: block;
+          }
+
+          strong {
+            font-size: 12px;
+            font-weight: 500;
+          }
+
+          small {
+            margin-top: 2px;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+          }
+        }
+      }
+    }
+  }
+
+  .monthly-table-card {
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: var(--overview-card-padding-block);
+    background-color: var(--card-background);
+    border-radius: var(--card-radius);
+    margin-bottom: var(--row-spacing);
+
+    header {
+      display: flex;
+      min-height: 78px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: var(--overview-card-padding-block)
+        var(--horizontal-screen-padding);
+
+      h2 {
+        margin: 0 0 4px;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: var(--text-small);
+      }
+    }
+
+    .table-wrapper {
+      max-width: 100%;
+      overflow-x: auto;
+
+      table {
+        --header-radius: var(--radius-small);
+        --header-padding: calc(var(--header-radius) / 2);
+        --header-margin: calc(
+          var(--horizontal-screen-padding) - var(--header-padding)
+        );
+
+        table-layout: fixed;
+        width: calc(100% - (var(--header-margin) * 2));
+        min-width: 760px;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+        margin-inline: var(--header-margin);
+
+        th,
+        td {
+          padding: 12px;
+          font-size: var(--text-size-90);
+        }
+
+        span {
+          font-size: var(--text-size-90);
+        }
+
+        th {
+          text-align: left;
+        }
+
+        td,
+        thead th:not(:first-child) {
+          text-align: right;
+        }
+
+        thead {
+          th {
+            font-weight: 500;
+          }
+        }
+
+        tbody {
+          th,
+          td {
+            border-top: 1px dotted var(--border);
+
+            &.is-positive {
+              color: var(--positive-dark);
+            }
+
+            &.is-negative {
+              color: var(--negative-dark);
+            }
+          }
+
+          tr {
+            &:hover {
+              background-color: var(--object-extra-light);
+            }
+          }
+
+          th span,
+          th small {
+            display: block;
+          }
+
+          th small {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: var(--text-size-80);
+          }
+        }
+      }
+    }
+  }
+
+  [data-annual-summary-help] svg,
+  [data-insight-help] svg {
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
+  }
+
+  [data-annual-summary-help]:hover,
+  [data-insight-help]:hover {
+    color: var(--text);
+  }
+}
+
+tool-tip {
+  .budget-overview-chart-tooltip {
+    display: grid;
+    min-width: min(230px, calc(100vw - 40px));
+    padding: 8px;
+
+    .chart-tooltip-row {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr) max-content;
+      gap: 8px;
+      align-items: center;
+      margin-top: 7px;
+      color: var(--inverse-text);
+      padding-top: 4px;
+
+      i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: var(--object-light);
+
+        &.is-spend {
+          background-color: var(--negative-accent-dark);
+        }
+
+        &.is-previous {
+          background-color: var(--positive-accent-dark);
+        }
+      }
+
+      .chart-label {
+        color: var(--inverse-text);
+        opacity: 0.6;
+        font-size: var(--text-size-90);
+      }
+
+      .chart-value {
+        display: block;
+        color: var(--inverse-text);
+        font-size: var(--text-size-90);
+        text-align: right;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  .budget-overview-stacked-tooltip {
+    padding: 4px;
+
+    .chart-title,
+    .chart-detail {
+      color: var(--inverse-text);
+      display: block;
+    }
+
+    .chart-detail {
+      margin-top: 8px;
+      opacity: 0.6;
+    }
+  }
+}
+
+@media (max-width: 1080px) {
+  .budget-overview-screen__annual-cards,
+  .budget-overview-screen__annual-cards.has-paycheck-deductions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .budget-overview-screen__annual-card:first-child,
+  .budget-overview-screen__annual-card:last-child {
+    border-radius: 0;
+  }
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+  .insights-grid > section + section {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+  .budget-overview-screen__metrics {
+    grid-template-columns: auto auto 1fr;
+    gap: 22px;
+  }
+  .budget-overview-screen__legend {
+    gap: 12px;
+  }
+}
+@media (max-width: 640px) {
+  budget-overview-screen .page-header-wrapper {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .budget-overview-screen__page-filters {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .budget-overview-screen__annual-cards,
+  .budget-overview-screen__annual-cards.has-paycheck-deductions {
+    grid-template-columns: 1fr;
+  }
+  .budget-overview-screen__annual-card {
+    min-height: 150px;
+    grid-template-columns: minmax(0, 1fr) 132px;
+  }
+  .budget-overview-screen__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    padding: 18px 20px 2px;
+  }
+  .budget-overview-screen__metrics > div {
+    padding: 0;
+  }
+  .budget-overview-screen__legend {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .budget-overview-screen__chart {
+    min-height: 240px;
+    padding-inline: 4px;
+  }
+  .budget-overview-screen__header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-inline: 20px;
+  }
+  .budget-overview-screen__monthly-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-inline: 20px;
+  }
+  .budget-overview-screen__year-navigation {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .budget-overview-screen__table th,
+  .budget-overview-screen__table td {
+    padding-inline: 20px;
+  }
+  budget-overview-screen page-title .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Liquid Glass Card */
+.liquid-glass-card {
+  position: relative;
+  width: 400px;
+  height: 300px;
+  border-radius: 28px;
+  isolation: isolate;
+  box-shadow: 0px 0px 35px -6px rgba(30, 30, 30, 0.3);
+  cursor: pointer;
+}
+
+/* Tint and inner shadow layer */
+.liquid-glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 28px;
+  box-shadow: inset 0 0 9px -5px rgba(219, 219, 219, 0.7);
+  background-color: rgba(192, 192, 192, 0.06);
+  pointer-events: none;
+}
+
+/* Backdrop blur and distortion layer */
+.liquid-glass-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 28px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  filter: url(#glass-distortion);
+  -webkit-filter: url(#glass-distortion);
+  isolation: isolate;
+  pointer-events: none;
+}

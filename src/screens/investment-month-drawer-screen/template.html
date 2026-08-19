@@ -1,0 +1,173 @@
+    <div class="drawer-overlay" id="investment-month-drawer-backdrop" hidden>
+      <aside
+        class="transaction-drawer investment-month-drawer"
+        id="investment-month-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="investment-month-drawer-title"
+        tabindex="-1"
+      >
+        <drawer-header
+          id="investment-drawer-header"
+          title="Account · Month"
+          eyebrow="Monthly investment update"
+        ></drawer-header>
+        <form id="investment-month-form" novalidate>
+          <div class="investment-month-targets">
+            <label class="form-field">
+              <span>Account</span>
+              <select name="accountId" required>
+                <option value="">Choose an account</option>
+              </select>
+            </label>
+            <month-picker
+              label="Reporting month"
+              alignment="right"
+            ></month-picker>
+          </div>
+          <p
+            class="investment-existing-notice"
+            id="investment-month-existing"
+            hidden
+          >
+            A balance already exists for this account and month. Saving will
+            update it.
+          </p>
+          <section
+            class="investment-month-conflict"
+            id="investment-month-conflict"
+            hidden
+            aria-live="polite"
+          >
+            <p class="eyebrow">Sync conflict</p>
+            <h3>Google Sheets changed this month</h3>
+            <div class="investment-conflict-comparison">
+              <article>
+                <span>Google Sheet</span
+                ><strong id="investment-month-sheet-balance">$0</strong
+                ><small id="investment-month-sheet-flow"
+                  >$0 net contribution</small
+                >
+              </article>
+              <article>
+                <span>Your draft</span
+                ><strong id="investment-month-draft-balance">$0</strong
+                ><small id="investment-month-draft-flow"
+                  >$0 net contribution</small
+                >
+              </article>
+            </div>
+            <p>
+              Review the editable draft below, use the Sheet values, or save
+              your changes against the latest version.
+            </p>
+            <button
+              class="secondary-button compact"
+              id="investment-month-use-sheet"
+              type="button"
+            >
+              Use Sheet values
+            </button>
+          </section>
+          <label class="form-field"
+            ><span>Ending balance</span
+            ><input
+              name="balance"
+              type="number"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              required
+          /></label>
+          <section
+            class="investment-flow-section"
+            aria-labelledby="investment-contributions-title"
+          >
+            <div>
+              <h3 id="investment-contributions-title">Contributions</h3>
+              <p>Enter each contribution as a positive amount.</p>
+            </div>
+            <div
+              class="investment-flow-list"
+              id="investment-contribution-list"
+            ></div>
+            <button
+              class="text-button"
+              id="add-investment-contribution"
+              type="button"
+            >
+              + Add another contribution
+            </button>
+          </section>
+          <section
+            class="investment-flow-section"
+            aria-labelledby="investment-withdrawals-title"
+          >
+            <div>
+              <h3 id="investment-withdrawals-title">Withdrawals</h3>
+              <p>
+                Enter withdrawals as positive amounts. They are stored as
+                negative flows.
+              </p>
+            </div>
+            <div
+              class="investment-flow-list"
+              id="investment-withdrawal-list"
+            ></div>
+            <button
+              class="text-button"
+              id="add-investment-withdrawal"
+              type="button"
+            >
+              + Add another withdrawal
+            </button>
+          </section>
+          <dl class="investment-flow-totals">
+            <div>
+              <dt>Contributions</dt>
+              <dd id="investment-gross-contributions">$0</dd>
+            </div>
+            <div>
+              <dt>Withdrawals</dt>
+              <dd id="investment-total-withdrawals">$0</dd>
+            </div>
+            <div>
+              <dt>Net contribution</dt>
+              <dd id="investment-net-contribution">$0</dd>
+            </div>
+          </dl>
+          <p
+            class="form-message"
+            id="investment-month-message"
+            role="status"
+          ></p>
+          <div class="transaction-drawer-controls">
+            <footer class="transaction-drawer-actions">
+              <button
+                class="secondary-button"
+                id="cancel-investment-month"
+                type="button"
+              >
+                Cancel</button
+              ><button class="primary-button" type="submit">Add balance</button>
+            </footer>
+            <label class="batch-entry-toggle" id="investment-batch-toggle">
+              <span>
+                <strong>Batch input</strong>
+                <small>Keep this month and add another account</small>
+              </span>
+              <input type="checkbox" name="batchEntry" role="switch" />
+            </label>
+            <div
+              class="transaction-metadata"
+              id="investment-balance-metadata"
+              hidden
+            >
+              <p id="investment-balance-created"></p>
+            </div>
+          </div>
+        </form>
+      </aside>
+    </div>
+    <!-- Toast notifications -->
+    <div

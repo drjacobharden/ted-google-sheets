@@ -3,8 +3,8 @@
 const APP = Object.freeze({
   spreadsheetIdProperty: "SPREADSHEET_ID",
   setupVersionProperty: "SETUP_VERSION",
-  setupVersion: "7",
-  apiVersion: 10,
+  setupVersion: "8",
+  apiVersion: 12,
   ledgerDirtyProperty: "LEDGER_DIRTY",
   incomeCategoryId: "00000000-0000-4000-8000-000000000001",
   sharedAssignmentId: "00000000-0000-4000-8000-000000000101",
@@ -83,8 +83,8 @@ const TABLES = Object.freeze({
   },
   investmentAccounts: {
     name: "InvestmentAccounts",
-    headers: ["ID", "Name", "Source", "Active", "Created At", "Updated At"],
-    fields: ["id", "name", "source", "active", "createdAt", "updatedAt"],
+    headers: ["ID", "Name", "Source", "Assignment ID", "Active", "Created At", "Updated At"],
+    fields: ["id", "name", "source", "assignmentId", "active", "createdAt", "updatedAt"],
   },
   investmentBalances: {
     name: "InvestmentBalances",
@@ -271,6 +271,7 @@ function handleRequest_(request) {
           apiVersion: APP.apiVersion,
           features: [
             "bootstrap",
+            "bootstrapArchives",
             "batchTransactions",
             "batchEntities",
             "batchTransactionUpdates",
@@ -546,17 +547,13 @@ function listTransactions_() {
 }
 
 function bootstrap_() {
-  let recordsBySheet = null;
   try {
-    recordsBySheet = readBootstrapWithSheetsApi_();
+    return buildBootstrapPayload_(readBootstrapWithSheetsApi_());
   } catch (error) {
-    console.warn(
-      "Sheets API batch bootstrap failed; using SpreadsheetApp fallback: " +
-        errorMessage_(error),
+    throw new Error(
+      "Bootstrap batch read failed: " + errorMessage_(error),
     );
   }
-  if (!recordsBySheet) recordsBySheet = readBootstrapWithSpreadsheetApp_();
-  return buildBootstrapPayload_(recordsBySheet);
 }
 
 function bootstrapSpecs_() {
@@ -579,11 +576,12 @@ function readBootstrapWithSheetsApi_() {
     !Sheets.Spreadsheets ||
     !Sheets.Spreadsheets.Values
   )
-    return null;
+    throw new Error("The Advanced Sheets service is not available.");
   const spreadsheetId = PropertiesService.getScriptProperties().getProperty(
     APP.spreadsheetIdProperty,
   );
-  if (!spreadsheetId) return null;
+  if (!spreadsheetId)
+    throw new Error("No spreadsheet is configured for the batch read.");
   const specs = bootstrapSpecs_();
   const ranges = specs.map(function (spec) {
     return (
@@ -619,19 +617,6 @@ function readBootstrapWithSheetsApi_() {
       .map(function (row) {
         return rowToRecord_(spec, normalizeBatchRow_(spec, row));
       });
-  });
-  return recordsBySheet;
-}
-
-function readBootstrapWithSpreadsheetApp_() {
-  const spreadsheet = getSpreadsheet_();
-  const recordsBySheet = {};
-  bootstrapSpecs_().forEach(function (spec) {
-    recordsBySheet[spec.name] = readRecordsFromSheet_(
-      requiredSheet_(spreadsheet, spec),
-      spec,
-      true,
-    );
   });
   return recordsBySheet;
 }
@@ -673,9 +658,11 @@ function buildBootstrapPayload_(recordsBySheet) {
     transactions: transactions.map(function (transaction) {
       return hydrateTransaction_(transaction, references);
     }),
-    categories: active(categories),
-    vendors: active(vendors),
-    assignments: active(assignments),
+    // Cache complete reference collections during bootstrap. Pickers use the
+    // active-only list functions, while archive screens use the same cache.
+    categories: categories,
+    vendors: vendors,
+    assignments: assignments,
     users: active(users),
     importProfiles: active(recordsBySheet[TABLES.importProfiles.name]).map(
       publicImportProfile_,
@@ -1192,6 +1179,16 @@ function normalizeInvestmentAccount_(input, existing) {
     throw new Error(
       "Choose paycheck deduction or manual transfer as the account source.",
     );
+  const assignmentId = requireUuid_(
+    input.assignmentId || APP.sharedAssignmentId,
+    "Investment account assignment ID",
+  );
+  if (
+    !readRecords_(TABLES.assignments, true).some(function (assignment) {
+      return assignment.id === assignmentId;
+    })
+  )
+    throw new Error("Choose a valid assignment.");
   return {
     id: requireUuid_(
       (existing && existing.id) || input.id || Utilities.getUuid(),
@@ -1199,6 +1196,7 @@ function normalizeInvestmentAccount_(input, existing) {
     ),
     name: requiredName_(input.name),
     source: source,
+    assignmentId: assignmentId,
     active: existing ? existing.active !== false : true,
     createdAt: existing
       ? existing.createdAt
@@ -2655,11 +2653,26 @@ function migrateLegacyInvestmentHeaders_(sheet, spec) {
     "Created At",
     "Updated At",
   ];
+  const previousHeaders = [
+    "ID",
+    "Name",
+    "Source",
+    "Active",
+    "Created At",
+    "Updated At",
+  ];
   let oldHeaders = accountHeaders;
   const accountCurrent = sheet
     .getRange(1, 1, 1, accountHeaders.length)
     .getValues()[0];
-  if (!headersMatch_(accountCurrent, accountHeaders)) oldHeaders = null;
+  if (!headersMatch_(accountCurrent, accountHeaders)) {
+    const previousCurrent = sheet
+      .getRange(1, 1, 1, previousHeaders.length)
+      .getValues()[0];
+    oldHeaders = headersMatch_(previousCurrent, previousHeaders)
+      ? previousHeaders
+      : null;
+  }
   if (!oldHeaders) return;
   const lastRow = sheet.getLastRow();
   const oldRows =
@@ -2674,13 +2687,17 @@ function migrateLegacyInvestmentHeaders_(sheet, spec) {
       return row[0] !== "";
     })
     .map(function (row) {
+      const isLegacy = oldHeaders === accountHeaders;
       return [
         row[0],
         row[1],
-        "manual",
-        row[5] === "" ? true : row[5],
-        row[6],
-        row[7],
+        isLegacy ? "manual" : row[2],
+        (isLegacy ? row[4] : "") || APP.sharedAssignmentId,
+        (isLegacy ? row[5] : row[3]) === ""
+          ? true
+          : (isLegacy ? row[5] : row[3]),
+        isLegacy ? row[6] : row[4],
+        isLegacy ? row[7] : row[5],
       ];
     });
   sheet
@@ -2920,7 +2937,6 @@ function getTransactionSheet_() {
     TABLES.transactions.name,
   );
   sheet.setFrozenRows(1);
-  sheet.getRange("E:E").setNumberFormat("$#,##0.00");
   return sheet;
 }
 function getLedgerSheet_() {
@@ -2933,7 +2949,6 @@ function getLedgerSheet_() {
 }
 function configureLedger_(sheet) {
   sheet.setFrozenRows(1);
-  sheet.getRange("H:H").setNumberFormat("$#,##0.00");
   sheet.hideColumns(9, 6);
   if (!sheet.getFilter())
     sheet

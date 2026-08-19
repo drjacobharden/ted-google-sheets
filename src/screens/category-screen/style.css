@@ -1,0 +1,282 @@
+category-screen {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.category-screen__layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.category-screen__panel {
+  overflow: hidden;
+  background: var(--surface-base);
+  flex: 1;
+}
+
+category-screen .list {
+  min-height: 200px;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* .category-screen .list[selection-active] .table-row[selected] {
+  opacity: 1;
+} */
+
+/* 
+
+Table items
+- the table is set up in a 4 column grid
+  - column 1 = checkbox
+  - column 2 = name
+  - column 3 = transaction count
+  - column 4 = total spend / income
+
+*/
+
+/* Grid structure for each row */
+category-screen .table-grid {
+  display: grid;
+  grid-template-columns: 40px 3fr repeat(4, 1fr) 40px;
+  align-items: center;
+  padding: 0px var(--horizontal-screen-padding);
+}
+
+category-screen .table-header {
+  padding-top: 24px;
+  padding-bottom: 12px;
+  opacity: 0.5;
+}
+
+/* Base style of the row. Visible when no selection is made */
+category-screen .table-row {
+  --row-vertical-padding: 12px;
+
+  min-height: 24px;
+  padding: var(--row-vertical-padding) var(--horizontal-screen-padding);
+  border-top: 1px dotted var(--border);
+  cursor: pointer;
+  background-color: var(--surface);
+}
+
+/* Style when the item is selected */
+category-screen .table-row[selection-state="selected"] {
+  border-color: transparent;
+}
+
+/* Style when some item is selected but this one is not */
+category-screen .table-row[selection-state="unselected"] {
+  border-color: transparent;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+category-screen .table-row[selection-state="unselected"] check-box {
+  pointer-events: auto;
+}
+
+/* Base style of the selection backdrop. Hidden by default. */
+category-screen .table-row .selection-backdrop {
+  display: none;
+  grid-column: 1 / -1;
+  background-color: var(--row-selection-highlight);
+  border: 1px solid var(--row-selection-border);
+  width: calc(100% + 16px);
+  height: calc(100% + var(--row-vertical-padding) * 1.5);
+  margin-left: -8px;
+  grid-row: 1;
+  border-radius: var(--radius-xsmall);
+  pointer-events: none;
+}
+
+/* Style of the selection backdrop when the row is selected */
+category-screen .table-row[selection-state="selected"] .selection-backdrop {
+  display: block;
+}
+
+category-screen .table-row:not([disabled]) .selection-backdrop {
+  opacity: 1;
+}
+
+category-screen
+  .list[selection-active]
+  .table-row[selected]
+  :not(.selection-backdrop) {
+  opacity: 1;
+}
+
+category-screen .table-row .option-button custom-button {
+  height: 20px;
+  opacity: 0.5;
+  border-width: 0;
+}
+
+category-screen .table-row:first-child {
+  border-top: 0;
+}
+
+category-screen .table-row:hover {
+  background: var(--surface-highlight-subtle);
+}
+
+category-screen .table-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid var(--surface-highlight-subtle);
+  outline-offset: -3px;
+}
+
+category-screen .table-grid span {
+  padding: 0 20px;
+}
+
+.col-2,
+.col-3,
+.col-4,
+.col-5 {
+  padding: 0 20px;
+  grid-row: 1;
+}
+
+.col-3,
+.col-4,
+.col-5,
+.col-6 {
+  text-align: end;
+  grid-row: 1;
+}
+
+.col-1 {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.col-2 {
+  grid-column: 2;
+}
+
+.col-3 {
+  grid-column: 3;
+}
+
+.col-4 {
+  grid-column: 4;
+}
+
+.col-5 {
+  grid-column: 5;
+}
+
+.col-6 {
+  grid-column: 6;
+}
+
+.col-7 {
+  grid-column: 7;
+  grid-row: 1;
+}
+
+.col-1-2 {
+  grid-column-start: 1;
+  grid-column-end: 3;
+}
+
+category-screen .status {
+  border-radius: 999px;
+  height: 20px;
+  font-size: 12px;
+  margin-left: auto;
+  margin-right: 12px;
+}
+
+category-screen .status[status="syncing"] {
+  background-color: var(--syncing);
+  color: var(--syncing-dark);
+}
+
+category-screen .status[status="active"] {
+  background-color: var(--success);
+  color: var(--success-dark);
+}
+
+category-screen .status[status="archived"] {
+  background-color: var(--archived);
+  color: var(--archived-dark);
+}
+
+category-screen .table-footer {
+  display: grid;
+  grid-template-columns: auto 40px;
+  border-top: 1px solid var(--border);
+  padding: 12px var(--horizontal-screen-padding) 20px;
+}
+
+category-screen .table-footer .total-count {
+  font-weight: 400;
+  font-size: 13px;
+}
+
+category-screen .table-footer span[data-display] {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+category-screen .table-footer div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+category-screen .table-footer .table-footer-col {
+  padding: 0 20px;
+}
+
+category-screen .table-footer div custom-button {
+  margin: -8px 12px -8px -12px;
+}
+
+category-screen .table-footer div .sum-label {
+  font-size: 13px;
+  opacity: 0.6;
+  margin-left: auto;
+}
+
+/* Container around the header extending the grid row */
+
+/* Individual rows inside the table */
+
+.table-view-button {
+  border: 1px solid transparent;
+}
+
+.table-view-button.active {
+  background-color: var(--surface-highlight-subtle);
+  border: 1px solid var(--surface-highlight-strong);
+}
+
+.category-screen_page-control {
+  display: flex;
+  padding: 8px 28px 16px;
+}
+
+@media (max-width: 1080px) {
+  .category-screen__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .category-screen__panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

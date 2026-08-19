@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 function loadRouter(initialHash = "") {
-  const source = fs.readFileSync("js/router.js", "utf8");
+  const source = fs.readFileSync("src/router/router.ts", "utf8");
   const events = [];
   const listeners = new Map();
   let hash = initialHash;
@@ -151,9 +151,9 @@ test("investment drawers preserve the account-detail route", () => {
 });
 
 test("main treats drawer parameters as overlays rather than new content", () => {
-  const main = fs.readFileSync("js/main.js", "utf8");
-  const drawer = fs.readFileSync("js/routes/transaction-drawer.js", "utf8");
-  const entityDrawer = fs.readFileSync("js/routes/entity-drawer.js", "utf8");
+  const main = fs.readFileSync("src/main.ts", "utf8");
+  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
+  const entityDrawer = fs.readFileSync("src/screens/entity-drawer-screen/entity-drawer-screen.ts", "utf8");
 
   assert.match(main, /delete contentParams\.drawer/);
   assert.match(main, /delete contentParams\.transactionId/);
@@ -177,27 +177,30 @@ test("main treats drawer parameters as overlays rather than new content", () => 
 
 test("dashboard is registered as a routed module", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const router = fs.readFileSync("js/router.js", "utf8");
-  const route = fs.readFileSync("js/routes/dashboard.js", "utf8");
-  assert.match(router, /dashboard:\s*\{[\s\S]*template: "route-dashboard"[\s\S]*script: "js\/routes\/dashboard\.js"[\s\S]*window\.DashboardRoute/);
-  assert.match(html, /<template id="route-dashboard">/);
+  const router = fs.readFileSync("src/router/router.ts", "utf8");
+  const route = fs.readFileSync("src/screens/dashboard-screen/dashboard-screen.ts", "utf8");
+  assert.match(router, /dashboard:\s*\{\s*template: "route-dashboard",?\s*\}/);
+  assert.match(html, /<template id="route-dashboard">\s*<dashboard-screen><\/dashboard-screen>/);
+  assert.doesNotMatch(html, /js\/routes\/dashboard\.js/);
   assert.doesNotMatch(html, /<script src="js\/investments\.js"/);
-  assert.match(route, /function mount\(root\)/);
-  assert.match(route, /function unmount\(\)/);
+  assert.match(route, /class DashboardScreen extends HTMLElement/);
+  assert.match(route, /connectedCallback\(\): void/);
+  assert.match(route, /disconnectedCallback\(\): void/);
 });
 
 test("archived entities use one routed list and the shared edit drawer", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const router = fs.readFileSync("js/router.js", "utf8");
-  const main = fs.readFileSync("js/main.js", "utf8");
-  const route = fs.readFileSync("js/routes/entity-archive.js", "utf8");
-  const drawer = fs.readFileSync("js/routes/entity-drawer.js", "utf8");
+  const router = fs.readFileSync("src/router/router.ts", "utf8");
+  const main = fs.readFileSync("src/main.ts", "utf8");
+  const route = fs.readFileSync("src/screens/entity-archive-screen/entity-archive-screen.ts", "utf8");
+  const template = fs.readFileSync("src/screens/entity-archive-screen/template.html", "utf8");
+  const drawer = fs.readFileSync("src/screens/entity-drawer-screen/entity-drawer-screen.ts", "utf8");
 
-  assert.match(router, /"entity-archive":\s*\{[\s\S]*js\/routes\/entity-archive\.js/);
+  assert.match(router, /"entity-archive":\s*\{\s*template: "route-entity-archive",?\s*\}/);
   assert.match(main, /"entity-archive": window\.EntityArchiveRoute/);
   assert.match(html, /<template id="route-entity-archive">/);
-  assert.equal((html.match(/View archived (?:categories|vendors|people)/g) || []).length, 3);
-  assert.match(route, /BudgetAPI\.listArchivedEntities/);
+  assert.match(template, /Archived entities/);
+  assert.match(route, /APIs\.budget\.listArchivedEntities/);
   assert.match(route, /drawer: "entity-edit"/);
   assert.match(drawer, /reactivateCategory/);
   assert.match(drawer, /Reactivate/);
@@ -207,15 +210,16 @@ test("archived entities use one routed list and the shared edit drawer", () => {
 
 test("settings route delegates state to cached custom-element forms", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const main = fs.readFileSync("js/main.js", "utf8");
-  const route = fs.readFileSync("js/routes/settings.js", "utf8");
-  const userForm = fs.readFileSync("js/components/user-form.js", "utf8");
-  const urlForm = fs.readFileSync("js/components/url-form.js", "utf8");
+  const main = fs.readFileSync("src/main.ts", "utf8");
+  const route = fs.readFileSync("src/screens/settings-screen/settings-screen.ts", "utf8");
+  const template = fs.readFileSync("src/screens/settings-screen/template.html", "utf8");
+  const userForm = fs.readFileSync("src/components/user-form/user-form.ts", "utf8");
+  const urlForm = fs.readFileSync("src/components/url-form/url-form.ts", "utf8");
 
-  assert.match(html, /id="route-settings"[\s\S]*<user-form><\/user-form>[\s\S]*<url-form><\/url-form>/);
-  assert.match(html, /js\/routes\/settings\.js/);
+  assert.match(template, /<user-form><\/user-form>[\s\S]*<url-form><\/url-form>/);
+  assert.doesNotMatch(html, /js\/routes\/settings\.js/);
   assert.match(main, /settings: window\.SettingsRoute/);
-  assert.doesNotMatch(route, /querySelector|addEventListener/);
+  assert.match(route, /class SettingsScreen extends HTMLElement/);
   assert.match(userForm, /const users = window\.BudgetAPI\.listUsers\(\)/);
   assert.doesNotMatch(userForm, /await window\.BudgetAPI\.listUsers/);
   assert.match(userForm, /budget:reference-data-changed/);
@@ -227,8 +231,8 @@ test("settings route delegates state to cached custom-element forms", () => {
 
 test("startup uses a cold splash, cached refresh lifecycle, and paginated monthly transactions", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const main = fs.readFileSync("js/main.js", "utf8");
-  const transactions = fs.readFileSync("js/routes/transactions.js", "utf8");
+  const main = fs.readFileSync("src/main.ts", "utf8");
+  const transactions = fs.readFileSync("src/screens/transactions/transactions.ts", "utf8");
 
   assert.match(html, /id="app-loading-splash"/);
   assert.match(html, /id="app-refresh-indicator"/);

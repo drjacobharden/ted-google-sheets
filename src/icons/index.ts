@@ -1,0 +1,92 @@
+import dashboardIcon from "./dashboard.html" with { type: "text" };
+import transcationsIcon from "./transactions.html" with { type: "text" };
+import labelIcon from "./label.html" with { type: "text" };
+import peopleIcon from "./people.html" with { type: "text" };
+import chartIcon from "./chart.html" with { type: "text" };
+import boxIcon from "./box.html" with { type: "text" };
+import plusIcon from "./plus.html" with { type: "text" };
+import importIcon from "./import.html" with { type: "text" };
+import syncIcon from "./sync.html" with { type: "text" };
+import settingsIcon from "./settings.html" with { type: "text" };
+import cartIcon from "./cart.html" with { type: "text" };
+import sidebarIcon from "./sidebar.html" with { type: "text" };
+import chevronSelectIcon from "./chevron-select.html" with { type: "text" };
+import chevronDownIcon from "./chevron-down.html" with { type: "text" };
+import chevronUpIcon from "./chevron-up.html" with { type: "text" };
+import chevronRightIcon from "./chevron-right.html" with { type: "text" };
+import chevronLeftIcon from "./chevron-left.html" with { type: "text" };
+import filterIcon from "./filter.html" with { type: "text" };
+import searchIcon from "./search.html" with { type: "text" };
+import sortIcon from "./sort.html" with { type: "text" };
+import checkmarkIcon from "./checkmark.html" with { type: "text" };
+import dotsHorizontalIcon from "./dots-horizontal.html" with { type: "text" };
+import dotsVerticalIcon from "./dots-vertical.html" with { type: "text" };
+import closeIcon from "./close.html" with { type: "text" };
+import pencilIcon from "./pencil.html" with { type: "text" };
+import pieChartIcon from "./pie-chart.html" with { type: "text" };
+import restoreIcon from "./restore.html" with { type: "text" };
+import trashIcon from "./trash.html" with { type: "text" };
+import questionMarkIcon from "./question-mark.html" with { type: "text" };
+import infoIcon from "./info.html" with { type: "text" };
+import targetIcon from "./target.html" with { type: "text" };
+import slidersIcon from "./sliders.html" with { type: "text" };
+import calendarIcon from "./calendar.html" with { type: "text" };
+import dollarSignIcon from "./dollar-sign.html" with { type: "text" };
+import noteIcon from "./note.html" with { type: "text" };
+import downloadIcon from "./download.html" with { type: "text" };
+
+export type IconKeys = keyof typeof iconStrings;
+
+const iconStrings = {
+  dashboard: dashboardIcon,
+  transactions: transcationsIcon,
+  label: labelIcon,
+  people: peopleIcon,
+  chart: chartIcon,
+  box: boxIcon,
+  plus: plusIcon,
+  import: importIcon,
+  sync: syncIcon,
+  settings: settingsIcon,
+  cart: cartIcon,
+  sidebar: sidebarIcon,
+  chevronRight: chevronRightIcon,
+  chevronLeft: chevronLeftIcon,
+  chevronDown: chevronDownIcon,
+  filter: filterIcon,
+  search: searchIcon,
+  sort: sortIcon,
+  checkmark: checkmarkIcon,
+  dotsHorizontal: dotsHorizontalIcon,
+  dotsVertical: dotsVerticalIcon,
+  close: closeIcon,
+  pencil: pencilIcon,
+  pieChart: pieChartIcon,
+  restore: restoreIcon,
+  trash: trashIcon,
+  questionMark: questionMarkIcon,
+  chevronSelect: chevronSelectIcon,
+  chevronUp: chevronUpIcon,
+  info: infoIcon,
+  target: targetIcon,
+  sliders: slidersIcon,
+  calendar: calendarIcon,
+  dollarSign: dollarSignIcon,
+  note: noteIcon,
+  download: downloadIcon,
+};
+
+const iconTemplateCache = new Map();
+
+for (const [name, svgString] of Object.entries(iconStrings)) {
+  const template = document.createElement("template");
+  template.innerHTML = svgString.trim();
+  iconTemplateCache.set(name, template);
+}
+
+export function getIcon(name: IconKeys) {
+  const template = iconTemplateCache.get(name);
+  if (!template) return null;
+
+  return template.content.firstElementChild.cloneNode(true);
+}

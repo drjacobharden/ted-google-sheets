@@ -47,7 +47,7 @@ function loadOnboarding(options = {}) {
     console,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("js/onboarding.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("src/components/onboarding/onboarding.ts", "utf8"), context);
   return { onboarding: context.window.OnboardingUI, api, calls, values, events, getConfig: () => config, callbacks };
 }
 
@@ -89,8 +89,8 @@ test("connects and retains an endpoint only after all startup data loads", async
 
 test("markup and controller keep onboarding modal, verification, and endpoint sharing guarded", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const source = fs.readFileSync("js/onboarding.js", "utf8");
-  const urlForm = fs.readFileSync("js/components/url-form.js", "utf8");
+  const source = fs.readFileSync("src/components/onboarding/onboarding.ts", "utf8");
+  const urlForm = fs.readFileSync("src/components/url-form/url-form.ts", "utf8");
   assert.match(html, /id="onboarding-dialog"[\s\S]*role="dialog"[\s\S]*aria-modal="true"/);
   assert.doesNotMatch(html, /onboarding-close/);
   assert.match(html, /js\/api\.js/);

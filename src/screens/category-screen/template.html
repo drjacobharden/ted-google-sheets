@@ -1,0 +1,68 @@
+<div class="table-accessory-row table-action-row">
+  <custom-button
+    class="ghost-button table-view-button"
+    label="Expenses"
+    data-table-view="expense"
+    data-action="change-tab"
+  >
+  </custom-button>
+  <custom-button
+    class="ghost-button table-view-button"
+    label="Income"
+    data-table-view="income"
+    data-action="change-tab"
+  >
+  </custom-button>
+
+  <date-range-picker-2 class="push-right"></date-range-picker-2>
+  <div class="vertical-divider"></div>
+  <dropdown-menu
+    id="sort-categories-dropdown"
+    label="Sort"
+    icon="sort"
+    hide-trailing-chevron
+  ></dropdown-menu>
+
+  <filter-bar id="categories-filter-bar"></filter-bar>
+</div>
+
+<div class="content">
+  <div class="category-screen__layout">
+    <section
+      class="category-screen__panel"
+      aria-labelledby="category-list-title"
+    >
+      <div class="table-grid table-header">
+        <div></div>
+        <span>Name</span>
+        <span class="push-right">Status</span>
+        <span class="push-right">Transaction count</span>
+        <span class="push-right">Avg transactions</span>
+        <span class="push-right">Total</span>
+      </div>
+      <div class="list" id="category-list" aria-live="polite"></div>
+    </section>
+  </div>
+</div>
+
+<div class="table-footer">
+  <div>
+    <custom-button
+      class="secondary-button"
+      data-action="clear-selection"
+      label="Clear selection"
+      hidden
+    ></custom-button>
+    <span class="total-count">0</span>
+    <div class="horizontal-center push-right">
+      <div class="table-footer-col">
+        <span class="sum-label">Avg transaction</span>
+        <span class="avg-sum" data-display="average">$0</span>
+      </div>
+      <div class="table-footer-col">
+        <span class="sum-label">Total</span>
+        <span class="total-sum" data-display="sum">$0</span>
+      </div>
+    </div>
+  </div>
+</div>

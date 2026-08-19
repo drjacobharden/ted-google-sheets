@@ -1,0 +1,75 @@
+*,
+*::before,
+*::after {
+  display: block;
+  box-sizing: border-box;
+}
+
+title {
+  display: none;
+}
+
+html,
+body {
+  background-color: var(--color-background);
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+strong,
+span,
+td,
+th,
+input,
+textarea {
+  font-family: "Urbanist";
+  text-wrap: pretty;
+}
+
+.container {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding-top: var(--section-block-padding);
+  padding-bottom: var(--section-block-padding);
+
+  @media (max-width: 600px) {
+    padding-inline: var(--section-inline-padding);
+  }
+}
+
+.background {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  height: 100dvh;
+  width: 100dvw;
+  background-color: white;
+  background-image:
+    linear-gradient(to right, rgba(15, 15, 15, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 15, 15, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center top;
+}
+
+.page-scroll {
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+}
+
+.page-section {
+  min-height: 100dvh;
+
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}

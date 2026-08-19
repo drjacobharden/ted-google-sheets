@@ -1,0 +1,23 @@
+<header class="import-heading"><div><p class="eyebrow">Google Sheets</p><h1>Import CSV data</h1><p>Map a recurring CSV format, review every row, then commit the ready records together.</p></div><button class="secondary-button" type="button" data-import-action="clear">Clear import</button></header>
+<section class="import-card"><h2>1. Upload CSV</h2><p>Files stay in this browser while you review them.</p><label class="import-field"><span>CSV file</span><input id="import-file" type="file" accept=".csv,text/csv" /></label><p class="import-message" id="import-file-message" role="status"></p><div class="import-preview" id="import-source-preview"></div></section>
+<section class="import-card import-step" id="import-profile-step" hidden><h2>2. Choose a mapping profile</h2><p>Header matches are suggested, but are not applied until you confirm.</p>
+  <form id="import-profile-form"><div class="import-grid">
+    <label class="import-field wide"><span>Saved profile</span><select name="profileId"><option value="">Create a new profile</option></select></label>
+    <label class="import-field"><span>Target</span><select name="target"><option value="budget">Budget transactions</option><option value="investment">Investment months</option></select></label>
+    <label class="import-field"><span>Profile name</span><input name="name" maxlength="150" required /></label>
+    <label class="import-field wide" data-investment-account-field hidden><span>Investment account</span><select name="investmentAccountId"></select></label>
+  </div><div class="import-actions"><button class="primary-button" type="submit">Continue</button><button class="secondary-button" type="button" data-import-action="archive-profile" hidden>Archive profile</button></div></form>
+  <p class="import-message" id="import-profile-message" role="status"></p>
+</section>
+<section class="import-card import-step" id="import-mapping-step" hidden><h2>3. Map CSV columns</h2><p>Choose source columns and parsing rules, then verify the preview.</p><form id="import-mapping-form"></form><p class="import-message" id="import-mapping-message" role="status"></p></section>
+<section class="import-card import-step" id="import-review-step" hidden>
+  <h2>4. Review staged rows</h2>
+  <p>Nothing is saved until you commit the import. Source descriptions are read-only; internal references and imported values remain editable.</p>
+  <div id="import-summary"></div>
+  <div class="import-filter-row" id="import-filters"></div>
+  <div class="import-review-wrap" id="import-budget-review"><table class="import-table"><thead id="import-review-head"></thead><tbody id="import-review-body"></tbody></table></div>
+  <div class="investment-import-review" id="import-investment-review" hidden></div>
+  <div class="import-actions"><button class="secondary-button" type="button" data-import-action="back-to-mapping">Edit mapping</button><button class="primary-button" type="button" data-import-action="commit">Commit import</button><button class="secondary-button" type="button" data-import-action="load-more">Load more</button></div>
+  <p class="import-message" id="import-review-message" role="status"></p>
+</section>
+<section class="import-card import-step import-progress-view" id="import-progress-step" hidden><h2>Committing import</h2><p id="import-progress-summary">Keep this page open while each step is confirmed in Google Sheets.</p><ol class="import-commit-progress" id="import-commit-progress"></ol><div class="import-actions"><button class="primary-button" type="button" data-import-action="retry-commit" hidden>Retry failed step</button><button class="secondary-button" type="button" data-import-action="return-review" hidden>Return to review</button><button class="secondary-button" type="button" data-import-action="finish-import" hidden>Start another import</button><button class="secondary-button" type="button" data-import-action="open-sync" hidden>Open Sync</button></div><p class="import-message" id="import-progress-message" role="status"></p></section>

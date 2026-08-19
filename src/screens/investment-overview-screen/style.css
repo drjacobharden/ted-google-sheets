@@ -1,0 +1,20 @@
+investment-overview-screen { display: block; }
+.investment-overview-screen__chart-card { margin-top: 20px; }
+.investment-overview-screen__chart { position: relative; min-height: 240px; padding: 12px 20px 20px; }
+.investment-overview-screen__chart svg { width: 100%; height: auto; overflow: visible; }
+.investment-overview-screen__chart .trend-area { fill: rgba(111, 157, 102, .14); }
+.investment-overview-screen__chart .trend-line { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.investment-overview-screen__chart .trend-contribution-line { stroke: #a56824; }
+.investment-overview-screen__chart .trend-grid line { stroke: var(--border); stroke-width: 1; }
+.investment-overview-screen__chart .trend-y-axis { stroke: var(--border-strong); stroke-width: 1; }
+.investment-overview-screen__chart circle { fill: white; stroke: var(--accent-dark); stroke-width: 3; }
+.investment-overview-screen__chart .trend-contribution-point { stroke: #a56824; }
+.investment-overview-screen__chart text { fill: var(--muted); font-size: 12px; }
+.investment-overview-screen__allocation { padding: 0 28px 26px; }
+.investment-overview-screen__allocation h3 { margin: 0 0 14px; }
+.investment-overview-screen__allocation-row { margin-top: 14px; }
+.investment-overview-screen__allocation-row > div:first-child { display: flex; justify-content: space-between; gap: 16px; }
+.investment-overview-screen__allocation-row small { display: block; margin-top: 5px; color: var(--muted); }
+.investment-overview-screen__allocation-track { height: 8px; margin-top: 7px; overflow: hidden; border-radius: 999px; background: var(--accent-soft); }
+.investment-overview-screen__allocation-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+@media (max-width: 560px) { .investment-overview-screen__chart { padding-inline: 4px; } }

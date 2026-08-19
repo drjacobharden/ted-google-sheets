@@ -1,0 +1,30 @@
+<div class="vendors-screen__layout">
+  <section class="vendors-screen__panel" aria-labelledby="vendor-list-title">
+    <div class="table-header">
+      <div>
+        <h2 id="vendor-list-title">All vendors</h2>
+        <p id="vendor-count">0 vendors</p>
+      </div>
+      <label class="search-field vendors-screen__search">
+        <span class="sr-only">Search vendors</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.5"></circle>
+          <path d="m16 16 4 4"></path>
+        </svg>
+        <input id="vendor-search" type="search" placeholder="Search vendors" />
+      </label>
+    </div>
+    <div class="vendors-screen__list" id="vendor-list" aria-live="polite"></div>
+  </section>
+  <form class="vendors-screen__form" id="vendor-form" novalidate>
+    <h2>Add a vendor</h2>
+    <p>Create a reusable vendor for future transactions.</p>
+    <label class="form-field">
+      <span>Name</span>
+      <input name="vendorName" type="text" maxlength="80" placeholder="e.g. Local Market" required />
+    </label>
+    <p class="vendors-screen__message" aria-live="polite"></p>
+    <button class="primary-button" type="submit">Add vendor</button>
+    <a class="secondary-button vendors-screen__archive-link" href="#/budgeting/vendors/archive">View archived vendors</a>
+  </form>
+</div>

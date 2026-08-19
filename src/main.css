@@ -1,0 +1,156 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+button,
+span,
+p,
+h1,
+h2,
+h3 {
+  color: var(--text);
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+button,
+span,
+p {
+  /* Scales font smoothly from 12px (0.75rem) at 390px screen up to 14px (0.875rem) at 1280px screen */
+  font-size: clamp(0.75rem, 0.695rem + 0.225vw, 0.875rem);
+
+  /* Scales line-height smoothly from 16px (1rem) at 390px screen up to 20px (1.25rem) at 1280px screen */
+  line-height: clamp(1rem, 0.89rem + 0.45vw, 1.25rem);
+
+  /* Body tracking spec */
+  letter-spacing: 0;
+}
+
+span strong,
+p strong {
+  font-weight: 500;
+}
+
+/* 
+
+APP HIERARCHY
+- .app-shell is the outer grid which separates the nav bar and the workspace
+- .route-outlet is the main content area on the right side where the routes get rendered
+- .screen is the wrapper around individual screens
+- .content is the scrollable area for a screen. Any non-scrollable content needs to go above or below.
+
+*/
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--background);
+}
+
+#route-outlet {
+  grid-area: 1 / 1;
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--background);
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  padding-inline: var(--horizontal-screen-padding);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+#route-outlet > .screen {
+  padding-top: 60px;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.vertical {
+  display: flex;
+  flex-direction: column;
+}
+
+.horizontal {
+  display: flex;
+  flex-direction: row;
+}
+
+.flex {
+  flex: 1;
+}
+
+.horizontal-center {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.push-right {
+  margin-left: auto;
+}
+
+.push-left {
+  margin-right: auto;
+}
+
+.vertical-divider {
+  height: 100%;
+  width: 1px;
+  background-color: var(--on-bg-border);
+}
+
+.table-accessory-row {
+  display: flex;
+  padding: 8px var(--horizontal-screen-padding);
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  gap: 8px;
+}
+
+.scroll-container {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  flex: 1;
+}
+
+svg {
+  height: 16px;
+  width: 16px;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

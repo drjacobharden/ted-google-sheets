@@ -1,0 +1,8 @@
+budget-screen {
+  h1 {
+    width: 100%;
+    text-align: center;
+    overflow: hidden;
+    font-size: clamp(48px, 7vw, 80px);
+  }
+}

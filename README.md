@@ -20,7 +20,7 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/onboarding-1.png" alt="Onboarding welcome" width="50%"></td>
+        <td width="50%"><img src="assets/images/onboarding-1.png" alt="Onboarding welcome" width="50%"></td>
     </tr>
 </table>
 
@@ -34,8 +34,8 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/onboarding-2.png" alt="Onboarding copy spreadsheet screen"></td>
-        <td width="50%"><img src="images/google-copy.png" alt="Google copy document confirmation"></td>
+        <td width="50%"><img src="assets/images/onboarding-2.png" alt="Onboarding copy spreadsheet screen"></td>
+        <td width="50%"><img src="assets/images/google-copy.png" alt="Google copy document confirmation"></td>
     </tr>
 </table>
 
@@ -45,8 +45,8 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/google-menu.png" alt="TED menu"></td>
-         <td width="50%"><img src="images/google-auth-alert.png" alt="Google authorization needed alert"></td>
+        <td width="50%"><img src="assets/images/google-menu.png" alt="TED menu"></td>
+         <td width="50%"><img src="assets/images/google-auth-alert.png" alt="Google authorization needed alert"></td>
     </tr>
 </table>
 
@@ -58,8 +58,8 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/google-verify-1.png" alt="Google verification screen"></td>
-         <td width="50%"><img src="images/google-verify-2.png" alt="Google access screen"></td>  
+        <td width="50%"><img src="assets/images/google-verify-1.png" alt="Google verification screen"></td>
+         <td width="50%"><img src="assets/images/google-verify-2.png" alt="Google access screen"></td>  
     </tr>
 </table>
 
@@ -67,7 +67,7 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/google-confirm.png" alt="Google confirmation that budget was initialized"></td>
+        <td width="50%"><img src="assets/images/google-confirm.png" alt="Google confirmation that budget was initialized"></td>
     </tr>
 </table>
 
@@ -77,8 +77,8 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/app-script-menu.png" alt="App script menu"></td>
-         <td width="50%"><img src="images/app-script-page.png" alt="App script page"></td>
+        <td width="50%"><img src="assets/images/app-script-menu.png" alt="App script menu"></td>
+         <td width="50%"><img src="assets/images/app-script-page.png" alt="App script page"></td>
     </tr>
 </table>
 
@@ -88,8 +88,8 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-        <td width="50%"><img src="images/app-script-deployment-1.png" alt="App script deployment settings"></td>
-         <td width="50%"><img src="images/app-script-deployment-2.png" alt="App script url"></td>
+        <td width="50%"><img src="assets/images/app-script-deployment-1.png" alt="App script deployment settings"></td>
+         <td width="50%"><img src="assets/images/app-script-deployment-2.png" alt="App script url"></td>
     </tr>
 </table>
 
@@ -99,8 +99,8 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-         <td width="50%"><img src="images/app-script-id.png" alt="App script page"></td>
-        <td width="50%"><img src="images/onboarding-3.png" alt="App script menu"></td>
+         <td width="50%"><img src="assets/images/app-script-id.png" alt="App script page"></td>
+        <td width="50%"><img src="assets/images/onboarding-3.png" alt="App script menu"></td>
     </tr>
 </table>
 
@@ -110,8 +110,8 @@ If you are starting a new spreadsheet from scratch, you will need to set up the 
 
 <table>
     <tr>
-         <td width="50%"><img src="images/onboarding-4.png" alt="App script page"></td>
-        <td width="50%"><img src="images/onboarding-5.png" alt="App script menu"></td>
+         <td width="50%"><img src="assets/images/onboarding-4.png" alt="App script page"></td>
+        <td width="50%"><img src="assets/images/onboarding-5.png" alt="App script menu"></td>
     </tr>
 </table>
 
@@ -128,8 +128,8 @@ TED fully supports collaboration and multiple household members entering and edi
 
 <table>
     <tr>
-         <td width="50%"><img src="images/onboarding-6.png" alt="App script page"></td>
-         <td width="50%"><img src="images/onboarding-7.png" alt="App script page"></td>
+         <td width="50%"><img src="assets/images/onboarding-6.png" alt="App script page"></td>
+         <td width="50%"><img src="assets/images/onboarding-7.png" alt="App script page"></td>
     </tr>
 </table>
 
@@ -139,8 +139,8 @@ TED fully supports collaboration and multiple household members entering and edi
 
 <table>
     <tr>
-         <td width="50%"><img src="images/onboarding-4.png" alt="App script page"></td>
-        <td width="50%"><img src="images/onboarding-5.png" alt="App script menu"></td>
+         <td width="50%"><img src="assets/images/onboarding-4.png" alt="App script page"></td>
+        <td width="50%"><img src="assets/images/onboarding-5.png" alt="App script menu"></td>
     </tr>
 </table>
 

@@ -1,0 +1,5 @@
+entity-detail-screen { display: block; }
+.entity-detail-screen__summary .summary-card { min-height: 105px; }
+.entity-detail-screen__card:has(> .transaction-state:not([hidden])) { display: flex; min-height: clamp(430px, calc(100vh - 330px), 720px); flex-direction: column; }
+.entity-detail-screen__card:has(> .transaction-state:not([hidden])) > .transaction-state { flex: 1; }
+@media (max-width: 680px) { .entity-detail-screen__summary { grid-template-columns: 1fr; } }

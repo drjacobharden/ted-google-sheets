@@ -1,0 +1,216 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { eventTargetElement } from "../../utilities/ui-utilities";
+import { APIs } from "../../api/api";
+import type { BudgetEntity, BudgetTransaction, EntityKind } from "../../api/budget-api";
+import type { RouteName } from "../../router/types";
+import { money } from "../../utilities/view-formatters";
+import templateString from "./template.html" with { type: "text" };
+import { appState } from "../../state/app-state";
+import { filterForBudgetingContext } from "../budgeting/budgeting-context";
+
+const template = document.createElement("template");
+template.innerHTML = templateString;
+
+interface MutablePageTitle extends HTMLElement { title: string; eyebrow: string; }
+interface EntityDetailSettings { label: string; route: RouteName; records(): BudgetEntity[]; }
+interface SelectedEntity { kind: EntityKind; id: string; }
+
+const ENTITY_DETAIL_CONFIG: Record<EntityKind, EntityDetailSettings> = {
+  category: { label: "category", route: "budgeting/categories", records: () => APIs.budget.listCategories({ type: "expense" }) },
+  vendor: { label: "vendor", route: "budgeting/vendors", records: () => APIs.budget.listVendors() },
+  assignment: { label: "person", route: "budgeting/people", records: () => APIs.budget.listPeople() },
+};
+
+const RENDER_EVENTS = [
+  "budget:transaction-queued", "budget:transaction-saved", "budget:transaction-sync-changed",
+  "budget:transaction-restored", "budget:transaction-removed", "budget:transactions-loaded",
+  "budget:reference-data-changed", "budget:categories-changed", "budget:vendors-changed",
+  "budget:people-changed", "budget:entity-sync-changed",
+] as const;
+
+/** Displays one budget entity and its transaction activity. */
+export class EntityDetailScreen extends HTMLElement implements EventListenerObject {
+  #selected: SelectedEntity | null = null;
+  #header!: MutablePageTitle;
+  #editButton!: HTMLButtonElement;
+  #summary!: HTMLElement;
+  #count!: HTMLElement;
+  #list!: HTMLTableSectionElement;
+  #table!: HTMLElement;
+  #empty!: HTMLElement;
+  #listening = false;
+  #unsubscribeBudgetingContext: (() => void) | null = null;
+
+  /** Initializes the detail screen from the current route parameters. */
+  connectedCallback(): void {
+    if (!this.dataset.initialized) {
+      this.dataset.initialized = "true";
+      this.classList.add("screen");
+      this.dataset.screen = "entity-detail";
+      this.append(template.content.cloneNode(true));
+      this.#captureElements();
+    }
+    const { kind, id } = router.currentParams();
+    this.#selected = this.#isEntityKind(kind) && id ? { kind, id } : null;
+    if (!this.#selected) {
+      router.navigate("budgeting/transactions", this.#scopeParams());
+      return;
+    }
+    if (this.#listening) return;
+    this.#listening = true;
+    this.addEventListener("budgeting:header-action", this);
+    this.#editButton.addEventListener("click", this);
+    this.#list.addEventListener("click", this);
+    this.#list.addEventListener("keydown", this);
+    RENDER_EVENTS.forEach((name) => window.addEventListener(name, this));
+    this.#unsubscribeBudgetingContext = appState.subscribe(
+      "budgetingContext",
+      () => this.#render(),
+    );
+    this.#render();
+  }
+
+  /** Removes every listener owned by the entity detail screen. */
+  disconnectedCallback(): void {
+    if (!this.#listening) return;
+    this.#listening = false;
+    this.removeEventListener("budgeting:header-action", this);
+    this.#editButton.removeEventListener("click", this);
+    this.#list.removeEventListener("click", this);
+    this.#list.removeEventListener("keydown", this);
+    RENDER_EVENTS.forEach((name) => window.removeEventListener(name, this));
+    this.#unsubscribeBudgetingContext?.();
+    this.#unsubscribeBudgetingContext = null;
+  }
+
+  /** Routes date, edit, row, keyboard, and budget events to screen behavior. */
+  handleEvent(event: Event): void {
+    if (event.type === "budgeting:header-action") {
+      if ((event as CustomEvent).detail.action === "edit-entity") this.#handleEdit();
+    } else if (event.type === "click" && event.currentTarget === this.#editButton) this.#handleEdit();
+    else if (event.type === "click") this.#handleListClick(event);
+    else if (event.type === "keydown") this.#handleListKeydown(event);
+    else this.#render();
+  }
+
+  /** Captures the typed elements cloned from the detail template. */
+  #captureElements(): void {
+    this.#header = this.querySelector<MutablePageTitle>("page-title")!;
+    this.#editButton = this.querySelector<HTMLButtonElement>("#edit-entity")!;
+    this.#summary = this.querySelector<HTMLElement>("#entity-summary-grid")!;
+    this.#count = this.querySelector<HTMLElement>("#entity-transaction-count")!;
+    this.#list = this.querySelector<HTMLTableSectionElement>("#entity-transaction-list")!;
+    this.#table = this.querySelector<HTMLElement>("#entity-transaction-table-wrap")!;
+    this.#empty = this.querySelector<HTMLElement>("#entity-transaction-state")!;
+  }
+
+  /** Narrows a route parameter to a supported entity kind. */
+  #isEntityKind(value: string | undefined): value is EntityKind {
+    return value === "category" || value === "vendor" || value === "assignment";
+  }
+
+  /** Returns the entity selected by the current route. */
+  #record(): BudgetEntity | undefined {
+    if (!this.#selected) return undefined;
+    return ENTITY_DETAIL_CONFIG[this.#selected.kind].records().find((item) => item.id === this.#selected?.id);
+  }
+
+  /** Returns matching transactions inside the selected date range. */
+  #transactions(): BudgetTransaction[] {
+    if (!this.#selected) return [];
+    const field: Record<EntityKind, "categoryId" | "vendorId" | "assignmentId"> = {
+      category: "categoryId", vendor: "vendorId", assignment: "assignmentId",
+    };
+    const selected = this.#selected;
+    const transactions = filterForBudgetingContext(
+      appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [],
+    );
+    return transactions
+      .filter((item) => item[field[selected.kind]] === selected.id)
+      .filter((item) => selected.kind === "assignment" || item.type !== "income")
+      .sort((left, right) => right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt));
+  }
+
+  /** Builds one summary card using the legacy route markup. */
+  #card(label: string, value: string, extra = ""): string {
+    return `<article class="summary-card"><div><p>${label}</p><strong class="${extra}">${value}</strong></div></article>`;
+  }
+
+  /** Renders entity metadata, summary metrics, and matching transactions. */
+  #render(): void {
+    if (!this.#selected) return;
+    const entity = this.#record();
+    if (!entity) {
+      if (!appController.isReferenceDataLoaded()) {
+        this.#header.title = "Loading details…";
+        this.#editButton.disabled = true;
+        this.#summary.replaceChildren();
+        this.#table.hidden = true;
+        this.#empty.hidden = false;
+        this.#empty.innerHTML = '<div class="spinner" aria-hidden="true"></div><p>Loading details…</p>';
+        return;
+      }
+      router.navigate(ENTITY_DETAIL_CONFIG[this.#selected.kind].route, this.#scopeParams());
+      return;
+    }
+    const items = this.#transactions();
+    const settings = ENTITY_DETAIL_CONFIG[this.#selected.kind];
+    this.#header.title = entity.name;
+    this.#header.eyebrow = `${settings.label} details`;
+    this.#editButton.textContent = `Edit ${settings.label}`;
+    const sync = APIs.budget.getEntitySyncStatus(this.#selected.kind, this.#selected.id);
+    this.#editButton.disabled = Boolean(sync);
+    this.#editButton.title = sync ? "Available after sync completes" : "";
+    if (this.#selected.kind === "assignment") {
+      const income = items.filter((item) => item.type === "income").reduce((total, item) => total + Number(item.amount || 0), 0);
+      const expenses = items.filter((item) => item.type !== "income").reduce((total, item) => total + Number(item.amount || 0), 0);
+      this.#summary.innerHTML = this.#card("Income", money(income), "amount-income") + this.#card("Expenses", money(expenses), "amount-expense") + this.#card("Net activity", money(income - expenses));
+    } else {
+      const total = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      this.#summary.innerHTML = this.#card("Total spent", money(total), "amount-expense") + this.#card("Transactions", String(items.length)) + this.#card("Average transaction", money(items.length ? total / items.length : 0));
+    }
+    this.#count.textContent = `${items.length} ${items.length === 1 ? "transaction" : "transactions"}`;
+    if (!items.length) {
+      this.#table.hidden = true;
+      this.#empty.hidden = false;
+      this.#empty.innerHTML = '<div class="empty-symbol" aria-hidden="true">$</div><h3>No activity in this scope</h3><p>Choose another year or assignment to see more transactions.</p>';
+    } else {
+      this.#list.replaceChildren(...items.map((item) => createTransactionRow(item)));
+      this.#empty.hidden = true;
+      this.#table.hidden = false;
+    }
+  }
+
+  /** Opens the selected entity in the editor drawer. */
+  #handleEdit(): void {
+    if (!this.#selected) return;
+    router.updateParams({ drawer: "entity-edit", entityKind: this.#selected.kind, entityId: this.#selected.id });
+  }
+
+  #scopeParams(): import("../../router/types").RouteParams {
+    const context = appState.get("budgetingContext");
+    return {
+      year: String(context.year),
+      assignment: context.assignmentId ?? "all",
+    };
+  }
+
+  /** Opens a clicked transaction in the editor drawer. */
+  #handleListClick(event: Event): void {
+    const row = eventTargetElement(event)?.closest<HTMLElement>("tr[data-transaction-id]");
+    if (row?.dataset.transactionId) router.updateParams({ drawer: "edit", transactionId: row.dataset.transactionId });
+  }
+
+  /** Opens a keyboard-activated transaction in the editor drawer. */
+  #handleListKeydown(event: Event): void {
+    if (!(event instanceof KeyboardEvent) || (event.key !== "Enter" && event.key !== " ")) return;
+    const row = eventTargetElement(event)?.closest<HTMLElement>("tr[data-transaction-id]");
+    if (!row?.dataset.transactionId) return;
+    event.preventDefault();
+    router.updateParams({ drawer: "edit", transactionId: row.dataset.transactionId });
+  }
+}
+
+if (!customElements.get("entity-detail-screen")) customElements.define("entity-detail-screen", EntityDetailScreen);

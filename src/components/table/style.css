@@ -1,0 +1,114 @@
+table-list {
+  --column-gap: 40px;
+  --outer-padding: var(--horizontal-screen-padding);
+  --vertical-padding: 20px;
+  --table-row-height: 57px;
+  --background: var(--elevation-1);
+  --hover: var(--elevation-2);
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0px;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-medium);
+
+  table {
+    width: 100%;
+    font-size: 14px;
+    border-collapse: collapse;
+
+    col.shrink {
+      width: 1px;
+    }
+
+    .table-sort-button {
+      display: inline-flex;
+      width: 100%;
+      align-items: center;
+      gap: 4px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      white-space: nowrap;
+      cursor: pointer;
+
+      &:hover {
+        color: var(--text);
+      }
+
+      &:focus-visible {
+        border-radius: var(--radius-xsmall);
+        outline: 2px solid var(--row-selection-border);
+        outline-offset: 3px;
+      }
+
+      svg {
+        width: 12px;
+        height: 12px;
+        flex: 0 0 auto;
+        stroke-width: 2px;
+      }
+    }
+
+    td {
+      padding: var(--vertical-padding) 12px;
+      border-bottom: 0;
+      border-left: 0;
+      border-right: 0;
+    }
+
+    th,
+    td {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      &:first-child {
+        padding-left: var(--outer-padding);
+      }
+
+      &:last-child {
+        padding-right: var(--outer-padding);
+      }
+    }
+
+    th {
+      padding: 24px 12px 12px;
+      opacity: 0.5;
+      font-weight: 400;
+
+      &[aria-sort]:not([aria-sort="none"]) {
+        opacity: 1;
+      }
+    }
+
+    tr:not(:first-child) {
+      border-top: 1px dotted var(--border);
+    }
+
+    tbody tr:hover {
+      background-color: var(--surface-highlight-subtle);
+    }
+
+    span {
+      padding: 2px 16px;
+      border-radius: 999px;
+    }
+
+    tr {
+      background-color: var(--surface);
+
+      .options custom-button {
+        height: 20px;
+        opacity: 0.5;
+        border-width: 0;
+        background-color: transparent;
+      }
+    }
+  }
+}

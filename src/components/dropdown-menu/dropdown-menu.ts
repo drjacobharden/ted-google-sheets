@@ -1,0 +1,286 @@
+import { getIcon, IconKeys } from "../../icons";
+import { appState } from "../../state/app-state";
+import { uuid } from "../../utilities/data-utilities";
+import { createEventHandler } from "../../utilities/event-utilities";
+import { CustomButton } from "../button/button";
+import { Popover } from "../popover-menu/popover-menu";
+import DropdownMenuTempString from "./template.html" with { type: "text" };
+
+const DropdownMenuTemp = document.createElement("template");
+DropdownMenuTemp.innerHTML = DropdownMenuTempString;
+
+export interface DropdownMenuItem {
+  key: string;
+  title: string;
+  icon?: IconKeys;
+  isDefaultValue?: boolean;
+  destructive?: boolean;
+  selectionIcon?: IconKeys | "none";
+}
+
+export interface DropdownSelectionEvent extends CustomEvent {
+  detail: {
+    value: string;
+    title: string;
+  };
+}
+
+export class DropdownMenu extends HTMLElement {
+  #trigger!: CustomButton;
+  #menu!: Popover;
+  #menuKey = "";
+  #listening = false;
+  #unsubscribeFromState: (() => void) | null = null;
+  #value: string | null = null;
+  #selection: HTMLElement | null = null;
+
+  /**
+   *
+   * Connections
+   *
+   */
+
+  connectedCallback(): void {
+    if (!this.dataset.initialized) {
+      this.dataset.initialized = "true";
+      const clone = DropdownMenuTemp.content.cloneNode(
+        true,
+      ) as DocumentFragment;
+      this.append(clone);
+      this.#trigger = this.querySelector(".dropdown-trigger")!;
+      this.#menu = this.querySelector("pop-over")!;
+      this.#menuKey = this.id || uuid();
+
+      this.#renderTrigger();
+      this.#renderItems();
+      this.#trigger.setAttribute("aria-haspopup", "menu");
+      this.#trigger.setAttribute("aria-expanded", "false");
+    }
+
+    if (this.#listening) return;
+    this.#listening = true;
+
+    this.#trigger.addEventListener("click", this);
+    this.#menu.addEventListener("click", this);
+    this.#menu.addEventListener("popover-dismiss", this);
+    this.#unsubscribeFromState = appState.subscribe(
+      "activeDropdownKey",
+      (activeKey) => {
+        if (activeKey !== this.#menuKey) this.#hideMenu();
+      },
+    );
+  }
+
+  disconnectedCallback() {
+    if (!this.#listening) return;
+    this.#listening = false;
+    this.#trigger.removeEventListener("click", this);
+    this.#menu.removeEventListener("click", this);
+    this.#menu.removeEventListener("popover-dismiss", this);
+    this.#unsubscribeFromState?.();
+    this.#unsubscribeFromState = null;
+    if (appState.get("activeDropdownKey") === this.#menuKey) {
+      appState.set("activeDropdownKey", null);
+    }
+  }
+
+  /**
+   *
+   * Rendering
+   *
+   */
+
+  #renderTrigger() {
+    const label = this.getAttribute("label")!;
+    const icon = this.getAttribute("icon")! as IconKeys;
+
+    const variant = this.getAttribute("variant");
+
+    if (variant === "ghost") {
+      this.#trigger.classList.remove("secondary-button");
+      this.#trigger.classList.add("ghost-button");
+    }
+
+    const hideTrailingChevron =
+      this.hasAttribute("hide-trailing-chevron") ?? false;
+
+    if (label) {
+      this.#trigger.label = label;
+    }
+
+    if (!hideTrailingChevron) {
+      this.#trigger.trailingIcon = "chevronDown";
+    }
+
+    if (icon) {
+      this.#trigger.leadingIcon = icon;
+    }
+  }
+
+  #renderItems() {
+    const items = JSON.parse(
+      this.getAttribute("items") ?? "[]",
+    ) as DropdownMenuItem[];
+
+    const children = items.map((item) => {
+      const { key, title, icon, isDefaultValue, destructive, selectionIcon } =
+        item;
+
+      const option = document.createElement("div");
+      option.classList.add("dropdown-menu-item");
+      option.dataset.value = key;
+      option.dataset.title = title;
+
+      if (icon) {
+        option.append(getIcon(icon));
+      }
+
+      const label = document.createElement("span");
+      label.textContent = title;
+      option.append(label);
+
+      if (selectionIcon !== "none") {
+        const icon = getIcon(selectionIcon ?? "checkmark");
+        icon.classList.add("selection-indicator");
+        option.append(icon);
+      }
+
+      if (isDefaultValue) {
+        this.#selection?.classList.remove("is-selected");
+        this.#selection = option;
+        this.#selection.classList.add("is-selected");
+        this.#value = key;
+        this.#trigger.label = title;
+      }
+
+      if (destructive) {
+        option.toggleAttribute("destructive", true);
+      }
+
+      return option;
+    });
+
+    this.#menu.replaceChildren(...children);
+  }
+
+  /**
+   *
+   * Event handling
+   *
+   */
+
+  handleEvent(event: Event) {
+    switch (event.type) {
+      case "click":
+        this.#handleClick(event);
+        break;
+
+      case "popover-dismiss":
+        this.close();
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  #handleClick(event: Event) {
+    const target = event.target as HTMLElement;
+
+    // Clicked the trigger
+    const trigger = target.closest('[data-action="toggle-dropdown"]');
+    if (trigger) {
+      const visible = this.#menu.classList.contains("is-visible");
+      if (visible) {
+        this.close();
+      } else {
+        appState.set("activeDropdownKey", this.#menuKey);
+        this.#menu.show(this.#trigger, {
+          side: "bottom",
+          align: "end",
+          gap: 4,
+        });
+        this.toggleAttribute("is-open", true);
+        this.#trigger.setAttribute("aria-expanded", "true");
+      }
+    }
+
+    // Clicked an item
+    const item = target.closest(".dropdown-menu-item") as HTMLElement;
+    if (item) {
+      this.#handleSelection(item);
+    }
+  }
+
+  //   Emit an event to alert an item was selected and pass along its data
+  #handleSelection(item: HTMLElement) {
+    const bubbles = this.hasAttribute("bubbles") ?? false;
+
+    this.#selection?.classList.remove("is-selected");
+    this.#selection = item;
+    this.#selection?.classList.add("is-selected");
+    this.#value = item.dataset.value ?? null;
+    this.#trigger.label = item.dataset.title!;
+    this.#events.dispatch(
+      {
+        id: this.#menuKey,
+        value: item.dataset.value!,
+        title: item.dataset.title!,
+      },
+      { bubbles },
+    );
+    this.close();
+  }
+
+  /**
+   *
+   * Setters
+   *
+   */
+
+  set items(array: DropdownMenuItem[]) {
+    this.setAttribute("items", JSON.stringify(array));
+
+    if (this.#menu) {
+      this.#renderItems();
+    }
+  }
+
+  set label(text: string) {
+    this.setAttribute("label", text);
+
+    if (this.#trigger) {
+      this.#trigger.label = text;
+    }
+  }
+
+  set icon(icon: IconKeys) {
+    this.setAttribute("icon", icon);
+
+    if (this.#trigger) {
+      this.#trigger.leadingIcon = icon;
+    }
+  }
+
+  close() {
+    if (appState.get("activeDropdownKey") === this.#menuKey) {
+      appState.set("activeDropdownKey", null);
+    } else {
+      this.#hideMenu();
+    }
+  }
+
+  #hideMenu() {
+    this.#menu.hide();
+    this.#trigger.setAttribute("aria-expanded", "false");
+    this.toggleAttribute("is-open", false);
+  }
+
+  #events = createEventHandler("dropdown-selection", this);
+
+  addListener = this.#events.addListener;
+  removeListener = this.#events.removeListener;
+  handleSelection = this.#events.handleEvent;
+}
+
+customElements.define("dropdown-menu", DropdownMenu);

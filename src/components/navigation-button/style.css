@@ -1,0 +1,44 @@
+.navigation-button {
+  display: flex;
+  flex-wrap: nowrap;
+  width: 100%;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 8px;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  transition:
+    background-color 240ms ease,
+    color 160ms ease;
+}
+
+.navigation-button:hover {
+  background: var(--ghost-button-hover);
+}
+
+.navigation-button:active {
+  background: var(--ghost-button-pressed);
+}
+
+.navigation-button.active {
+  color: var(--accent-dark-muted);
+  background: var(--accent-soft);
+}
+
+.navigation-button svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: var(--accent-muted);
+  stroke-width: 0.25px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.navigation-button.active svg {
+  stroke: var(--accent-dark);
+}

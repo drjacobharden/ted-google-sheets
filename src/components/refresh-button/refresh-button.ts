@@ -1,0 +1,71 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
+import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
+import { CustomButton } from "../button/button";
+
+export class RefreshButton extends CustomButton {
+  #overlayManager!: OverlayManager;
+
+  connectedCallback(): void {
+    this.setAttribute("leading-icon", "sync");
+    this.setAttribute("class", "secondary-button square");
+
+    super.connectedCallback();
+
+    this.#overlayManager = document.querySelector("overlay-manager")!;
+
+    this.addEventListener("click", this);
+    this.addEventListener("pointerenter", this);
+    this.addEventListener("pointerleave", this);
+  }
+
+  handleEvent(event: Event) {
+    switch (event.type) {
+      case "click":
+        this.#handleClick(event);
+        break;
+
+      case "pointerenter":
+        this.#pointerEnter(event);
+        break;
+
+      case "pointerleave":
+        this.#pointerLeave(event);
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  #handleClick(event: Event) {
+    const target = event.target as HTMLElement;
+    const button = target.closest("refresh-button");
+    if (!button) return;
+    void appController.initializeData({ refresh: true }).catch(() => {});
+  }
+
+  #pointerEnter(event: Event) {
+    const target = event.target as HTMLElement;
+    const button = target.closest("refresh-button") as HTMLElement;
+
+    this.#overlayManager.showTooltip(button, "Refresh Data", {
+      side: "bottom",
+      align: "center",
+      gap: 8,
+    });
+  }
+
+  #pointerLeave(event: Event) {
+    this.#overlayManager.hideTooltip();
+  }
+
+  disconnectedCallback() {
+    this.removeEventListener("click", this);
+  }
+}
+
+customElements.define("refresh-button", RefreshButton);

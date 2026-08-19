@@ -1,0 +1,178 @@
+import { router } from "../../router/router";
+import { appController } from "../../state/app-controller";
+import { InvestmentView } from "../../utilities/investment-view";
+import { createTransactionRow } from "../../utilities/transaction-row";
+import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
+import { APIs } from "../../api/api";
+import type { InvestmentAccount } from "../../api/investment-api";
+import { escapeHTML, messageFromError, money } from "../../utilities/view-formatters";
+import templateString from "./template.html" with { type: "text" };
+
+const template = document.createElement("template");
+template.innerHTML = templateString;
+
+/** Displays investment accounts and the account creation form. */
+export class InvestmentAccountsScreen extends HTMLElement implements EventListenerObject {
+  #form!: HTMLFormElement;
+  #message!: HTMLElement;
+  #list!: HTMLElement;
+  #count!: HTMLElement;
+  #includeArchived = false;
+  #listening = false;
+
+  /** Initializes the screen and subscribes to investment data events. */
+  connectedCallback(): void {
+    if (!this.dataset.initialized) {
+      this.dataset.initialized = "true";
+      this.classList.add("screen");
+      this.dataset.screen = "investment-accounts";
+      this.append(template.content.cloneNode(true));
+      this.#captureElements();
+    }
+    if (this.#listening) return;
+    this.#listening = true;
+    this.#form.addEventListener("submit", this);
+    this.#list.addEventListener("click", this);
+    this.#list.addEventListener("keydown", this);
+    window.addEventListener("budget:investments-changed", this);
+    window.addEventListener("budget:investments-loaded", this);
+    window.addEventListener("budget:people-changed", this);
+    this.#render();
+  }
+
+  /** Removes the listeners owned by this route screen. */
+  disconnectedCallback(): void {
+    if (!this.#listening) return;
+    this.#listening = false;
+    this.#form.removeEventListener("submit", this);
+    this.#list.removeEventListener("click", this);
+    this.#list.removeEventListener("keydown", this);
+    window.removeEventListener("budget:investments-changed", this);
+    window.removeEventListener("budget:investments-loaded", this);
+    window.removeEventListener("budget:people-changed", this);
+  }
+
+  /** Routes form, row, and application events to the corresponding behavior. */
+  handleEvent(event: Event): void {
+    if (event.type === "submit") this.#handleSubmit(event);
+    else if (event.type === "click") this.#handleListClick(event);
+    else if (event.type === "keydown") this.#handleListKeydown(event);
+    else {
+      this.#populateAssignments();
+      this.#render();
+    }
+  }
+
+  /** Captures the typed elements cloned from the screen template. */
+  #captureElements(): void {
+    this.#form = this.querySelector<HTMLFormElement>("#investment-account-form")!;
+    this.#message = this.querySelector<HTMLElement>(".investment-accounts-screen__message")!;
+    this.#list = this.querySelector<HTMLElement>("#investment-account-list")!;
+    this.#count = this.querySelector<HTMLElement>("#investment-account-count")!;
+    this.#populateAssignments();
+  }
+
+  #populateAssignments(): void {
+    const select = this.#form.elements.namedItem("assignmentId");
+    if (!(select instanceof HTMLSelectElement)) return;
+    const assignments = APIs.budget.listPeople();
+    select.replaceChildren(
+      ...assignments.map((assignment) => {
+        const option = document.createElement("option");
+        option.value = assignment.id;
+        option.textContent = assignment.name;
+        option.selected = assignment.id === APIs.budget.SHARED_ASSIGNMENT_ID;
+        return option;
+      }),
+    );
+  }
+
+  /** Renders all active investment accounts and their latest balances. */
+  #render(): void {
+    const accounts = APIs.investment
+      .accounts()
+      .filter((account) => this.#includeArchived || account.active !== false);
+    const latest = InvestmentView.latestByAccount();
+    this.#count.textContent = `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`;
+    if (!accounts.length) {
+      this.#list.innerHTML = '<div class="investment-accounts-screen__empty">Add your first investment account.</div>';
+      return;
+    }
+    this.#list.replaceChildren(...accounts.map((account) => this.#createAccountRow(account, Number(latest.get(account.id)?.balance ?? 0))));
+  }
+
+  /** Creates an accessible row for an investment account. */
+  #createAccountRow(account: InvestmentAccount, balance: number): HTMLElement {
+    const row = document.createElement("article");
+    row.className = "investment-accounts-screen__item";
+    row.dataset.investmentAccount = account.id;
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `View ${account.name} balance history`);
+    const assignment = APIs.budget.listAllPeople().find(
+      (item) => item.id === account.assignmentId,
+    );
+    row.innerHTML = `<span class="investment-accounts-screen__avatar" aria-hidden="true">${escapeHTML(account.name.charAt(0).toUpperCase())}</span><div class="investment-accounts-screen__details"><strong>${escapeHTML(account.name)}</strong><p>${InvestmentView.sourceLabel(account.source)} · ${escapeHTML(assignment?.name ?? "Shared")}</p></div><strong class="investment-accounts-screen__balance">${money(balance)}</strong>`;
+    return row;
+  }
+
+  /** Navigates to an investment account selected by mouse or keyboard. */
+  #openAccount(row: HTMLElement | null): void {
+    const accountId = row?.dataset.investmentAccount;
+    if (accountId) router.navigate("investment-account-detail", { accountId });
+  }
+
+  /** Handles pointer activation inside the account list. */
+  #handleListClick(event: Event): void {
+    this.#openAccount(eventTargetElement(event)?.closest<HTMLElement>("[data-investment-account]") ?? null);
+  }
+
+  /** Handles keyboard activation inside the account list. */
+  #handleListKeydown(event: Event): void {
+    if (!(event instanceof KeyboardEvent) || (event.key !== "Enter" && event.key !== " ")) return;
+    const row = eventTargetElement(event)?.closest<HTMLElement>("[data-investment-account]") ?? null;
+    if (!row) return;
+    event.preventDefault();
+    this.#openAccount(row);
+  }
+
+  /** Creates a new investment account from validated form values. */
+  #handleSubmit(event: Event): void {
+    event.preventDefault();
+    this.#message.textContent = "";
+    if (!this.#form.checkValidity()) {
+      this.#form.reportValidity();
+      return;
+    }
+    const data = new FormData(this.#form);
+    const name = data.get("name");
+    const source = data.get("source");
+    const assignmentId = data.get("assignmentId");
+    if (
+      typeof name !== "string"
+      || !isInvestmentSource(source)
+      || typeof assignmentId !== "string"
+    ) return;
+    try {
+      const account = APIs.investment.addAccount({ name, source, assignmentId });
+      this.#form.reset();
+      const assignmentSelect = this.#form.elements.namedItem("assignmentId");
+      if (assignmentSelect instanceof HTMLSelectElement)
+        assignmentSelect.value = APIs.budget.SHARED_ASSIGNMENT_ID;
+      const nameInput = this.#form.elements.namedItem("name");
+      if (nameInput instanceof HTMLInputElement) nameInput.focus();
+      this.#setMessage(`${account.name} added. Syncing…`, "success");
+      this.#render();
+    } catch (error: unknown) {
+      this.#setMessage(messageFromError(error), "error");
+    }
+  }
+
+  /** Updates the accessible form message and visual state. */
+  #setMessage(message: string, state: "success" | "error"): void {
+    this.#message.className = `investment-accounts-screen__message ${state}`;
+    this.#message.textContent = message;
+  }
+}
+
+if (!customElements.get("investment-accounts-screen")) customElements.define("investment-accounts-screen", InvestmentAccountsScreen);

@@ -1,0 +1,18 @@
+dashboard-screen { display: block; }
+.dashboard-screen__summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dashboard-screen__summary .summary-card small { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.dashboard-screen__layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .7fr); gap: 20px; margin-top: 18px; }
+.dashboard-screen__layout > .ledger-card { margin-top: 0; }
+.dashboard-screen__chart { position: relative; min-height: 240px; padding: 12px 20px 20px; }
+.dashboard-screen__chart svg { width: 100%; height: auto; overflow: visible; }
+.dashboard-screen__chart .trend-area { fill: rgba(111, 157, 102, .14); }
+.dashboard-screen__chart .trend-line { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.dashboard-screen__chart .trend-grid line { stroke: var(--border); stroke-width: 1; }
+.dashboard-screen__chart .trend-y-axis { stroke: var(--border-strong); stroke-width: 1; }
+.dashboard-screen__chart circle { fill: white; stroke: var(--accent-dark); stroke-width: 3; }
+.dashboard-screen__chart text { fill: var(--muted); font-size: 12px; }
+.dashboard-screen__breakdown { padding: 4px 28px 26px; }
+.dashboard-screen__breakdown > div { display: flex; justify-content: space-between; gap: 20px; padding: 15px 0; border-bottom: 1px solid var(--border); }
+.dashboard-screen__breakdown .transfer-note { margin: 18px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+@media (max-width: 900px) { .dashboard-screen__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dashboard-screen__layout { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .dashboard-screen__summary { grid-template-columns: 1fr; } .dashboard-screen__chart { padding-inline: 4px; } }

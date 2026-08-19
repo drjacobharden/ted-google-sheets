@@ -1,36 +1,95 @@
 :root {
+  --background: hsl(197, 12%, 94%);
+  --elevation-1: hsl(197, 12%, 95%);
+  --elevation-2: hsl(197, 12%, 100%);
+
+  --object-extra-light: hsl(197, 12%, 89%);
+  --object-light: hsl(197, 12%, 85%);
+  --object-dark: hsl(300, 1%, 20%);
+
+  --negative-accent-dark: hsl(33, 70%, 30%);
+  --positive-accent-dark: hsl(194, 50%, 36%);
+
+  --border: hsl(300, 1%, 85%);
+
+  /* Styles for the charts on the main background */
+  --main-chart-inactive: hsl(197, 12%, 80%);
+  --main-chart-active: hsl(197, 12%, 65%);
+  --main-chart-selected: hsl(300, 1%, 20%);
+  --main-chart-gridline: hsl(300, 1%, 80%);
+
+  --on-bg-border: hsl(300, 1%, 70%);
+
+  --muted-opacity: 0.6;
+  --muted-opacity-extra-light: 0.4;
+
+  /* Navbar styles */
+  --navbar-background: hsl(30, 0%, 5%);
+  --navbar-button-hover: hsl(30, 0%, 18%);
+  --navbar-button-active: hsl(30, 0%, 20%);
+  --navbar-button-text: hsl(30, 0%, 100%);
+  --navbar-button-text-inactive: hsl(30, 0%, 75%);
+  --navbar-section-title-text: hsl(30, 0%, 65%);
+
+  /* Hover color for transparent buttons */
+  --ghost-button-hover: hsl(240, 4%, 93%);
+
+  /* Hover color for transparent buttons */
+  --ghost-button-pressed: hsl(240, 4%, 90%);
+
   /* Background of the page surrounding the app */
-  --page-background: #f2f3f0;
+  --page-background: hsl(30, 0%, 96%);
 
   /* Main content area on the right side of the app */
-  --surface: #ffffff;
+  --surface: hsl(30, 0%, 100%);
+
+  /* Background of surfaces that need start contrast against the main area such as toasts and tooltips */
+  --inverse-surface: hsl(240, 0%, 8%);
+  --inverse-surface-hover: hsl(240, 0%, 16%);
+  --inverse-surface-active: hsl(240, 0%, 24%);
 
   /* Background color of the navigation sidebar on the left */
-  --sidebar-background: #fbfbfa;
+  /* --sidebar-background: hsl(240, 4%, 98%); */
+
+  --sidebar-background: hsl(41, 35%, 95%);
+  --content-background: hsl(38, 70%, 100%);
+  --surface-background: hsl(30, 100%, 100%);
+
+  /* Shadows */
+  --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.03), 0 2px 6px hsl(0 0% 0% / 0.025);
+  --shadow-popover:
+    0 2px 4px hsl(0 0% 0% / 0.05), 0 8px 24px hsl(0 0% 0% / 0.08);
+
+  /* Borders */
+
+  --border-strong: hsl(37 13% 88%);
 
   /* Color of all standard borders */
-  --border: #e5e7e2;
+  /* --border: #e5e7e2; */
 
   /* Color of all thick borders */
-  --border-strong: #dfe2dc;
+  /* --border-strong: #dfe2dc; */
 
   /* Standard text color */
-  --text: #171817;
+  --text: hsl(120, 2%, 6%);
 
   /* Inverse text color */
   --inverse-text: #ffffff;
 
   /* Muted text color */
-  --muted: #7a7d78;
+  --muted: hsl(96, 2%, 48%);
 
   /* Standard accent color */
-  --accent: #6f9d66;
+  --accent: hsl(240, 0%, 8%);
 
   /* Darker accent color used for buttons and text */
-  --accent-dark: #4d7f47;
+  --accent-dark: hsl(240, 0%, 8%);
+
+  /* --accent-dark: hsl(255deg 78% 59%); */
 
   /* Lighter accent color used for highlighting active navigation button and background of icons */
   --accent-soft: #eaf0e7;
+  /* --accent-soft: hsl(255, 52%, 96%); */
 
   /* Muted accent color */
   --accent-muted: #595655;
@@ -49,16 +108,80 @@
 
   /* Shadows to provide a sense of depth and elevation */
   --shadow: 0 24px 60px rgba(38, 44, 36, 0.08);
+  --shadow-prominent: 0 8px 20px hsl(0, 0%, 0%, 0.2);
 
   /* Roundness of corners on inputs and boxes */
   --radius-large: 24px;
   --radius-medium: 16px;
   --radius-small: 12px;
+  --radius-xsmall: 8px;
 
   /* Font sizes */
   --text-large: 17px;
   --text-small: 12px;
   --text-paragraph: 15px;
+
+  /* Spacing around and between elements */
+  --horizontal-screen-padding: 32px;
+  --gap-xsmall: 2px;
+  --gap-small: 4px;
+  --gap-medium: 8px;
+
+  /* Semantic colors */
+  --positive-number: hsl(150, 70%, 24%);
+  --negative-number: hsl(0, 70%, 35%);
+
+  --success: hsl(120, 30%, 95%);
+  --success-dark: hsl(150, 100%, 24%);
+
+  --archived: hsl(50, 50%, 80%);
+  --archived-dark: hsl(50, 90%, 40%);
+
+  --syncing: hsl(260, 30%, 80%);
+  --syncing-dark: hsl(260, 20%, 40%);
+
+  --row-selection-highlight: hsl(260, 50%, 95%);
+  --row-selection-border: hsl(260, 50%, 50%);
+
+  --error: hsl(0, 70%, 90%);
+  --error-dark: hsl(0, 40%, 30%);
+
+  /* 
+
+  The color of buttons in the interface.
+  - Primary button = the buttons with a dark background and light text
+  - Secondary button = the buttons with a border and no background
+  - Ghost button = text buttons with no background or border
+
+  The secondary button border uses the standard border color from earlier.
+  The hover color is what it will transition to when you hover the mouse over.
+  The active state is what it will transition to when you click down on the button.
+
+  For color consistency purposes, if you change the hue (first number) in the base state, you should
+  change it in the hover and active states as well.
+
+  */
+  --primary-button: hsl(240, 0%, 8%);
+  --primary-button-hover: hsl(240, 0%, 16%);
+  --primary-button-active: hsl(240, 0%, 24%);
+
+  --secondary-button: hsl(240, 20%, 95%);
+  --secondary-button-hover: hsl(240, 20%, 93%);
+  --secondary-button-active: hsl(240, 20%, 90%);
+
+  /* 
+  
+  The color of active tabs in the tables
+
+  */
+
+  --surface-base: hsl(240, 8%, 100%);
+  --surface-highlight: hsl(240, 8%, 95%);
+  --surface-highlight-subtle: hsl(240, 8%, 98%);
+  --surface-highlight-strong: hsl(240, 8%, 90%);
+
+  /* Height of  */
+  --button-height: 36px;
 
   /* Available fonts for text */
   font-family:

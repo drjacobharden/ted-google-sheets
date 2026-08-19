@@ -1,0 +1,13 @@
+investment-account-detail-screen { display: block; }
+.investment-account-detail-screen__card:has(> .investment-account-detail-screen__empty:not([hidden])) { display: flex; min-height: clamp(430px, calc(100vh - 330px), 720px); flex-direction: column; }
+.investment-account-detail-screen__card:has(> .investment-account-detail-screen__empty:not([hidden])) > .investment-account-detail-screen__empty { flex: 1; }
+.investment-account-detail-screen__table { min-width: 560px; }
+.investment-account-detail-screen__table th:nth-child(1) { width: 28%; }
+.investment-account-detail-screen__table th:nth-child(2) { width: 42%; }
+.investment-account-detail-screen__table th:nth-child(3) { width: 30%; }
+.investment-account-detail-screen__table td, .investment-account-detail-screen__table th { padding-right: 22px; padding-left: 22px; }
+.investment-account-detail-screen__table td small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.investment-account-detail-screen__table tr[role="button"] { cursor: pointer; }
+.investment-account-detail-screen__table tr[role="button"]:hover td { background: #f6f8f4; }
+.investment-account-detail-screen__table tr[role="button"]:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent); outline-offset: -3px; }
+.investment-account-detail-screen__empty { display: grid; min-height: 180px; place-items: center; padding: 24px; color: var(--muted); text-align: center; }
