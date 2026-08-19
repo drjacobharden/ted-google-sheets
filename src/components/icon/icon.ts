@@ -17,4 +17,4 @@ class Icon extends HTMLElement {
   }
 }
 
-customElements.define("custom-icon", Icon, { extends: "svg" });
+customElements.define("custom-icon", Icon);

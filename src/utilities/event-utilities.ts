@@ -15,6 +15,7 @@ type EventDetails<T = any> = Readonly<{
   "segmented-control-selection": { value: string; title: string };
   "table-data-changed": { data: readonly T[] };
   "drawer:close-requested": {};
+  "scroll-changed": { position: number };
 }>;
 
 export const addListener = (
@@ -36,6 +37,15 @@ export const handleCustomEvent = <T extends any, K extends EventNames>(
 ) => {
   const e = event as CustomEvent;
   fxn(e.detail);
+};
+
+export const dispatchCustomEvent = <T extends any, K extends EventNames>(
+  eventName: K,
+  target: EventTarget,
+  detail: EventDetails<T>[K],
+  bubbles = { bubbles: false },
+) => {
+  target.dispatchEvent(new CustomEvent(eventName, { detail, ...bubbles }));
 };
 
 export const createEventHandler = <T extends any, K extends EventNames>(

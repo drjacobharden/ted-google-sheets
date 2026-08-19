@@ -3,6 +3,8 @@ table-list {
   --outer-padding: var(--horizontal-screen-padding);
   --vertical-padding: 20px;
   --table-row-height: 57px;
+  --background: var(--elevation-1);
+  --hover: var(--elevation-2);
 
   display: flex;
   flex-direction: column;
@@ -11,6 +13,7 @@ table-list {
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior: contain;
+  border-radius: var(--radius-medium);
 
   table {
     width: 100%;

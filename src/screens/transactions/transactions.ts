@@ -1,5 +1,4 @@
 import type { BudgetTransaction } from "../../api/budget-api";
-import { Breadcrumbs } from "../../components/breadcrumbs/breadcrumbs";
 import type { AppliedFilter } from "../../components/filter-bar/filter-bar";
 import { PageControl } from "../../components/page-control/page-control";
 import {
@@ -10,17 +9,18 @@ import {
 } from "../../components/table/table";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
-import {
-  DatePickerStep,
-  DateRange,
-  DateUtils,
-} from "../../utilities/date-utilities";
+import { DateRange, DateUtils } from "../../utilities/date-utilities";
 import {
   addListener,
   handleCustomEvent,
   removeListener,
 } from "../../utilities/event-utilities";
 import { money } from "../../utilities/view-formatters";
+import { appState } from "../../state/app-state";
+import {
+  budgetingYearRange,
+  filterForBudgetingContext,
+} from "../budgeting/budgeting-context";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -30,7 +30,6 @@ export class TransactionScreen
   extends HTMLElement
   implements EventListenerObject
 {
-  #breadcrumbs!: Breadcrumbs;
   #table!: Table<BudgetTransaction>;
   #pagination!: PageControl;
   #resizeObserver: ResizeObserver | null = null;
@@ -43,6 +42,7 @@ export class TransactionScreen
   #page = 1;
   #pageSize = 10;
   #listening = false;
+  #unsubscribeBudgetingContext: (() => void) | null = null;
 
   connectedCallback(): void {
     if (!this.dataset.initialized) {
@@ -50,15 +50,15 @@ export class TransactionScreen
       this.classList.add("screen");
       this.dataset.screen = "transactions";
       this.append(template.content.cloneNode(true));
-      this.#breadcrumbs = this.querySelector("breadcrumbs-header")!;
       this.#table = this.querySelector("table-list")!;
       this.#pagination = this.querySelector("page-control")!;
-      this.#setBreadcrumbs(this.#dateRange, "year");
+      this.#dateRange = budgetingYearRange(
+        appState.get("budgetingContext").year,
+      );
     }
     if (this.#listening) return;
     this.#listening = true;
 
-    addListener("date-range-changed", this, this);
     addListener("filters-changed", this, this);
     addListener("table-sort-request", this, this);
     this.addEventListener("page-change", this);
@@ -80,6 +80,14 @@ export class TransactionScreen
       this.#scheduleCapacityUpdate(),
     );
     this.#resizeObserver.observe(this.#table);
+    this.#unsubscribeBudgetingContext = appState.subscribe(
+      "budgetingContext",
+      (context) => {
+        this.#dateRange = budgetingYearRange(context.year);
+        this.#page = 1;
+        this.#repaint();
+      },
+    );
     this.#repaint();
     this.#scheduleCapacityUpdate();
   }
@@ -87,7 +95,6 @@ export class TransactionScreen
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    removeListener("date-range-changed", this, this);
     removeListener("filters-changed", this, this);
     removeListener("table-sort-request", this, this);
     this.removeEventListener("page-change", this);
@@ -108,19 +115,12 @@ export class TransactionScreen
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = null;
     cancelAnimationFrame(this.#capacityFrame);
+    this.#unsubscribeBudgetingContext?.();
+    this.#unsubscribeBudgetingContext = null;
   }
 
   handleEvent(event: Event): void {
     switch (event.type) {
-      case "date-range-changed":
-        handleCustomEvent("date-range-changed", event, ({ range, step }) => {
-          this.#dateRange = range;
-          this.#page = 1;
-          this.#setBreadcrumbs(range, step);
-          this.#repaint();
-        });
-        break;
-
       case "filters-changed":
         handleCustomEvent<BudgetTransaction, "filters-changed">(
           "filters-changed",
@@ -235,8 +235,7 @@ export class TransactionScreen
   }
 
   #filteredRows(): BudgetTransaction[] {
-    return appController
-      .getTransactions()
+    return filterForBudgetingContext(appController.getTransactions())
       .filter((row) => DateUtils.isInRange(row.date, this.#dateRange))
       .filter((row) => this.#filters.every((filter) => this.#matches(row, filter)));
   }
@@ -329,18 +328,6 @@ export class TransactionScreen
     router.updateParams({ drawer: "edit", transactionId: transaction.id });
   }
 
-  #setBreadcrumbs(range: DateRange, step: DatePickerStep): void {
-    const date = DateUtils.formatDateRange(range.start, range.end, {
-      showDays: step === "week",
-      showMonth: step !== "year",
-      monthFormat: "long",
-    });
-    this.#breadcrumbs.setPath([
-      { title: "Budgeting" },
-      { key: "transactions", title: "Transactions" },
-      { title: date },
-    ]);
-  }
 }
 
 if (!customElements.get("transaction-list-screen")) {

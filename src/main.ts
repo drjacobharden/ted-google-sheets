@@ -3,6 +3,10 @@ import "./api/api.ts";
 import "./utilities/date-utilities.ts";
 import "./utilities/event-utilities.ts";
 
+import "./elements/nav-bar/nav-bar.ts";
+
+import "./screens/budget/budget.ts";
+
 import "./components/page-title/page-title.ts";
 import "./components/button/button.ts";
 import "./components/navigation-button/navigation-button.ts";
@@ -43,9 +47,8 @@ import "./elements/navigation-bar/navigation-bar.ts";
 import "./elements/new-entity-popover/new-entity-popover.ts";
 import "./elements/overlay-manager/overlay-manager.ts";
 
-import "./screens/budget-overview-screen-2/budget-overview-screen.ts";
-import "./screens/budget-overview-screen-3/budget-overview-screen.ts";
-
+import "./screens/budgeting/budgeting-shell";
+import type { BudgetingShell } from "./screens/budgeting/budgeting-shell";
 import "./screens/budget-overview-screen/budget-overview-screen.ts";
 import "./screens/category-screen/category-screen.ts";
 import "./screens/dashboard-screen/dashboard-screen.ts";
@@ -86,28 +89,51 @@ function renderRoute({
   name: RouteChangedEventDetail["name"];
   params: RouteChangedEventDetail["params"];
 }): void {
+  const outlet = document.getElementById("route-outlet");
+  if (!outlet) throw new Error("Missing route outlet");
+
+  if (router.isBudgetingRoute(name)) {
+    if (mountedContentKey !== "budgeting") {
+      const template = document.getElementById(
+        "route-budgeting",
+      ) as HTMLTemplateElement | null;
+      if (!template) throw new Error("Missing budgeting shell template");
+      outlet.replaceChildren(template.content.cloneNode(true));
+      mountedContentKey = "budgeting";
+    }
+    const shell = outlet.querySelector<BudgetingShell>("budgeting-shell");
+    if (!shell) throw new Error("Budgeting shell failed to mount");
+    shell.route = { name, route: name, params };
+    updateActiveTab("budgeting");
+    return;
+  }
+
   const contentParams = Object.fromEntries(
     Object.entries(params).filter(([key]) => !OVERLAY_PARAMS.has(key)),
   );
   const contentKey = `${name}?${new URLSearchParams(contentParams)}`;
   if (contentKey === mountedContentKey) return;
   mountedContentKey = contentKey;
-  const outlet = document.getElementById("route-outlet");
   const template = document.getElementById(
     `route-${name}`,
   ) as HTMLTemplateElement | null;
   if (!outlet || !template)
     throw new Error(`Missing template for route: ${name}`);
   outlet.replaceChildren(template.content.cloneNode(true));
-  const activeTab =
-    name === "investment-account-detail" ? "investment-accounts" : name;
+  const activeTab = name.startsWith("investment-")
+    ? "investment-overview"
+    : name;
+  updateActiveTab(activeTab);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function updateActiveTab(activeTab: string): void {
   document.querySelectorAll<HTMLElement>("[data-tab]").forEach((item) => {
     const active = item.dataset.tab === activeTab;
     item.classList.toggle("active", active);
     if (active) item.setAttribute("aria-current", "page");
     else item.removeAttribute("aria-current");
   });
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 window.addEventListener("app:route-changed", (event: Event) =>

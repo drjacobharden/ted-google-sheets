@@ -1,8 +1,12 @@
-import type { SegmentedControl } from "../../components/segmented-control/segmented-control";
 import type {
   DropdownMenu,
+  DropdownMenuItem,
   DropdownSelectionEvent,
 } from "../../components/dropdown-menu/dropdown-menu";
+import type {
+  SegmentedControl,
+  SegmentedControlSelectionEvent,
+} from "../../components/segmented-control/segmented-control";
 import { type SpendTrendPeriod } from "../../utilities/spend-trend";
 import { appState } from "../../state/app-state";
 import { appController } from "../../state/app-controller";
@@ -33,6 +37,7 @@ import {
 import templateString from "./template.html" with { type: "text" };
 
 import { DateUtils } from "../../utilities/date-utilities";
+import { handleCustomEvent } from "../../utilities/event-utilities";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -291,13 +296,51 @@ function withLeadIn(
   ];
 }
 
-function renderChartSVG(series: AnnualSpendTrendSeries, width: number): string {
+function chartGeometry(
+  series: AnnualSpendTrendSeries,
+  width: number,
+): {
+  plotLeft: number;
+  plotRight: number;
+  dataLeft: number;
+  dataWidth: number;
+  barWidth: number;
+} {
+  const plotLeft = 68;
+  const pointCount = Math.max(1, series.points.length);
+  const plotWidth = Math.max(1, width - plotLeft);
+  const intervalWidth = plotWidth / pointCount;
+  const dataLeft = plotLeft + intervalWidth / 2;
+  const barWidth = Math.max(
+    5,
+    Math.min(series.period === "monthly" ? 56 : 14, intervalWidth * 0.78),
+  );
+  const plotRight = intervalWidth / 2;
+  return {
+    plotLeft,
+    plotRight,
+    dataLeft,
+    dataWidth: intervalWidth * Math.max(0, pointCount - 1),
+    barWidth,
+  };
+}
+
+function renderChartSVG(
+  series: AnnualSpendTrendSeries,
+  width: number,
+  selectedRange: { start: number; end: number },
+): string {
   const { points } = series;
   const height = 330;
-  const plot = { left: 68, right: 0, top: 16, bottom: 42 };
-  const dataLeft = plot.left + 12;
-  const dataWidth = width - dataLeft - plot.right;
-  const hitboxWidth = width - plot.left - plot.right;
+  const geometry = chartGeometry(series, width);
+  const plot = {
+    left: geometry.plotLeft,
+    right: geometry.plotRight,
+    top: 16,
+    bottom: 42,
+  };
+  const { dataLeft, dataWidth, barWidth } = geometry;
+  const hitboxWidth = width - plot.left;
   const plotHeight = height - plot.top - plot.bottom;
   const scale = buildCurrencyAxisScale(
     Math.max(
@@ -316,12 +359,6 @@ function renderChartSVG(series: AnnualSpendTrendSeries, width: number): string {
   const y = (value: number): number =>
     plot.top + plotHeight - (value / maximum) * plotHeight;
   const coordinates = points.map((point, index) => ({ point, x: x(index) }));
-  const pointSpacing =
-    points.length > 1 ? dataWidth / (points.length - 1) : dataWidth;
-  const barWidth = Math.max(
-    5,
-    Math.min(series.period === "monthly" ? 56 : 14, pointSpacing * 0.78),
-  );
   const zeroY = y(0);
   const trendPath = curvedPath(
     withLeadIn(
@@ -340,39 +377,45 @@ function renderChartSVG(series: AnnualSpendTrendSeries, width: number): string {
         ),
       )
     : "";
-  const monthIndexes = Array.from({ length: 12 }, (_, month) => {
-    const target = `${series.year}-${String(month + 1).padStart(2, "0")}-01`;
-    return points.reduce(
-      (best, point, index) =>
-        Math.abs(
-          new Date(`${point.date}T00:00:00Z`).getTime() -
-            new Date(`${target}T00:00:00Z`).getTime(),
-        ) <
-        Math.abs(
-          new Date(`${points[best].date}T00:00:00Z`).getTime() -
-            new Date(`${target}T00:00:00Z`).getTime(),
-        )
-          ? index
-          : best,
-      0,
-    );
+  const xLabels = points.flatMap((point, index) => {
+    const date = new Date(`${point.date}T00:00:00Z`);
+    if (series.period === "monthly") {
+      const step = width < 700 ? 2 : 1;
+      return index % step === 0
+        ? [
+            {
+              index,
+              label: shortMonthYear.format(date).replace(` ${series.year}`, ""),
+            },
+          ]
+        : [];
+    }
+    const previous = points[index - 1];
+    const beginsMonth =
+      index === 0 || point.date.slice(0, 7) !== previous.date.slice(0, 7);
+    return beginsMonth
+      ? [
+          {
+            index,
+            label: shortMonthYear.format(date).replace(` ${series.year}`, ""),
+          },
+        ]
+      : [];
   });
-  const monthStep = width < 700 ? 2 : 1;
 
   const periodLabel = series.period === "monthly" ? "Monthly" : "Weekly";
 
   return `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${periodLabel} spending trend for ${series.year}${series.hasPriorYearTrend ? ` compared with ${series.year - 1}` : ""}">
       <g class="grid" aria-hidden="true">
-        ${ticks.map((tick) => `<line x1="${plot.left}" y1="${y(tick)}" x2="${width - plot.right}" y2="${y(tick)}"/>`).join("")}
+        ${ticks.map((tick) => `<line x1="${plot.left}" y1="${y(tick)}" x2="${width}" y2="${y(tick)}"/>`).join("")}
       </g>
       <g class="labels" aria-hidden="true">
         ${ticks.map((tick) => `<text x="0" y="${y(tick) + 4}" text-anchor="start">${escapeHTML(compactCurrency.format(tick))}</text>`).join("")}
-        ${monthIndexes
-          .filter((_, month) => month % monthStep === 0)
+        ${xLabels
           .map(
-            (index, labelIndex) =>
-              `<text x="${x(index)}" y="${height - 12}" text-anchor="middle">${escapeHTML(shortMonthYear.format(new Date(series.year, labelIndex * monthStep, 1)).replace(` ${series.year}`, ""))}</text>`,
+            ({ index, label }) =>
+              `<text x="${x(index)}" y="${height - 12}" text-anchor="middle">${escapeHTML(label)}</text>`,
           )
           .join("")}
       </g>
@@ -383,7 +426,9 @@ function renderChartSVG(series: AnnualSpendTrendSeries, width: number): string {
             const valueY = y(point.total);
             const barY = Math.min(valueY, zeroY);
             const barHeight = Math.max(1, Math.abs(zeroY - valueY));
-            return `<rect class="spend-bar" data-spend-trend="raw" data-period-index="${index}" x="${pointX - barWidth / 2}" y="${barY}" width="${barWidth}" height="${barHeight}" rx="3" ry="3"/>`;
+            const outside =
+              index < selectedRange.start || index >= selectedRange.end;
+            return `<rect class="spend-bar${outside ? " is-outside-range" : ""}" data-spend-trend="raw" data-period-index="${index}" x="${pointX - barWidth / 2}" y="${barY}" width="${barWidth}" height="${barHeight}" rx="3" ry="3"/>`;
           })
           .join("")}
       </g>
@@ -402,8 +447,9 @@ function mountChartAtWidth(
   series: AnnualSpendTrendSeries,
   overlayManager: OverlayManager,
   width: number,
+  selectedRange: { start: number; end: number },
 ): () => void {
-  container.innerHTML = renderChartSVG(series, width);
+  container.innerHTML = renderChartSVG(series, width, selectedRange);
   const svg = container.querySelector<SVGSVGElement>("svg")!;
   const hitbox = svg.querySelector<SVGRectElement>("[data-scrub-hitbox]")!;
   const layer = svg.querySelector<SVGGElement>("[data-scrub-layer]")!;
@@ -418,10 +464,9 @@ function mountChartAtWidth(
   tooltipAnchor.className = "tooltip-anchor";
   tooltipAnchor.setAttribute("aria-hidden", "true");
   container.append(tooltipAnchor);
-  const plotLeft = 68;
-  const plotRight = 0;
-  const dataLeft = plotLeft + 12;
-  const dataWidth = width - dataLeft - plotRight;
+  const geometry = chartGeometry(series, width);
+  const plotRight = geometry.plotRight;
+  const { dataLeft, dataWidth } = geometry;
   let activeIndex = 0;
   let dragging = false;
 
@@ -588,15 +633,28 @@ function mountChart(
   container: HTMLElement,
   series: AnnualSpendTrendSeries,
   overlayManager: OverlayManager,
+  selectedRange: () => { start: number; end: number },
 ): () => void {
   let width = chartContentWidth(container);
-  let cleanup = mountChartAtWidth(container, series, overlayManager, width);
+  let cleanup = mountChartAtWidth(
+    container,
+    series,
+    overlayManager,
+    width,
+    selectedRange(),
+  );
   const observer = new ResizeObserver(() => {
     const nextWidth = chartContentWidth(container);
     if (nextWidth === width) return;
     width = nextWidth;
     cleanup();
-    cleanup = mountChartAtWidth(container, series, overlayManager, width);
+    cleanup = mountChartAtWidth(
+      container,
+      series,
+      overlayManager,
+      width,
+      selectedRange(),
+    );
   });
   observer.observe(container);
   return () => {
@@ -605,23 +663,88 @@ function mountChart(
   };
 }
 
+function getAvailableYears(): DropdownMenuItem[] {
+  const summaries = appState.get("budgetOverview").monthlyTransactionSummaries;
+
+  const currentYear = DateUtils.today.getFullYear();
+
+  const availableYears = Object.keys(summaries)
+    .map(Number)
+    .filter((year) => Number.isInteger(year) && year <= currentYear);
+
+  if (!availableYears.includes(currentYear)) {
+    availableYears.push(currentYear);
+  }
+
+  return availableYears
+    .sort((a, b) => b - a)
+    .map((y) => ({
+      key: y.toString(),
+      title: y.toString(),
+      isDefaultValue: y === currentYear,
+    }));
+}
+
+function getAvailableAssignments(): DropdownMenuItem[] {
+  const selectedId = appState.get("budgetOverview").assignmentId;
+  const assignments = appController.getBudgetOverviewAssignments();
+
+  return [
+    {
+      key: "all",
+      title: "All assignments",
+      isDefaultValue: selectedId === null,
+    },
+    ...assignments.map((assignment) => ({
+      key: assignment.id,
+      title: assignment.name,
+      isDefaultValue: assignment.id === selectedId,
+    })),
+  ];
+}
+
+type ChartRangeAction = "start" | "move" | "end";
+
+interface ChartRangeDrag {
+  action: ChartRangeAction;
+  pointerId: number;
+  pointerUnit: number;
+  startBoundary: number;
+  endBoundary: number;
+}
+
 /** Displays weekly or monthly spending totals and their recent-weighted trend. */
 export class BudgetOverviewScreen
   extends HTMLElement
   implements EventListenerObject
 {
+  #yearControl!: DropdownMenu;
+  #selectedYear = new Date().getFullYear();
+
+  #assignmentControl!: DropdownMenu;
+
+  #contentControl!: DropdownMenu;
+
   #periodControl!: SegmentedControl;
-  #title!: HTMLElement;
   #chart!: HTMLElement;
   #metrics!: HTMLElement;
+  #totalBalance!: HTMLElement;
+  #totalBalanceCaption!: HTMLElement;
+  #totalSpend!: HTMLElement;
+  #totalIncome!: HTMLElement;
+  #totalDeductions!: HTMLElement;
+  #range!: HTMLElement;
+  #rangeTrack!: HTMLElement;
+  #rangeSelection!: HTMLElement;
+  #rangeStartHandle!: HTMLButtonElement;
+  #rangeMoveHandle!: HTMLButtonElement;
+  #rangeEndHandle!: HTMLButtonElement;
+  #rangeStartTooltip!: HTMLOutputElement;
+  #rangeEndTooltip!: HTMLOutputElement;
   #empty!: HTMLElement;
   #emptyTitle!: HTMLElement;
   #emptyCopy!: HTMLElement;
   #legend!: HTMLElement;
-  #average!: HTMLElement;
-  #averageCaption!: HTMLElement;
-  #change!: HTMLElement;
-  #changeLabel!: HTMLElement;
   #legendTotal!: HTMLElement;
   #previousLegend!: HTMLElement;
   #monthlySummaryYear!: HTMLElement;
@@ -650,14 +773,23 @@ export class BudgetOverviewScreen
   #deductionsLegendRate!: HTMLElement;
   #spendLegendRate!: HTMLElement;
   #annualSummaryCards!: HTMLElement;
-  #assignmentFilter!: DropdownMenu;
+
   #overlayManager!: OverlayManager;
   #period: SpendTrendPeriod = "weekly";
-  #selectedYear = new Date().getFullYear();
+
+  #rangeStart = 0;
+  #rangeEnd = -1;
+  #rangePointCount = 0;
+  #rangeVisualStart = 0;
+  #rangeVisualEnd = 0;
+  #rangeDrag: ChartRangeDrag | null = null;
   #cleanupChart: (() => void) | null = null;
   #unsubscribeBudgetOverview: (() => void) | null = null;
   #unsubscribePaycheckHistory: (() => void) | null = null;
+  #unsubscribeBudgetingContext: (() => void) | null = null;
   #listening = false;
+
+  #yearSelector!: DropdownMenu;
 
   connectedCallback(): void {
     if (!this.dataset.initialized) {
@@ -666,11 +798,21 @@ export class BudgetOverviewScreen
       this.dataset.screen = "budget-overview";
       this.append(template.content.cloneNode(true));
       this.#captureElements();
+
+      //
+      this.#initialize.capture();
+      this.#initialize.setup();
+      this.#selectedYear = appState.get("budgetingContext").year;
     }
     if (this.#listening) return;
     this.#listening = true;
-    this.#periodControl.addEventListener("segmented-control-selection", this);
-    this.#assignmentFilter.addListener(this);
+    this.#periodControl.addListener(this);
+    this.#range.addEventListener("pointerdown", this);
+    this.#range.addEventListener("pointermove", this);
+    this.#range.addEventListener("pointerup", this);
+    this.#range.addEventListener("pointercancel", this);
+    this.#range.addEventListener("keydown", this);
+
     this.#previousYearButton.addEventListener("click", this);
     this.#nextYearButton.addEventListener("click", this);
     this.#annualSummaryCards.addEventListener("pointerover", this);
@@ -692,17 +834,29 @@ export class BudgetOverviewScreen
       "hasPaycheckDeductionHistory",
       () => this.#renderAnnualSummaryCards(),
     );
+    this.#unsubscribeBudgetingContext = appState.subscribe(
+      "budgetingContext",
+      (context) => {
+        if (this.#selectedYear === context.year) return;
+        this.#selectedYear = context.year;
+        this.#rangeStart = 0;
+        this.#rangeEnd = -1;
+        this.#renderOverview();
+      },
+    );
     this.#renderOverview();
   }
 
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    this.#periodControl.removeEventListener(
-      "segmented-control-selection",
-      this,
-    );
-    this.#assignmentFilter.removeListener(this);
+    this.#periodControl.removeListener(this);
+    this.#range.removeEventListener("pointerdown", this);
+    this.#range.removeEventListener("pointermove", this);
+    this.#range.removeEventListener("pointerup", this);
+    this.#range.removeEventListener("pointercancel", this);
+    this.#range.removeEventListener("keydown", this);
+
     this.#previousYearButton.removeEventListener("click", this);
     this.#nextYearButton.removeEventListener("click", this);
     this.#annualSummaryCards.removeEventListener("pointerover", this);
@@ -722,12 +876,27 @@ export class BudgetOverviewScreen
     this.#unsubscribeBudgetOverview = null;
     this.#unsubscribePaycheckHistory?.();
     this.#unsubscribePaycheckHistory = null;
+    this.#unsubscribeBudgetingContext?.();
+    this.#unsubscribeBudgetingContext = null;
     this.#cleanupChart?.();
     this.#cleanupChart = null;
-    appController.setBudgetOverviewAssignment(null);
   }
 
   handleEvent(event: Event): void {
+    switch (event.type) {
+      case "dropdown-selection":
+        this.#eventHandlers.dropdownSelection(event);
+        return;
+
+      default:
+        break;
+    }
+
+    if (event.currentTarget === this.#range) {
+      if (event instanceof PointerEvent) this.#handleRangePointer(event);
+      else if (event instanceof KeyboardEvent) this.#handleRangeKeydown(event);
+      return;
+    }
     if (
       event.currentTarget instanceof SVGElement &&
       event.currentTarget.matches("[data-donut-segment]")
@@ -846,7 +1015,7 @@ export class BudgetOverviewScreen
     }
     if (
       event.type === "dropdown-selection" &&
-      event.target === this.#assignmentFilter
+      event.target === this.#assignmentControl
     ) {
       const selection = event as DropdownSelectionEvent;
       appController.setBudgetOverviewAssignment(
@@ -858,8 +1027,10 @@ export class BudgetOverviewScreen
       event.type === "segmented-control-selection" &&
       event.target === this.#periodControl
     ) {
-      const value = (event as CustomEvent<{ value?: string }>).detail?.value;
+      const value = (event as SegmentedControlSelectionEvent).detail.value;
       if (value === "weekly" || value === "monthly") this.#period = value;
+      this.#rangeStart = 0;
+      this.#rangeEnd = -1;
       this.#renderTrend();
       return;
     }
@@ -868,20 +1039,88 @@ export class BudgetOverviewScreen
       event.currentTarget === this.#previousYearButton
     ) {
       this.#selectedYear -= 1;
+      this.#rangeStart = 0;
+      this.#rangeEnd = -1;
       this.#renderOverview();
     } else if (
       event.type === "click" &&
       event.currentTarget === this.#nextYearButton
     ) {
       this.#selectedYear += 1;
+      this.#rangeStart = 0;
+      this.#rangeEnd = -1;
       this.#renderOverview();
     }
   }
 
+  #initialize = {
+    capture: () => {
+      this.#contentControl = this.querySelector("#content-selector")!;
+      this.#assignmentControl = this.querySelector("#assignment-selector")!;
+      this.#yearControl = this.querySelector("#year-selector")!;
+    },
+    setup: () => {
+      this.#update.assignmentControl();
+      this.#update.contentControl();
+      this.#update.yearControl();
+    },
+    addListeners: () => {},
+    teardown: () => {},
+  };
+
+  #update = {
+    assignmentControl: () => {
+      this.#assignmentControl.items = getAvailableAssignments();
+    },
+    contentControl: () => {
+      this.#contentControl.items = [
+        {
+          key: "overview",
+          title: "Overview",
+          icon: "dashboard",
+          isDefaultValue: true,
+        },
+        { key: "transactions", title: "Transactions", icon: "transactions" },
+        { key: "categories", title: "Categories", icon: "label" },
+        { key: "vendors", title: "Vendors", icon: "cart" },
+        { key: "assignments", title: "People", icon: "people" },
+      ];
+    },
+    yearControl: () => {
+      this.#yearControl.items = getAvailableYears();
+    },
+  };
+
+  #eventHandlers = {
+    dropdownSelection: (event: Event) => {
+      handleCustomEvent("dropdown-selection", event, ({ value, title, id }) => {
+        switch (id) {
+          case "content-selector":
+            console.log({ value, title });
+            break;
+
+          case "year-selector":
+            this.#selectedYear = Number(value);
+            this.#rangeStart = 0;
+            this.#rangeEnd = -1;
+            this.#renderOverview();
+            console.log({ value, title });
+            break;
+
+          case "assignment-selector":
+            appController.setBudgetOverviewAssignment(
+              value === "all" ? null : value,
+            );
+            break;
+
+          default:
+            break;
+        }
+      });
+    },
+  };
+
   #captureElements(): void {
-    this.#assignmentFilter = this.querySelector<DropdownMenu>(
-      "#overview-assignment-filter",
-    )!;
     this.#periodControl = this.querySelector<SegmentedControl>(
       "#spend-trend-period",
     )!;
@@ -889,9 +1128,45 @@ export class BudgetOverviewScreen
       { key: "weekly", title: "Weekly", isDefaultValue: true },
       { key: "monthly", title: "Monthly" },
     ];
-    this.#title = this.querySelector<HTMLElement>("#weekly-spend-title")!;
     this.#chart = this.querySelector<HTMLElement>("#weekly-spend-chart")!;
     this.#metrics = this.querySelector<HTMLElement>("#spend-trend-metrics")!;
+    this.#totalBalance = this.querySelector<HTMLElement>(
+      "#overview-total-balance",
+    )!;
+    this.#totalBalanceCaption = this.querySelector<HTMLElement>(
+      "#overview-total-balance-caption",
+    )!;
+    this.#totalSpend = this.querySelector<HTMLElement>(
+      "#overview-total-spend",
+    )!;
+    this.#totalIncome = this.querySelector<HTMLElement>(
+      "#overview-total-income",
+    )!;
+    this.#totalDeductions = this.querySelector<HTMLElement>(
+      "#overview-total-deductions",
+    )!;
+    this.#range = this.querySelector<HTMLElement>("#spend-trend-range")!;
+    this.#rangeTrack = this.querySelector<HTMLElement>(
+      "#spend-trend-range-track",
+    )!;
+    this.#rangeSelection = this.querySelector<HTMLElement>(
+      "#spend-trend-range-selection",
+    )!;
+    this.#rangeStartHandle = this.querySelector<HTMLButtonElement>(
+      '[data-range-action="start"]',
+    )!;
+    this.#rangeMoveHandle = this.querySelector<HTMLButtonElement>(
+      '[data-range-action="move"]',
+    )!;
+    this.#rangeEndHandle = this.querySelector<HTMLButtonElement>(
+      '[data-range-action="end"]',
+    )!;
+    this.#rangeStartTooltip = this.querySelector<HTMLOutputElement>(
+      "#spend-trend-range-start-tooltip",
+    )!;
+    this.#rangeEndTooltip = this.querySelector<HTMLOutputElement>(
+      "#spend-trend-range-end-tooltip",
+    )!;
     this.#empty = this.querySelector<HTMLElement>("#weekly-spend-empty")!;
     this.#emptyTitle = this.querySelector<HTMLElement>(
       "#weekly-spend-empty-title",
@@ -900,14 +1175,6 @@ export class BudgetOverviewScreen
       "#weekly-spend-empty-copy",
     )!;
     this.#legend = this.querySelector<HTMLElement>("#weekly-spend-legend")!;
-    this.#average = this.querySelector<HTMLElement>("#weekly-spend-average")!;
-    this.#averageCaption = this.querySelector<HTMLElement>(
-      "#spend-trend-average-caption",
-    )!;
-    this.#change = this.querySelector<HTMLElement>("#weekly-spend-change")!;
-    this.#changeLabel = this.querySelector<HTMLElement>(
-      "#weekly-spend-change-label",
-    )!;
     this.#legendTotal = this.querySelector<HTMLElement>(
       "#spend-trend-legend-total",
     )!;
@@ -1001,32 +1268,11 @@ export class BudgetOverviewScreen
   }
 
   #renderOverview(): void {
-    this.#renderAssignmentFilter();
+    // this.#renderAssignmentFilter();
     this.#renderMonthlySummary();
     this.#renderAnnualSummaryCards();
     this.#renderTrend();
     this.#renderInsights();
-  }
-
-  #renderAssignmentFilter(): void {
-    const selectedId = appState.get("budgetOverview").assignmentId;
-    const assignments = appController.getBudgetOverviewAssignments();
-    const selected = assignments.find(
-      (assignment) => assignment.id === selectedId,
-    );
-    this.#assignmentFilter.items = [
-      {
-        key: "all",
-        title: "All assignments",
-        isDefaultValue: selectedId === null,
-      },
-      ...assignments.map((assignment) => ({
-        key: assignment.id,
-        title: assignment.name,
-        isDefaultValue: assignment.id === selectedId,
-      })),
-    ];
-    this.#assignmentFilter.label = selected?.name ?? "All assignments";
   }
 
   #renderAnnualSummaryCards(): void {
@@ -1093,49 +1339,390 @@ export class BudgetOverviewScreen
       .forEach((button) => button.append(getIcon("info")!));
   }
 
+  #renderPeriodControl(): void {
+    this.#periodControl.selection = this.#period;
+  }
+
+  #rangeSeries(): AnnualSpendTrendSeries | undefined {
+    return appState.get("budgetOverview").annualSpendTrendsByYear[
+      this.#selectedYear
+    ]?.[this.#period];
+  }
+
+  #rangeUnitFromPointer(event: PointerEvent): number {
+    const bounds = this.#rangeTrack.getBoundingClientRect();
+    const progress = bounds.width
+      ? (event.clientX - bounds.left) / bounds.width
+      : 0;
+    return Math.max(
+      0,
+      Math.min(this.#rangePointCount, progress * this.#rangePointCount),
+    );
+  }
+
+  #updateRangeFromPointer(event: PointerEvent): void {
+    const drag = this.#rangeDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const pointerUnit = this.#rangeUnitFromPointer(event);
+    if (drag.action === "start") {
+      this.#rangeVisualStart = Math.max(
+        0,
+        Math.min(
+          drag.endBoundary - 1,
+          drag.startBoundary + pointerUnit - drag.pointerUnit,
+        ),
+      );
+      this.#rangeVisualEnd = drag.endBoundary;
+    } else if (drag.action === "end") {
+      this.#rangeVisualStart = drag.startBoundary;
+      this.#rangeVisualEnd = Math.min(
+        this.#rangePointCount,
+        Math.max(
+          drag.startBoundary + 1,
+          drag.endBoundary + pointerUnit - drag.pointerUnit,
+        ),
+      );
+    } else {
+      const length = drag.endBoundary - drag.startBoundary;
+      const requestedDelta = pointerUnit - drag.pointerUnit;
+      const delta = Math.max(
+        -drag.startBoundary,
+        Math.min(this.#rangePointCount - drag.endBoundary, requestedDelta),
+      );
+      this.#rangeVisualStart = drag.startBoundary + delta;
+      this.#rangeVisualEnd = this.#rangeVisualStart + length;
+    }
+    const series = this.#rangeSeries();
+    if (series) {
+      this.#renderRangeSelector(series);
+      this.#renderRangeBarSelection(
+        this.#rangeVisualStart,
+        this.#rangeVisualEnd,
+      );
+    }
+  }
+
+  #handleRangePointer(event: PointerEvent): void {
+    if (event.type === "pointerdown") {
+      const control = (event.target as Element | null)?.closest<HTMLElement>(
+        "[data-range-action]",
+      );
+      if (!control || !this.#range.contains(control)) return;
+      const action = control.dataset.rangeAction as ChartRangeAction;
+      event.preventDefault();
+      this.#rangeDrag = {
+        action,
+        pointerId: event.pointerId,
+        pointerUnit: this.#rangeUnitFromPointer(event),
+        startBoundary: this.#rangeStart,
+        endBoundary: this.#rangeEnd + 1,
+      };
+      this.#rangeVisualStart = this.#rangeStart;
+      this.#rangeVisualEnd = this.#rangeEnd + 1;
+      this.#range.classList.add("is-dragging");
+      this.#range.setPointerCapture?.(event.pointerId);
+      return;
+    }
+    if (!this.#rangeDrag || this.#rangeDrag.pointerId !== event.pointerId)
+      return;
+    if (event.type === "pointermove") {
+      this.#updateRangeFromPointer(event);
+      return;
+    }
+    if (event.type === "pointercancel") {
+      const series = this.#rangeSeries();
+      this.#rangeDrag = null;
+      this.#rangeVisualStart = this.#rangeStart;
+      this.#rangeVisualEnd = this.#rangeEnd + 1;
+      this.#range.classList.remove("is-dragging");
+      if (series) {
+        this.#renderRangeSelector(series);
+        this.#renderRangeBarSelection(
+          this.#rangeVisualStart,
+          this.#rangeVisualEnd,
+        );
+      }
+      return;
+    }
+    if (event.type === "pointerup") {
+      this.#updateRangeFromPointer(event);
+      this.#range.releasePointerCapture?.(event.pointerId);
+      const drag = this.#rangeDrag;
+      this.#rangeDrag = null;
+      if (drag?.action === "move") {
+        const length = drag.endBoundary - drag.startBoundary;
+        this.#rangeStart = Math.max(
+          0,
+          Math.min(
+            this.#rangePointCount - length,
+            Math.round(this.#rangeVisualStart),
+          ),
+        );
+        this.#rangeEnd = this.#rangeStart + length - 1;
+      } else {
+        this.#rangeStart = Math.max(
+          0,
+          Math.min(
+            this.#rangePointCount - 1,
+            Math.round(this.#rangeVisualStart),
+          ),
+        );
+        const endExclusive = Math.max(
+          this.#rangeStart + 1,
+          Math.min(this.#rangePointCount, Math.round(this.#rangeVisualEnd)),
+        );
+        this.#rangeEnd = endExclusive - 1;
+      }
+      this.#rangeVisualStart = this.#rangeStart;
+      this.#rangeVisualEnd = this.#rangeEnd + 1;
+      this.#range.classList.remove("is-dragging");
+      const series = this.#rangeSeries();
+      if (series) {
+        this.#renderRangeSelector(series);
+        this.#renderRangeBarSelection(
+          this.#rangeVisualStart,
+          this.#rangeVisualEnd,
+        );
+        this.#renderSelectedRangeTotals(series);
+      }
+    }
+  }
+
+  #handleRangeKeydown(event: KeyboardEvent): void {
+    const control = (event.target as Element | null)?.closest<HTMLElement>(
+      "[data-range-action]",
+    );
+    if (!control || !this.#range.contains(control)) return;
+    const action = control.dataset.rangeAction as ChartRangeAction;
+    const direction =
+      event.key === "ArrowLeft" || event.key === "ArrowDown"
+        ? -1
+        : event.key === "ArrowRight" || event.key === "ArrowUp"
+          ? 1
+          : 0;
+    if (!direction && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    if (action === "start") {
+      this.#rangeStart =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? this.#rangeEnd
+            : Math.max(
+                0,
+                Math.min(this.#rangeEnd, this.#rangeStart + direction),
+              );
+    } else if (action === "end") {
+      this.#rangeEnd =
+        event.key === "Home"
+          ? this.#rangeStart
+          : event.key === "End"
+            ? this.#rangePointCount - 1
+            : Math.max(
+                this.#rangeStart,
+                Math.min(this.#rangePointCount - 1, this.#rangeEnd + direction),
+              );
+    } else {
+      const length = this.#rangeEnd - this.#rangeStart;
+      const maximumStart = this.#rangePointCount - 1 - length;
+      const nextStart =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? maximumStart
+            : Math.max(0, Math.min(maximumStart, this.#rangeStart + direction));
+      this.#rangeStart = nextStart;
+      this.#rangeEnd = nextStart + length;
+    }
+    const series = this.#rangeSeries();
+    if (!series) return;
+    this.#rangeVisualStart = this.#rangeStart;
+    this.#rangeVisualEnd = this.#rangeEnd + 1;
+    this.#renderRangeSelector(series);
+    this.#renderRangeBarSelection(this.#rangeVisualStart, this.#rangeVisualEnd);
+    this.#renderSelectedRangeTotals(series);
+  }
+
+  #rangeDates(
+    series: AnnualSpendTrendSeries,
+    startIndex: number,
+    endIndex: number,
+  ): { start: string; end: string } {
+    const first = series.points[startIndex];
+    const last = series.points[endIndex];
+    const yearStart = `${series.year}-01-01`;
+    const yearEnd = `${series.year}-12-31`;
+    return {
+      start: first
+        ? first.periodStart < yearStart
+          ? yearStart
+          : first.periodStart
+        : yearStart,
+      end: last
+        ? last.periodEnd > yearEnd
+          ? yearEnd
+          : last.periodEnd
+        : yearEnd,
+    };
+  }
+
+  #selectedRangeDates(series: AnnualSpendTrendSeries): {
+    start: string;
+    end: string;
+  } {
+    return this.#rangeDates(series, this.#rangeStart, this.#rangeEnd);
+  }
+
+  #renderRangeSelector(series: AnnualSpendTrendSeries): void {
+    const count = series.points.length;
+    if (!count) return;
+    const left = (this.#rangeVisualStart / count) * 100;
+    const width =
+      ((this.#rangeVisualEnd - this.#rangeVisualStart) / count) * 100;
+    this.#rangeSelection.style.left = `${left}%`;
+    this.#rangeSelection.style.width = `${width}%`;
+    const visualStartIndex = Math.max(
+      0,
+      Math.min(count - 1, Math.round(this.#rangeVisualStart)),
+    );
+    const visualEndIndex = Math.max(
+      visualStartIndex,
+      Math.min(count - 1, Math.round(this.#rangeVisualEnd) - 1),
+    );
+    const { start, end } = this.#rangeDates(
+      series,
+      visualStartIndex,
+      visualEndIndex,
+    );
+    const startLabel = shortDate.format(new Date(`${start}T00:00:00Z`));
+    const endLabel = shortDate.format(new Date(`${end}T00:00:00Z`));
+    this.#rangeStartTooltip.textContent = startLabel;
+    this.#rangeEndTooltip.textContent = endLabel;
+    this.#rangeStartTooltip.style.left = `calc(${left}% + 7px)`;
+    this.#rangeEndTooltip.style.left = `calc(${left + width}% - 7px)`;
+    [this.#rangeStartHandle, this.#rangeEndHandle].forEach((handle) => {
+      handle.setAttribute("aria-valuemin", "1");
+      handle.setAttribute("aria-valuemax", String(count));
+      handle.setAttribute("aria-orientation", "horizontal");
+    });
+    this.#rangeStartHandle.setAttribute(
+      "aria-valuenow",
+      String(visualStartIndex + 1),
+    );
+    this.#rangeStartHandle.setAttribute("aria-valuetext", startLabel);
+    this.#rangeEndHandle.setAttribute(
+      "aria-valuenow",
+      String(visualEndIndex + 1),
+    );
+    this.#rangeEndHandle.setAttribute("aria-valuetext", endLabel);
+    this.#rangeMoveHandle.setAttribute(
+      "aria-label",
+      `Move selected range, ${startLabel} through ${endLabel}`,
+    );
+  }
+
+  #renderRangeBarSelection(start: number, end: number): void {
+    const selectedStart = Math.max(
+      0,
+      Math.min(this.#rangePointCount - 1, Math.round(start)),
+    );
+    const selectedEnd = Math.max(
+      selectedStart + 1,
+      Math.min(this.#rangePointCount, Math.round(end)),
+    );
+    this.#chart
+      .querySelectorAll<SVGRectElement>("[data-period-index]")
+      .forEach((bar) => {
+        const index = Number(bar.dataset.periodIndex);
+        const selected = index >= selectedStart && index < selectedEnd;
+        bar.classList.toggle("is-outside-range", !selected);
+      });
+  }
+
+  #renderSelectedRangeTotals(series: AnnualSpendTrendSeries): void {
+    const overview = appState.get("budgetOverview");
+    const summary = overview.annualSummaryCards[this.#selectedYear];
+    const { start, end } = this.#selectedRangeDates(series);
+    const assignmentId = overview.assignmentId;
+    const today = DateUtils.today;
+    const todayId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const dataEnd = end > todayId ? todayId : end;
+    const transactions = appController
+      .getTransactions()
+      .filter(
+        (transaction) =>
+          transaction.date >= start &&
+          transaction.date <= dataEnd &&
+          (assignmentId === null || transaction.assignmentId === assignmentId),
+      );
+    const spend = transactions.reduce(
+      (total, transaction) =>
+        transaction.type === "expense"
+          ? total + Number(transaction.amount || 0)
+          : total,
+      0,
+    );
+    const income = transactions.reduce(
+      (total, transaction) =>
+        transaction.type === "income"
+          ? total + Number(transaction.amount || 0)
+          : total,
+      0,
+    );
+    const startMonth = start.slice(0, 7);
+    const endMonth = end.slice(0, 7);
+    const deductions =
+      summary?.metrics.paycheckDeductions.months.reduce(
+        (total, month) =>
+          month.monthId >= startMonth && month.monthId <= endMonth
+            ? total + (month.value ?? 0)
+            : total,
+        0,
+      ) ?? 0;
+    const balance = income - spend + deductions;
+    const isFullYear =
+      this.#rangeStart === 0 && this.#rangeEnd === series.points.length - 1;
+    const startLabel = shortDate.format(new Date(`${start}T00:00:00Z`));
+    const endLabel = shortDate.format(new Date(`${end}T00:00:00Z`));
+    this.#totalBalance.textContent = money(balance, false);
+    this.#totalBalanceCaption.textContent = isFullYear
+      ? `Total balance in ${this.#selectedYear}`
+      : `Total balance · ${startLabel}–${endLabel}`;
+    this.#totalSpend.textContent = money(spend, false);
+    this.#totalIncome.textContent = money(income, false);
+    this.#totalDeductions.textContent = money(deductions, false);
+    this.#metrics.setAttribute(
+      "aria-label",
+      `Financial totals from ${startLabel} through ${endLabel}`,
+    );
+  }
+
   #renderTrend(): void {
     const monthly = this.#period === "monthly";
     const periodNoun = monthly ? "month" : "week";
     const periodAdjective = monthly ? "monthly" : "weekly";
+    const overview = appState.get("budgetOverview");
     const series =
-      appState.get("budgetOverview").annualSpendTrendsByYear[
-        this.#selectedYear
-      ]?.[this.#period];
-    if (!series) return;
-    const isHistorical = this.#selectedYear < new Date().getFullYear();
-    const displayedTrend = isHistorical
-      ? series.annualAverageTrend
-      : series.latestTrend;
-    const change = isHistorical
-      ? series.annualAveragePercentChange
-      : series.trendPercentChange;
-    this.#title.textContent = "Current spending trend";
-    this.#averageCaption.textContent = isHistorical
-      ? `Average ${periodAdjective} trend in ${this.#selectedYear}`
-      : `Current ${periodAdjective} trend`;
+      overview.annualSpendTrendsByYear[this.#selectedYear]?.[this.#period];
+    this.#renderPeriodControl();
+
+    if (!series) {
+      this.#totalBalance.textContent = "—";
+      this.#totalBalanceCaption.textContent = `Total balance in ${this.#selectedYear}`;
+      this.#totalSpend.textContent = "—";
+      this.#totalIncome.textContent = "—";
+      this.#totalDeductions.textContent = "—";
+      this.#cleanupChart?.();
+      this.#cleanupChart = null;
+      this.#chart.replaceChildren();
+      this.#chart.hidden = true;
+      this.#range.hidden = true;
+      this.#legend.hidden = true;
+      return;
+    }
+
     this.#legendTotal.textContent = `${monthly ? "Monthly" : "Weekly"} spend`;
     this.#previousLegend.hidden = !series.hasPriorYearTrend;
-    this.#metrics.setAttribute(
-      "aria-label",
-      `${monthly ? "Monthly" : "Weekly"} spending summary`,
-    );
-    this.#average.textContent =
-      displayedTrend === null ? "—" : money(displayedTrend);
-    this.#change.textContent =
-      change === null
-        ? "—"
-        : `${change > 0 ? "+" : change < 0 ? "−" : ""}${percentage.format(Math.abs(change))}%`;
-    this.#change.classList.toggle("is-increase", change !== null && change > 0);
-    this.#change.classList.toggle("is-decrease", change !== null && change < 0);
-    this.#changeLabel.textContent = isHistorical
-      ? change === null
-        ? "Previous year average unavailable"
-        : `From ${this.#selectedYear - 1} average`
-      : change === null
-        ? `Needs another completed ${periodNoun}`
-        : series.comparisonPeriodsUsed < series.comparisonPeriods
-          ? `From earliest ${periodNoun}`
-          : `From ${series.comparisonPeriods} ${periodNoun}s ago`;
     this.#cleanupChart?.();
     this.#cleanupChart = null;
     const empty = !series.hasExpenseHistory || series.latestTrend === null;
@@ -1148,13 +1735,31 @@ export class BudgetOverviewScreen
     this.#empty.hidden = !empty;
     this.#chart.hidden = empty;
     this.#legend.hidden = empty;
-    if (!empty)
+    this.#range.hidden = empty;
+    this.#rangePointCount = series.points.length;
+    if (
+      this.#rangeEnd < 0 ||
+      this.#rangeEnd >= this.#rangePointCount ||
+      this.#rangeStart > this.#rangeEnd
+    ) {
+      this.#rangeStart = 0;
+      this.#rangeEnd = Math.max(0, this.#rangePointCount - 1);
+    }
+    this.#rangeVisualStart = this.#rangeStart;
+    this.#rangeVisualEnd = this.#rangeEnd + 1;
+    this.#renderRangeSelector(series);
+    this.#renderSelectedRangeTotals(series);
+    if (!empty) {
       this.#cleanupChart = mountChart(
         this.#chart,
         series,
         this.#overlayManager,
+        () => ({
+          start: this.#rangeVisualStart,
+          end: this.#rangeVisualEnd,
+        }),
       );
-    else this.#chart.replaceChildren();
+    } else this.#chart.replaceChildren();
   }
 
   #renderMonthlySummary(): void {

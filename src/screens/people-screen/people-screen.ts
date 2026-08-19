@@ -7,6 +7,8 @@ import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction } from "../../api/budget-api";
 import { escapeHTML, messageFromError } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
+import { appState } from "../../state/app-state";
+import { filterForBudgetingContext } from "../budgeting/budgeting-context";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -20,6 +22,7 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
   #usage = new Map<string, number>();
   #includeArchived = false;
   #listening = false;
+  #unsubscribeBudgetingContext: (() => void) | null = null;
 
   /** Initializes the screen and subscribes to assignment and transaction events. */
   connectedCallback(): void {
@@ -35,10 +38,15 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
     this.#form.addEventListener("submit", this);
     this.#list.addEventListener("click", this);
     this.#list.addEventListener("keydown", this);
+    this.addEventListener("budgeting:header-action", this);
     window.addEventListener("budget:people-changed", this);
     window.addEventListener("budget:entity-sync-changed", this);
     window.addEventListener("budget:transaction-sync-changed", this);
     window.addEventListener("budget:transaction-saved", this);
+    this.#unsubscribeBudgetingContext = appState.subscribe(
+      "budgetingContext",
+      () => this.#loadUsage(),
+    );
     this.#loadUsage();
   }
 
@@ -49,10 +57,13 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
     this.#form.removeEventListener("submit", this);
     this.#list.removeEventListener("click", this);
     this.#list.removeEventListener("keydown", this);
+    this.removeEventListener("budgeting:header-action", this);
     window.removeEventListener("budget:people-changed", this);
     window.removeEventListener("budget:entity-sync-changed", this);
     window.removeEventListener("budget:transaction-sync-changed", this);
     window.removeEventListener("budget:transaction-saved", this);
+    this.#unsubscribeBudgetingContext?.();
+    this.#unsubscribeBudgetingContext = null;
   }
 
   /** Routes DOM and application events to the corresponding behavior. */
@@ -60,7 +71,12 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
     if (event.type === "submit") void this.#handleSubmit(event);
     else if (event.type === "click") this.#handleClick(event);
     else if (event.type === "keydown") this.#handleKeydown(event);
-    else if (event.type.includes("transaction")) this.#loadUsage();
+    else if (event.type === "budgeting:header-action") {
+      if ((event as CustomEvent).detail.action === "focus-person-form") {
+        this.#form.scrollIntoView({ behavior: "smooth", block: "center" });
+        (this.#form.elements.namedItem("personName") as HTMLInputElement | null)?.focus();
+      }
+    } else if (event.type.includes("transaction")) this.#loadUsage();
     else this.#render();
   }
 
@@ -74,7 +90,9 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
 
   /** Returns the current transaction collection from the staged UI bridge or API cache. */
   #transactions(): BudgetTransaction[] {
-    return appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
+    return filterForBudgetingContext(
+      appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [],
+    );
   }
 
   /** Recalculates transaction usage counts before rendering assignments. */
@@ -188,7 +206,13 @@ export class PeopleScreen extends HTMLElement implements EventListenerObject {
 
   /** Navigates to the selected assignment detail route. */
   #openPerson(id: string): void {
-    router.navigate("entity-detail", { kind: "assignment", id });
+    const context = appState.get("budgetingContext");
+    router.navigate("budgeting/entity-detail", {
+      kind: "assignment",
+      id,
+      year: String(context.year),
+      assignment: context.assignmentId ?? "all",
+    });
   }
 
   /** Updates the accessible form message and its visual state. */

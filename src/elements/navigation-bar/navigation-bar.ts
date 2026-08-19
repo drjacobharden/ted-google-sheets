@@ -18,11 +18,11 @@ const NAVIGATION_BUTTONS = [
     title: "Budgeting",
     action: "new-transaction",
     data: [
-      { label: "Overview", icon: "dashboard", tab: "budget-overview" },
-      { label: "Transactions", icon: "transactions", tab: "transactions" },
-      { label: "Categories", icon: "label", tab: "categories" },
-      { label: "Vendors", icon: "cart", tab: "vendors" },
-      { label: "People", icon: "people", tab: "people" },
+      { label: "Overview", icon: "dashboard", tab: "budgeting/overview" },
+      { label: "Transactions", icon: "transactions", tab: "budgeting/transactions" },
+      { label: "Categories", icon: "label", tab: "budgeting/categories" },
+      { label: "Vendors", icon: "cart", tab: "budgeting/vendors" },
+      { label: "People", icon: "people", tab: "budgeting/people" },
     ],
   },
 

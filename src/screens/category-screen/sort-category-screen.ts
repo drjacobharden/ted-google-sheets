@@ -1,5 +1,4 @@
 import { BudgetEntity } from "../../api/budget-api";
-import { DropdownSelectionEvent } from "../../components/dropdown-menu/dropdown-menu";
 
 export type SortedEntityArrayFxn = (
   data: BudgetEntity[],
@@ -13,10 +12,8 @@ export type SortedEntityArrayFxn = (
 ) => BudgetEntity[];
 
 export function sortCategoryScreen(
-  event: DropdownSelectionEvent,
+  key: string,
 ): SortedEntityArrayFxn {
-  const key = event.detail.value;
-
   if (key === "name") {
     return (data, totals) => data;
   }

@@ -1,0 +1,71 @@
+budgeting-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+
+  .budgeting-shell__header {
+    display: flex;
+    min-height: var(--button-height);
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin: 24px 0;
+  }
+
+  .budgeting-shell__breadcrumbs,
+  .budgeting-shell__actions,
+  #budgeting-breadcrumb-tail {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #budgeting-breadcrumb-tail:empty {
+    display: none;
+  }
+
+  .budgeting-shell__breadcrumb {
+    overflow: hidden;
+    max-width: 240px;
+    color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .budgeting-shell__outlet {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+
+    > * {
+      min-height: 0;
+    }
+
+    > .screen {
+      flex: 0 0 auto;
+      min-height: auto;
+      padding-inline: 0;
+      overflow: visible;
+      overscroll-behavior: auto;
+      scrollbar-gutter: auto;
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  budgeting-shell {
+    .budgeting-shell__header {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .budgeting-shell__breadcrumbs {
+      width: 100%;
+      overflow-x: auto;
+    }
+  }
+}

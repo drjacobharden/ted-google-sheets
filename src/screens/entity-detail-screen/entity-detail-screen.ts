@@ -1,13 +1,14 @@
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
-import { InvestmentView } from "../../utilities/investment-view";
 import { createTransactionRow } from "../../utilities/transaction-row";
-import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
+import { eventTargetElement } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction, EntityKind } from "../../api/budget-api";
 import type { RouteName } from "../../router/types";
 import { money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
+import { appState } from "../../state/app-state";
+import { filterForBudgetingContext } from "../budgeting/budgeting-context";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -17,9 +18,9 @@ interface EntityDetailSettings { label: string; route: RouteName; records(): Bud
 interface SelectedEntity { kind: EntityKind; id: string; }
 
 const ENTITY_DETAIL_CONFIG: Record<EntityKind, EntityDetailSettings> = {
-  category: { label: "category", route: "categories", records: () => APIs.budget.listCategories({ type: "expense" }) },
-  vendor: { label: "vendor", route: "vendors", records: () => APIs.budget.listVendors() },
-  assignment: { label: "person", route: "people", records: () => APIs.budget.listPeople() },
+  category: { label: "category", route: "budgeting/categories", records: () => APIs.budget.listCategories({ type: "expense" }) },
+  vendor: { label: "vendor", route: "budgeting/vendors", records: () => APIs.budget.listVendors() },
+  assignment: { label: "person", route: "budgeting/people", records: () => APIs.budget.listPeople() },
 };
 
 const RENDER_EVENTS = [
@@ -34,14 +35,13 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
   #selected: SelectedEntity | null = null;
   #header!: MutablePageTitle;
   #editButton!: HTMLButtonElement;
-  #rangePicker!: DateRangePickerElement;
   #summary!: HTMLElement;
   #count!: HTMLElement;
   #list!: HTMLTableSectionElement;
   #table!: HTMLElement;
   #empty!: HTMLElement;
-  #range: DateRangeValue = { start: "", end: "" };
   #listening = false;
+  #unsubscribeBudgetingContext: (() => void) | null = null;
 
   /** Initializes the detail screen from the current route parameters. */
   connectedCallback(): void {
@@ -55,17 +55,20 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
     const { kind, id } = router.currentParams();
     this.#selected = this.#isEntityKind(kind) && id ? { kind, id } : null;
     if (!this.#selected) {
-      router.navigate("transactions");
+      router.navigate("budgeting/transactions", this.#scopeParams());
       return;
     }
     if (this.#listening) return;
     this.#listening = true;
-    this.#range = this.#rangePicker.value;
-    this.addEventListener("date-range-changed", this);
+    this.addEventListener("budgeting:header-action", this);
     this.#editButton.addEventListener("click", this);
     this.#list.addEventListener("click", this);
     this.#list.addEventListener("keydown", this);
     RENDER_EVENTS.forEach((name) => window.addEventListener(name, this));
+    this.#unsubscribeBudgetingContext = appState.subscribe(
+      "budgetingContext",
+      () => this.#render(),
+    );
     this.#render();
   }
 
@@ -73,17 +76,20 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    this.removeEventListener("date-range-changed", this);
+    this.removeEventListener("budgeting:header-action", this);
     this.#editButton.removeEventListener("click", this);
     this.#list.removeEventListener("click", this);
     this.#list.removeEventListener("keydown", this);
     RENDER_EVENTS.forEach((name) => window.removeEventListener(name, this));
+    this.#unsubscribeBudgetingContext?.();
+    this.#unsubscribeBudgetingContext = null;
   }
 
   /** Routes date, edit, row, keyboard, and budget events to screen behavior. */
   handleEvent(event: Event): void {
-    if (event.type === "date-range-changed") this.#handleDateRangeChange(event);
-    else if (event.type === "click" && event.currentTarget === this.#editButton) this.#handleEdit();
+    if (event.type === "budgeting:header-action") {
+      if ((event as CustomEvent).detail.action === "edit-entity") this.#handleEdit();
+    } else if (event.type === "click" && event.currentTarget === this.#editButton) this.#handleEdit();
     else if (event.type === "click") this.#handleListClick(event);
     else if (event.type === "keydown") this.#handleListKeydown(event);
     else this.#render();
@@ -93,7 +99,6 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
   #captureElements(): void {
     this.#header = this.querySelector<MutablePageTitle>("page-title")!;
     this.#editButton = this.querySelector<HTMLButtonElement>("#edit-entity")!;
-    this.#rangePicker = this.querySelector<DateRangePickerElement>("date-range-picker")!;
     this.#summary = this.querySelector<HTMLElement>("#entity-summary-grid")!;
     this.#count = this.querySelector<HTMLElement>("#entity-transaction-count")!;
     this.#list = this.querySelector<HTMLTableSectionElement>("#entity-transaction-list")!;
@@ -104,14 +109,6 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
   /** Narrows a route parameter to a supported entity kind. */
   #isEntityKind(value: string | undefined): value is EntityKind {
     return value === "category" || value === "vendor" || value === "assignment";
-  }
-
-  /** Updates the active date range and rerenders the activity list. */
-  #handleDateRangeChange(event: Event): void {
-    const range = dateRangeDetail(event);
-    if (!range) return;
-    this.#range = range;
-    this.#render();
   }
 
   /** Returns the entity selected by the current route. */
@@ -127,11 +124,12 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
       category: "categoryId", vendor: "vendorId", assignment: "assignmentId",
     };
     const selected = this.#selected;
-    const transactions = appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
+    const transactions = filterForBudgetingContext(
+      appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [],
+    );
     return transactions
       .filter((item) => item[field[selected.kind]] === selected.id)
       .filter((item) => selected.kind === "assignment" || item.type !== "income")
-      .filter((item) => (!this.#range.start || item.date >= this.#range.start) && (!this.#range.end || item.date <= this.#range.end))
       .sort((left, right) => right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt));
   }
 
@@ -154,7 +152,7 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
         this.#empty.innerHTML = '<div class="spinner" aria-hidden="true"></div><p>Loading details…</p>';
         return;
       }
-      router.navigate(ENTITY_DETAIL_CONFIG[this.#selected.kind].route);
+      router.navigate(ENTITY_DETAIL_CONFIG[this.#selected.kind].route, this.#scopeParams());
       return;
     }
     const items = this.#transactions();
@@ -177,7 +175,7 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
     if (!items.length) {
       this.#table.hidden = true;
       this.#empty.hidden = false;
-      this.#empty.innerHTML = '<div class="empty-symbol" aria-hidden="true">$</div><h3>No activity in this range</h3><p>Choose another date range to see more transactions.</p>';
+      this.#empty.innerHTML = '<div class="empty-symbol" aria-hidden="true">$</div><h3>No activity in this scope</h3><p>Choose another year or assignment to see more transactions.</p>';
     } else {
       this.#list.replaceChildren(...items.map((item) => createTransactionRow(item)));
       this.#empty.hidden = true;
@@ -189,6 +187,14 @@ export class EntityDetailScreen extends HTMLElement implements EventListenerObje
   #handleEdit(): void {
     if (!this.#selected) return;
     router.updateParams({ drawer: "entity-edit", entityKind: this.#selected.kind, entityId: this.#selected.id });
+  }
+
+  #scopeParams(): import("../../router/types").RouteParams {
+    const context = appState.get("budgetingContext");
+    return {
+      year: String(context.year),
+      assignment: context.assignmentId ?? "all",
+    };
   }
 
   /** Opens a clicked transaction in the editor drawer. */

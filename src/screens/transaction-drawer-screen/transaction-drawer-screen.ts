@@ -328,7 +328,7 @@ document.addEventListener("DOMContentLoaded", () => {
     expenseDraft = { categoryId: "", vendorId: "" };
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
-      : document.querySelector('[data-tab="transactions"]')
+      : document.querySelector('[data-tab="budgeting"]')
     )?.focus();
   }
 

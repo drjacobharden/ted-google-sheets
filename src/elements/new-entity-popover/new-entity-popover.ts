@@ -176,7 +176,7 @@ export class NewEntityPopover extends HTMLElement {
 
   #handleTypeChange(event: Event) {
     this.#typeSelector?.handleSelection(event, (e) => {
-      this.#type = e.detail.value as TransactionType;
+      this.#type = e.value as TransactionType;
     });
   }
 

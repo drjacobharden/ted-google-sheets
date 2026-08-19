@@ -24,11 +24,11 @@ describe("TypeScript runtime migration", () => {
   });
 
   test("router encodes, parses, preserves, and removes hash parameters", () => {
-    expect(parseRoute("#/budget-overview").name).toBe("budget-overview");
-    expect(routeHash("entity-detail", { kind: "vendor", id: "vendor 1" })).toBe("#/entity-detail?kind=vendor&id=vendor+1");
-    expect(parseRoute("#/entity-detail?kind=vendor&id=vendor%201")).toEqual({ name: "entity-detail", params: { kind: "vendor", id: "vendor 1" } });
-    expect(parseRoute("#/not-a-route?drawer=edit").name).toBe("transactions");
-    expect(routeHash("transactions", { drawer: "edit", transactionId: null })).toBe("#/transactions?drawer=edit");
+    expect(parseRoute("#/budget-overview").name).toBe("budgeting/overview");
+    expect(routeHash("budgeting/entity-detail", { kind: "vendor", id: "vendor 1" })).toBe("#/budgeting/vendors/vendor%201");
+    expect(parseRoute("#/entity-detail?kind=vendor&id=vendor%201")).toEqual({ name: "budgeting/entity-detail", params: { kind: "vendor", id: "vendor 1" } });
+    expect(parseRoute("#/not-a-route?drawer=edit").name).toBe("budgeting/overview");
+    expect(routeHash("budgeting/transactions", { drawer: "edit", transactionId: null })).toBe("#/budgeting/transactions?drawer=edit");
   });
 
   test("budget overview is available from budgeting navigation", () => {
@@ -37,9 +37,9 @@ describe("TypeScript runtime migration", () => {
     const screen = readFileSync("src/screens/budget-overview-screen/budget-overview-screen.ts", "utf8");
     const controller = readFileSync("src/state/app-controller.ts", "utf8");
     const state = readFileSync("src/state/app-state.ts", "utf8");
-    expect(navigation).toContain('{ label: "Overview", icon: "dashboard", tab: "budget-overview" }');
-    expect(html).toContain('<template id="route-budget-overview">');
-    expect(html).toContain("<budget-overview-screen></budget-overview-screen>");
+    expect(navigation).toContain('{ label: "Overview", icon: "dashboard", tab: "budgeting/overview" }');
+    expect(html).toContain('<template id="route-budgeting">');
+    expect(html).toContain("<budgeting-shell></budgeting-shell>");
     expect(screen).toContain('appState.get("budgetOverview").annualSpendTrendsByYear');
     expect(screen).toContain('appState.subscribe("budgetOverview"');
     expect(screen).toContain("this.#unsubscribeBudgetOverview?.()");
@@ -51,6 +51,7 @@ describe("TypeScript runtime migration", () => {
     expect(state).toContain("annualSummaryCards: AnnualSummaryCards");
     expect(state).toContain("hasPaycheckDeductionHistory: boolean");
     expect(state).toContain("budgetOverview: BudgetOverviewDerivedState");
+    expect(state).toContain("budgetingContext: BudgetingContext");
     expect(screen).toContain("appController.setBudgetOverviewAssignment(");
     expect(controller).toContain('window.addEventListener("budget:investments-changed"');
     expect(controller).toContain('appState.set("spendTrends"');

@@ -4,15 +4,16 @@ import { APIs } from "../../api/api";
 import { OverlayManager } from "../overlay-manager/overlay-manager";
 import TopNavBarTempString from "./template.html" with { type: "text" };
 import { CustomButton } from "../../components/button/button";
+import { appState } from "../../state/app-state";
 
 const TopNavBarTemp = document.createElement("template");
 TopNavBarTemp.innerHTML = TopNavBarTempString;
 
 // Add new navigation items here
 const NAVIGATION_BUTTONS = [
-  { title: "Budgeting", icon: "transactions", tab: "budget-overview" },
+  { title: "Budgeting", icon: "transactions", tab: "budgeting" },
   { title: "Investments", icon: "chart", tab: "investment-overview" },
-  { title: "Goals", icon: "target", tab: "transactions" },
+  { title: "Goals", icon: "target", tab: "dashboard" },
 ];
 
 class TopNavBar extends HTMLElement {
@@ -27,7 +28,6 @@ class TopNavBar extends HTMLElement {
 
   async connectedCallback() {
     const clone = TopNavBarTemp.content.cloneNode(true) as DocumentFragment;
-    const container = clone.querySelector("aside") as HTMLElement;
 
     this.append(clone);
     this.classList.add("pad-screen");
@@ -205,7 +205,12 @@ class TopNavBar extends HTMLElement {
     const item = target.closest("[data-tab]");
     if (!item) return;
     const route = (item as HTMLElement).dataset.tab;
-    if (route) router.navigate(route as import("../../router/types").RouteName);
+    if (route === "budgeting") {
+      const context = appState.get("budgetingContext");
+      router.navigate(context.lastRoute, context.lastParams);
+    } else if (route) {
+      router.navigate(route as import("../../router/types").RouteName);
+    }
   }
 
   #handleScroll(event: Event): void {

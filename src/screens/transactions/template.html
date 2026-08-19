@@ -1,21 +1,12 @@
-<section class="screen" data-screen="transactions">
-  <breadcrumbs-header>
-    <date-range-picker-2></date-range-picker-2>
-    <div class="vertical-divider"></div>
-  </breadcrumbs-header>
-  <div class="horizontal-center pad-screen pad-t-24">
-    <h2 class="text-lg fw-regular">Transactions</h2>
-    <div class="horizontal-center push-right">
-      <custom-button
-        class="primary-button"
-        id="new-transaction-button"
-        leading-icon="plus"
-        label="Add transaction"
-        data-action="new-transaction"
-      ></custom-button>
-    </div>
+<section data-screen="transactions">
+  <div class="horizontal-center justify-end">
+    <dropdown-menu
+      id="transaction-list-filter"
+      icon="filter"
+      label="Filter"
+      hide-trailing-chevron
+    ></dropdown-menu>
   </div>
-
   <table-list></table-list>
   <page-control></page-control>
 </section>

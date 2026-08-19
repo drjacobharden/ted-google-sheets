@@ -1,0 +1,44 @@
+/* Fonts */
+@font-face {
+  font-family: "Chewy";
+  src: url("../assets/fonts/Chewy-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0.2em;
+}
+
+@font-face {
+  font-family: "Urbanist";
+  src: url("../assets/fonts/Urbanist-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Urbanist";
+  src: url("../assets/fonts/Urbanist-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Urbanist";
+  src: url("../assets/fonts/Urbanist-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+}
+
+:root {
+  --color-background: var(--parchment-100);
+  --color-border: var(--parchment-200);
+
+  --max: 1200px;
+  --logo-text: var(--text-size-500);
+  --section-block-padding: 48px;
+  --section-inline-adding: 24px;
+}
+
+[data-theme="dark"] {
+  --color-background: var(--parchment-950);
+  --color-border: var(--parchment-800);
+}

@@ -3,6 +3,7 @@ import type { MonthlyTransactionSummaries } from "../utilities/monthly-transacti
 import type { AnnualBudgetOverviews } from "../utilities/annual-budget-overview";
 import type { AnnualSummaryCards } from "../utilities/annual-summary-cards";
 import type { AnnualSpendTrendSeries } from "../utilities/annual-spend-trend";
+import type { BudgetingRouteName } from "../router/types";
 
 export type SpendTrendsByYear = Record<
   number,
@@ -20,6 +21,13 @@ export interface BudgetOverviewDerivedState {
   monthlyTransactionSummaries: MonthlyTransactionSummaries;
   annualBudgetOverviews: AnnualBudgetOverviews;
   annualSummaryCards: AnnualSummaryCards;
+}
+
+export interface BudgetingContext {
+  year: number;
+  assignmentId: string | null;
+  lastRoute: BudgetingRouteName;
+  lastParams: Record<string, string>;
 }
 
 export type StorageScope = "local" | "session";
@@ -146,9 +154,41 @@ export interface AppState {
   annualSummaryCards: AnnualSummaryCards;
   hasPaycheckDeductionHistory: boolean;
   budgetOverview: BudgetOverviewDerivedState;
+  budgetingContext: BudgetingContext;
 }
 
-const APP_STATE_PERSISTENCE: PersistenceConfig<AppState> = {};
+function isBudgetingContext(value: unknown): value is BudgetingContext {
+  if (!value || typeof value !== "object") return false;
+  const context = value as Partial<BudgetingContext>;
+  return (
+    Number.isInteger(context.year) &&
+    (context.assignmentId === null ||
+      typeof context.assignmentId === "string") &&
+    typeof context.lastRoute === "string" &&
+    [
+      "budgeting/overview",
+      "budgeting/transactions",
+      "budgeting/categories",
+      "budgeting/vendors",
+      "budgeting/people",
+      "budgeting/entity-detail",
+      "budgeting/entity-archive",
+    ].includes(context.lastRoute) &&
+    Boolean(context.lastParams) &&
+    typeof context.lastParams === "object" &&
+    Object.values(context.lastParams).every(
+      (item) => typeof item === "string",
+    )
+  );
+}
+
+const APP_STATE_PERSISTENCE: PersistenceConfig<AppState> = {
+  budgetingContext: {
+    storage: "session",
+    key: "ted.budgeting-context",
+    validate: isBudgetingContext,
+  },
+};
 
 export const appState = new StateStore<AppState>(
   {
@@ -166,6 +206,12 @@ export const appState = new StateStore<AppState>(
       monthlyTransactionSummaries: {},
       annualBudgetOverviews: {},
       annualSummaryCards: {},
+    },
+    budgetingContext: {
+      year: new Date().getFullYear(),
+      assignmentId: null,
+      lastRoute: "budgeting/overview",
+      lastParams: {},
     },
   },
   APP_STATE_PERSISTENCE,

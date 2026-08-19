@@ -59,4 +59,4 @@ class CurrencyInput extends HTMLElement {
   }
 }
 
-customElements.define("currency-input", CurrencyInput, { extends: "label" });
+customElements.define("currency-input", CurrencyInput);

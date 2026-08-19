@@ -8,6 +8,7 @@ import type { BudgetEntity, EntityKind } from "../../api/budget-api";
 import type { RouteName } from "../../router/types";
 import { escapeHTML, messageFromError } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
+import { appState } from "../../state/app-state";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -17,9 +18,9 @@ type ArchivedCollections = Record<ArchiveCollection, BudgetEntity[]>;
 interface ArchiveSettings { collection: ArchiveCollection; singular: string; plural: string; route: RouteName; }
 
 const SETTINGS_BY_KIND: Record<EntityKind, ArchiveSettings> = {
-  category: { collection: "categories", singular: "category", plural: "categories", route: "categories" },
-  vendor: { collection: "vendors", singular: "vendor", plural: "vendors", route: "vendors" },
-  assignment: { collection: "assignments", singular: "person", plural: "people", route: "people" },
+  category: { collection: "categories", singular: "category", plural: "categories", route: "budgeting/categories" },
+  vendor: { collection: "vendors", singular: "vendor", plural: "vendors", route: "budgeting/vendors" },
+  assignment: { collection: "assignments", singular: "person", plural: "people", route: "budgeting/people" },
 };
 
 /** Displays archived budget entities and opens them for reactivation. */
@@ -143,7 +144,11 @@ export class EntityArchiveScreen extends HTMLElement implements EventListenerObj
   #handleClick(event: Event): void {
     const target = eventTargetElement(event);
     if (target?.closest("[data-archive-back]")) {
-      router.navigate(this.#settings.route);
+      const context = appState.get("budgetingContext");
+      router.navigate(this.#settings.route, {
+        year: String(context.year),
+        assignment: context.assignmentId ?? "all",
+      });
       return;
     }
     const row = target?.closest<HTMLElement>("[data-entity-id]");

@@ -1,14 +1,34 @@
 <!-- Page header -->
 <div class="content-container">
-  <div class="page-header-wrapper align-base">
-    <h1 class="text-500 push-left fw-regular mt-32">Budgeting</h1>
-    <div class="horizontal-center gap-12 push-right">
-      <dropdown-menu
-        id="overview-assignment-filter"
-        label="All assignments"
-        aria-label="Filter overview by assignment"
-      ></dropdown-menu>
-      <div class="year-controls">
+  <div class="page-header-wrapper align-base" hidden>
+    <div class="horizontal-center gap-12 push-left mt-24">
+      <h1 class="fw-medium text-400">Budgeting</h1>
+      <div class="horizontal-center gap-4 pad-r-12">
+        <custom-icon icon="chevronRight" class="muted"></custom-icon>
+        <dropdown-menu
+          id="content-selector"
+          class="content-selector"
+          variant="ghost"
+          hide-trailing-chevron
+          icon="dashboard"
+        ></dropdown-menu>
+        <custom-icon icon="chevronRight" class="muted"></custom-icon>
+        <dropdown-menu
+          id="year-selector"
+          class="year-selector"
+          variant="ghost"
+          hide-trailing-chevron
+        ></dropdown-menu>
+        <custom-icon icon="chevronRight" class="muted"></custom-icon>
+        <dropdown-menu
+          id="assignment-selector"
+          class="assignment-selector"
+          variant="ghost"
+          hide-trailing-chevron
+        ></dropdown-menu>
+      </div>
+
+      <div class="year-controls" hidden>
         <custom-button
           class="secondary-button square"
           leading-icon="chevronLeft"
@@ -23,54 +43,125 @@
           aria-label="Show next year"
         ></custom-button>
       </div>
+      <dropdown-menu
+        hidden
+        id="overview-assignment-filter"
+        label="All assignments"
+        aria-label="Filter overview by assignment"
+      ></dropdown-menu>
+    </div>
+    <!-- <h1 class="text-400 push-left fw-regular mt-32">Budgeting</h1> -->
+
+    <div class="horizontal-center gap-12 push-right">
+      <custom-button
+        class="tertiary square"
+        leading-icon="import"
+      ></custom-button>
+      <custom-button
+        class="tertiary square"
+        leading-icon="download"
+      ></custom-button>
+      <custom-button
+        class="primary-button"
+        leading-icon="plus"
+        data-action="new-transaction"
+        label="Add transaction"
+      ></custom-button>
     </div>
   </div>
-  <!-- Summary cards -->
-  <section
-    id="annual-summary-cards"
-    class="summary-card-row"
-    aria-label="Annual financial summary"
-  ></section>
+
   <!-- Trend chart -->
   <section class="trend-card" aria-labelledby="weekly-spend-title">
-    <header>
-      <h2 id="weekly-spend-title" class="text-200 fw-regular">
-        Spending trend
-      </h2>
-      <segmented-control
-        id="spend-trend-period"
-        aria-label="Spending trend period"
-      ></segmented-control>
-    </header>
-    <div
-      id="spend-trend-metrics"
-      class="metrics"
-      aria-label="Spending trend summary"
-    >
-      <div class="current-trend">
-        <strong id="weekly-spend-average" class="text-400">—</strong>
-        <small id="spend-trend-average-caption">Current weekly trend</small>
+    <div class="trend-balance" aria-live="polite">
+      <div class="trend-balance-controller">
+        <div class="legend-wrapper">
+          <p class="title">Spending trend</p>
+          <div
+            id="weekly-spend-legend"
+            class="legend"
+            aria-label="Chart legend"
+          >
+            <span>
+              <i class="line" aria-hidden="true"></i>
+              <span>Trend</span>
+            </span>
+            <span>
+              <i class="dot" aria-hidden="true"></i>
+              <span id="spend-trend-legend-total">Weekly spend</span>
+            </span>
+            <span id="spend-trend-previous-legend">
+              <i class="line is-previous" aria-hidden="true"></i>
+              <span>Previous year trend</span>
+            </span>
+          </div>
+        </div>
+        <strong id="overview-total-balance">—</strong>
+        <div class="controls">
+          <segmented-control
+            id="spend-trend-period"
+            variant="text"
+            aria-label="Spending trend period"
+          ></segmented-control>
+        </div>
       </div>
-      <div class="trend-change">
-        <strong id="weekly-spend-change" class="text-200">—</strong>
-        <small id="weekly-spend-change-label">From 12 weeks ago</small>
-      </div>
-      <div id="weekly-spend-legend" class="legend" aria-label="Chart legend">
-        <span>
-          <i class="line" aria-hidden="true"></i>
-          <span id="spend-trend-legend-trend">Trend</span>
-        </span>
-        <span>
-          <i class="dot" aria-hidden="true"></i>
-          <span id="spend-trend-legend-total">Weekly spend</span>
-        </span>
-        <span id="spend-trend-previous-legend">
-          <i class="line is-previous" aria-hidden="true"></i>
-          <span id="spend-trend-legend-prev-trend">Prev year Trend</span>
-        </span>
-      </div>
+      <span id="overview-total-balance-caption">Total balance</span>
+      <dl
+        id="spend-trend-metrics"
+        class="metrics"
+        aria-label="Annual financial totals"
+      >
+        <div>
+          <dt>Total spend</dt>
+          <dd id="overview-total-spend">—</dd>
+        </div>
+        <div>
+          <dt>Total income</dt>
+          <dd id="overview-total-income">—</dd>
+        </div>
+        <div>
+          <dt>Deductions</dt>
+          <dd id="overview-total-deductions">—</dd>
+        </div>
+      </dl>
     </div>
     <div id="weekly-spend-chart" class="chart"></div>
+    <div id="spend-trend-range" class="chart-range" hidden>
+      <div id="spend-trend-range-track" class="chart-range-track">
+        <div id="spend-trend-range-selection" class="chart-range-selection">
+          <button
+            class="chart-range-handle is-start"
+            type="button"
+            data-range-action="start"
+            role="slider"
+            aria-label="Adjust the start of the selected chart range"
+          ></button>
+          <button
+            class="chart-range-window"
+            type="button"
+            data-range-action="move"
+            aria-label="Move the selected chart range"
+          ></button>
+          <button
+            class="chart-range-handle is-end"
+            type="button"
+            data-range-action="end"
+            role="slider"
+            aria-label="Adjust the end of the selected chart range"
+          ></button>
+        </div>
+      </div>
+      <output
+        id="spend-trend-range-start-tooltip"
+        class="chart-range-tooltip is-start"
+        aria-hidden="true"
+      ></output>
+      <output
+        id="spend-trend-range-end-tooltip"
+        class="chart-range-tooltip is-end"
+        aria-hidden="true"
+      ></output>
+    </div>
+
     <div id="weekly-spend-empty" class="empty-state" hidden>
       <h3 id="weekly-spend-empty-title" class="text-200 fw-medium">
         No spending history yet
@@ -80,6 +171,12 @@
       </p>
     </div>
   </section>
+  <!-- Summary cards -->
+  <section
+    id="annual-summary-cards"
+    class="summary-card-row"
+    aria-label="Annual financial summary"
+  ></section>
   <!-- Insights -->
   <div class="insights-grid gap-12">
     <section class="ranking-card" aria-labelledby="top-categories-title">

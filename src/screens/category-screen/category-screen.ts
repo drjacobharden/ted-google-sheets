@@ -11,12 +11,10 @@ import {
 } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction } from "../../api/budget-api";
-import { Breadcrumbs } from "../../components/breadcrumbs/breadcrumbs";
 import { CustomButton } from "../../components/button/button";
 import { Checkbox } from "../../components/checkbox/checkbox";
 import {
   DatePicker,
-  DatePickerStep,
   DateRangeChangedEvent,
 } from "../../components/date-range-picker/date-range-picker-2";
 import {
@@ -24,7 +22,7 @@ import {
   DropdownSelectionEvent,
 } from "../../components/dropdown-menu/dropdown-menu";
 import { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
-import { DateRange, DateUtils } from "../../utilities/date-utilities";
+import { DatePickerStep, DateRange, DateUtils } from "../../utilities/date-utilities";
 import { errorMessage } from "../../utilities/data-utilities";
 import { money } from "../../utilities/view-formatters";
 import {
@@ -36,10 +34,23 @@ import {
   AppliedFilter,
   FilterBar,
 } from "../../components/filter-bar/filter-bar";
+import { appState } from "../../state/app-state";
+import {
+  budgetingYearRange,
+  filterForBudgetingContext,
+} from "../budgeting/budgeting-context";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
 type CategoryScreenTabs = "expense" | "income" | "archived";
+
+interface CategoryFilterValues {
+  name: string;
+  status: string;
+  count: number;
+  average: number;
+  total: number;
+}
 
 interface ActionButton extends HTMLButtonElement {
   dataset: {
@@ -56,10 +67,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   #tableView: CategoryScreenTabs = "expense";
   #sortKey = "name";
   #sortFxn: SortedEntityArrayFxn = (data) => data;
-
-  // Header
-  #breadcrumbs!: Breadcrumbs;
-  #addCategoryButton!: CustomButton;
 
   // Table action row
   #actionRow!: HTMLElement;
@@ -81,10 +88,11 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
   #overlayManager!: OverlayManager;
 
   #sortDropdown!: DropdownMenu;
-  #filterDropdown!: FilterBar;
-  #filters: AppliedFilter[] = [
+  #filterDropdown!: FilterBar<CategoryFilterValues>;
+  #filters: AppliedFilter<CategoryFilterValues>[] = [
     { key: "status", value: "Active", operator: "Equals" },
   ];
+  #unsubscribeBudgetingContext: (() => void) | null = null;
 
   /** Initializes the screen and subscribes to UI and budget events. */
   connectedCallback(): void {
@@ -98,12 +106,13 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
     if (this.#listening) return;
     this.#listening = true;
+    this.#range = budgetingYearRange(appState.get("budgetingContext").year);
     this.#list.addEventListener("click", this);
     this.#list.addEventListener("keydown", this);
     this.#actionRow.addEventListener("click", this);
     this.#datePicker.addEventListener("date-range-changed", this);
     this.#clearSelectionButton.addEventListener("click", this);
-    this.#breadcrumbs.addEventListener("click", this);
+    this.addEventListener("budgeting:header-action", this);
 
     this.#sortDropdown.addListener(this);
     this.#filterDropdown.addListener(this);
@@ -112,8 +121,14 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     window.addEventListener("budget:entity-sync-changed", this);
     window.addEventListener("budget:transaction-sync-changed", this);
     window.addEventListener("budget:transaction-saved", this);
+    this.#unsubscribeBudgetingContext = appState.subscribe(
+      "budgetingContext",
+      (context) => {
+        this.#range = budgetingYearRange(context.year);
+        this.#render();
+      },
+    );
     this.#render();
-    this.#setBreadcrumbs();
   }
 
   /** Removes every listener owned by the screen when routing detaches it. */
@@ -125,7 +140,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#actionRow.removeEventListener("click", this);
     this.#datePicker.removeEventListener("date-range-changed", this);
     this.#clearSelectionButton.removeEventListener("click", this);
-    this.#breadcrumbs.removeEventListener("click", this);
+    this.removeEventListener("budgeting:header-action", this);
 
     this.#sortDropdown.removeListener(this);
     this.#filterDropdown.removeListener(this);
@@ -134,6 +149,8 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     window.removeEventListener("budget:entity-sync-changed", this);
     window.removeEventListener("budget:transaction-sync-changed", this);
     window.removeEventListener("budget:transaction-saved", this);
+    this.#unsubscribeBudgetingContext?.();
+    this.#unsubscribeBudgetingContext = null;
   }
 
   /** Routes subscribed events to the appropriate screen behavior. */
@@ -173,6 +190,20 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
       case "filters-changed":
         this.#handleFiltersChanged(event);
+        break;
+
+      case "budgeting:header-action": {
+        const detail = (event as CustomEvent<{ action: string; anchor?: HTMLElement }>).detail;
+        if (detail.action === "new-category" && detail.anchor) {
+          this.#overlayManager.showEntityForm(detail.anchor, "category", {
+            side: "bottom",
+            align: "end",
+            gap: 8,
+            offset: 16,
+          });
+        }
+        break;
+      }
 
       default:
         break;
@@ -192,7 +223,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
     this.#tableViewButtons =
       this.querySelectorAll<CustomButton>("[data-table-view]");
     this.#datePicker = this.querySelector<DatePicker>("date-range-picker-2")!;
-    this.#breadcrumbs = this.querySelector<Breadcrumbs>("breadcrumbs-header")!;
     this.#totalCount = this.querySelector(".total-count")!;
     this.#totalSum = this.querySelector(".total-sum")!;
     this.#avgSum = this.querySelector(".avg-sum")!;
@@ -206,7 +236,7 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       "#sort-categories-dropdown",
     )!;
     this.#sortDropdown.items = [
-      { key: "name", title: "Name", defaultValue: true },
+      { key: "name", title: "Name", isDefaultValue: true },
       { key: "status", title: "Status" },
       { key: "count", title: "Transaction count" },
       { key: "total", title: "Total" },
@@ -225,14 +255,6 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       { key: "total", dataType: "number", title: "Total" },
     ];
     this.#filterDropdown.filters = this.#filters;
-  }
-
-  /** Sets the breadcrumbs at the top of the page */
-  #setBreadcrumbs(): void {
-    this.#breadcrumbs.setPath([
-      { title: "Budgeting" },
-      { title: "Categories", key: "categories" },
-    ]);
   }
 
   /** Recalculates transaction usage counts before rendering categories. */
@@ -258,10 +280,10 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
   /** Returns the current application transaction collection. */
   #transactions(): BudgetTransaction[] {
-    return (
+    return filterForBudgetingContext(
       appController.getTransactions() ??
       APIs.budget.getCachedTransactions() ??
-      []
+      [],
     );
   }
 
@@ -559,10 +581,9 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
       return;
     }
 
-    // if (row?.dataset.entityId) {
-    //   this.#navigateToCategory(row.dataset.entityId);
-    //   return;
-    // }
+    if (row?.dataset.entityId) {
+      this.#navigateToCategory(row.dataset.entityId);
+    }
   }
 
   /** Handles keyboard activation for category rows. */
@@ -612,9 +633,11 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
   /** Navigates to the selected category's entity detail route. */
   #navigateToCategory(categoryId: string): void {
-    router.navigate("entity-detail", {
+    router.navigate("budgeting/entity-detail", {
       kind: "category",
       id: categoryId,
+      year: String(appState.get("budgetingContext").year),
+      assignment: appState.get("budgetingContext").assignmentId ?? "all",
     });
   }
 
@@ -659,17 +682,17 @@ export class CategoryScreen extends HTMLElement implements EventListenerObject {
 
   // Sets the sort function based on the item selected from the menu, re-renders the page, and removes the listener.
   #handleSortSelection(event: Event) {
-    this.#sortDropdown.handleSelection(event, ({ value, title }) => {
+    this.#sortDropdown.handleSelection(event, ({ value }) => {
       this.#sortKey = value;
-      this.#sortFxn = sortCategoryScreen(e);
+      this.#sortFxn = sortCategoryScreen(value);
       this.#render();
       this.#sortDropdown.close();
     });
   }
 
   #handleFiltersChanged(event: Event) {
-    this.#filterDropdown.handleFiltersChanged(event, (e) => {
-      this.#filters = e.detail;
+    this.#filterDropdown.handleFiltersChanged(event, ({ filters }) => {
+      this.#filters = filters;
       this.#render();
     });
   }

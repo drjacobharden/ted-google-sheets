@@ -738,6 +738,14 @@ align-start {
 
 /* Justify */
 
+.justify-start {
+  justify-content: start;
+}
+
+.justify-end {
+  justify-content: end;
+}
+
 .justify-between {
   justify-content: space-between;
 }

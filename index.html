@@ -7,59 +7,39 @@
       name="description"
       content="A private, local-first budget tracker connected to Google Sheets."
     />
-    <title>TED</title>
+    <title hidden>TED</title>
+    <link rel="stylesheet" href="theme/tokens.css" />
+    <link rel="stylesheet" href="theme/variables.css" />
+    <link rel="stylesheet" href="theme/elements.css" />
+
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="css/tokens.css" />
     <link rel="stylesheet" href="css/components.css" />
     <link rel="stylesheet" href="css/branding.css" />
-    <!-- <link rel="stylesheet" href="css/navigation-bar.css" /> -->
+    <link rel="stylesheet" href="css/navigation-bar.css" />
     <link rel="stylesheet" href="css/responsiveness.css" />
     <link rel="stylesheet" href="dist/bundle.css" />
 
     <script src="dist/bundle.js"></script>
   </head>
   <body>
+    <!-- <nav-bar></nav-bar> -->
     <overlay-manager></overlay-manager>
     <main class="app-shell">
       <!-- <navigation-bar></navigation-bar> -->
-      <top-nav></top-nav>
+      <top-nav class="nav"></top-nav>
       <div id="route-outlet"></div>
       <!-- Dashboard tab -->
       <template id="route-dashboard">
         <dashboard-screen></dashboard-screen>
       </template>
-      <!-- Budget overview tab -->
-      <template id="route-budget-overview">
-        <budget-overview-screen-3></budget-overview-screen-3>
+      <!-- Persistent budgeting workspace -->
+      <template id="route-budgeting">
+        <budgeting-shell></budgeting-shell>
       </template>
       <!-- Import tab -->
       <template id="route-import">
         <import-screen></import-screen>
-      </template>
-
-      <!-- Transaction list tab -->
-      <template id="route-transactions">
-        <transaction-list-screen></transaction-list-screen>
-      </template>
-      <!-- Categories tab -->
-      <template id="route-categories">
-        <category-screen></category-screen>
-      </template>
-      <!-- Vendors tab -->
-      <template id="route-vendors">
-        <vendors-screen></vendors-screen>
-      </template>
-      <!-- People tab -->
-      <template id="route-people">
-        <people-screen></people-screen>
-      </template>
-      <!-- Entity archive -->
-      <template id="route-entity-archive">
-        <entity-archive-screen></entity-archive-screen>
-      </template>
-      <!-- Entity drill down tab -->
-      <template id="route-entity-detail">
-        <entity-detail-screen></entity-detail-screen>
       </template>
       <!-- Sync tab -->
       <template id="route-sync">

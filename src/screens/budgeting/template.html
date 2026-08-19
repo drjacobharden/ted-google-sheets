@@ -1,0 +1,28 @@
+<header class="budgeting-shell__header">
+  <div class="budgeting-shell__breadcrumbs">
+    <h1 class="fw-medium text-400">Budgeting</h1>
+    <custom-icon icon="chevronRight" class="muted"></custom-icon>
+    <dropdown-menu
+      id="budgeting-content-selector"
+      variant="ghost"
+      hide-trailing-chevron
+    ></dropdown-menu>
+    <div id="budgeting-breadcrumb-tail"></div>
+    <custom-icon icon="chevronRight" class="muted"></custom-icon>
+    <dropdown-menu
+      id="budgeting-year-selector"
+      variant="ghost"
+      hide-trailing-chevron
+      aria-label="Budget year"
+    ></dropdown-menu>
+    <custom-icon icon="chevronRight" class="muted"></custom-icon>
+    <dropdown-menu
+      id="budgeting-assignment-selector"
+      variant="ghost"
+      hide-trailing-chevron
+      aria-label="Assignment filter"
+    ></dropdown-menu>
+  </div>
+  <div id="budgeting-header-actions" class="budgeting-shell__actions"></div>
+</header>
+<div id="budgeting-view-outlet" class="budgeting-shell__outlet"></div>
