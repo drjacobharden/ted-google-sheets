@@ -56,7 +56,7 @@ export class CustomButton extends HTMLElement {
     span.textContent = label;
     span.setAttribute("class", "button");
     this.#label = span;
-    this.append(span);
+    this.insertBefore(span, this.#trailingIcon);
   }
 
   #createLeadingIcon(leadingIcon: IconKeys) {
