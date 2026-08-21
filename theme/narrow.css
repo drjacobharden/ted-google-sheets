@@ -1,5 +1,4 @@
-@media (max-width: 600px) {
-  .nav-inner {
-    grid-template-columns: 1fr auto;
-  }
-}
+/*
+ * Reserved for responsive overrides shared by multiple editorial screens.
+ * Component-specific breakpoints should remain beside their components.
+ */
