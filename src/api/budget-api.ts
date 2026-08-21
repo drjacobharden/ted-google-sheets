@@ -130,6 +130,10 @@ export interface BudgetAPIContract {
     input: BudgetTransactionInput,
     openedRecord: BudgetTransaction,
   ): BudgetTransaction;
+  deleteTransaction(
+    id: string,
+    openedRecord?: BudgetTransaction | null,
+  ): Promise<void>;
   syncOutbox(): Promise<void> | null;
   getOutboxTransactions(): BudgetTransaction[];
   getOutboxStatus(): SyncSummary;
@@ -1678,6 +1682,14 @@ export function BudgetAPI(): BudgetAPIContract {
     );
     writeConfirmedTransactionCache([...byId.values()]);
   }
+  /** Removes one transaction from the confirmed client cache. */
+  function removeConfirmedTransactionFromCache(id) {
+    const cached = readConfirmedTransactionCache();
+    if (!cached) return;
+    writeConfirmedTransactionCache(
+      cached.transactions.filter((transaction) => transaction.id !== id),
+    );
+  }
   /** Handles the mergeServerTransactions operation for the budget data layer. */
   function mergeServerTransactions(data) {
     if (!Array.isArray(data))
@@ -2117,6 +2129,41 @@ export function BudgetAPI(): BudgetAPIContract {
     emitSyncStatus();
     scheduleSync(0);
     return queued;
+  }
+
+  /** Deletes a transaction locally or from the connected Sheet. */
+  async function deleteTransaction(id, openedRecord = null) {
+    ensureLocalData();
+    const transactionId = String(id || "");
+    if (!transactionId) throw new Error("That transaction could not be found.");
+
+    if (getConfig().endpoint) {
+      await request("deleteTransaction", {
+        body: {
+          deletion: {
+            id: transactionId,
+            base: openedRecord
+              ? confirmedTransactionRecord(openedRecord)
+              : null,
+          },
+        },
+      });
+      removeConfirmedTransactionFromCache(transactionId);
+    } else {
+      const transactions = readArray(KEYS.transactions);
+      if (!transactions.some((transaction) => transaction.id === transactionId))
+        throw new Error("That transaction could not be found.");
+      writeArray(
+        KEYS.transactions,
+        transactions.filter((transaction) => transaction.id !== transactionId),
+      );
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("budget:transaction-removed", {
+        detail: { id: transactionId },
+      }),
+    );
   }
 
   /** Handles the sendTransactionBatch operation for the budget data layer. */
@@ -2657,6 +2704,7 @@ export function BudgetAPI(): BudgetAPIContract {
     queueTransaction,
     queueImportedTransactions,
     queueTransactionUpdate,
+    deleteTransaction,
     syncOutbox,
     getOutboxTransactions,
     getOutboxStatus,

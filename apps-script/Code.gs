@@ -302,6 +302,8 @@ function handleRequest_(request) {
         );
       case "updateTransactions":
         return successResult_(updateTransactions_(request.updates));
+      case "deleteTransaction":
+        return successResult_(deleteTransaction_(request.deletion));
       case "addEntities":
         return success_(addEntities_(request.entities));
       case "listUsers":
@@ -919,6 +921,85 @@ function updateTransactions_(inputs) {
       }
     }
     return { data: { saved: saved, failed: failed }, warning: warning };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteTransaction_(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("A transaction deletion is required.");
+  const id = requireUuid_(input.id, "Transaction ID");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const spreadsheet = getSpreadsheet_();
+    const transactionSheet = requiredSheet_(spreadsheet, TABLES.transactions);
+    const ledgerSheet = requiredSheet_(spreadsheet, TABLES.ledger);
+    const records = readRecordsFromSheet_(
+      transactionSheet,
+      TABLES.transactions,
+      true,
+    );
+    const index = records.findIndex(function (transaction) {
+      return transaction.id === id;
+    });
+    if (index < 0) throw new Error("That transaction could not be found.");
+    const existing = records[index];
+    if (input.base && !editableTransactionsMatch_(existing, input.base))
+      throw new Error("This transaction changed in the Sheet after you opened it.");
+
+    records.splice(index, 1);
+    if (records.length)
+      transactionSheet
+        .getRange(2, 1, records.length, TABLES.transactions.headers.length)
+        .setValues(
+          records.map(function (transaction) {
+            return recordToRow_(TABLES.transactions, transaction);
+          }),
+        );
+    transactionSheet
+      .getRange(records.length + 2, 1, 1, TABLES.transactions.headers.length)
+      .clearContent();
+
+    let warning = "";
+    try {
+      const lastRow = ledgerSheet.getLastRow();
+      const ledgerRows =
+        lastRow < 2
+          ? []
+          : ledgerSheet
+              .getRange(2, 1, lastRow - 1, TABLES.ledger.headers.length)
+              .getValues();
+      const remainingLedgerRows = ledgerRows.filter(function (row) {
+        return String(row[8] || "") !== id;
+      });
+      if (remainingLedgerRows.length === ledgerRows.length)
+        throw new Error("The deleted transaction is missing from the Ledger.");
+      if (remainingLedgerRows.length)
+        ledgerSheet
+          .getRange(
+            2,
+            1,
+            remainingLedgerRows.length,
+            TABLES.ledger.headers.length,
+          )
+          .setValues(remainingLedgerRows);
+      ledgerSheet
+        .getRange(
+          remainingLedgerRows.length + 2,
+          1,
+          ledgerRows.length - remainingLedgerRows.length,
+          TABLES.ledger.headers.length,
+        )
+        .clearContent();
+    } catch (error) {
+      markLedgerDirty_();
+      warning =
+        "The transaction was deleted, but the Ledger needs to be rebuilt: " +
+        errorMessage_(error);
+    }
+    return { data: { id: id }, warning: warning };
   } finally {
     lock.releaseLock();
   }
