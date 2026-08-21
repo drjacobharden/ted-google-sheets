@@ -13,7 +13,10 @@ export interface SegmentedControlSelectionEvent extends CustomEvent {
   };
 }
 
-/** Displays a variable-width set of mutually exclusive choices. */
+/**
+ * Displays mutually exclusive choices with a shared animated indicator.
+ * Use the `section-tabs` variant for route-level navigation in any app area.
+ */
 export class SegmentedControl
   extends HTMLElement
   implements EventListenerObject

@@ -1,5 +1,7 @@
 search-bar {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   height: var(--button-height);
   background-color: var(--surface-highlight-subtle);
   border: 1px solid var(--border);
@@ -11,9 +13,47 @@ search-bar {
   min-width: 30%;
 }
 
+search-bar[variant="editorial"] {
+  width: min(230px, 28vw);
+  min-width: 180px;
+  height: 42px;
+  box-sizing: border-box;
+  margin: 0;
+  border: 1px solid var(--color-rule-strong);
+  border-radius: var(--radius-xs, 3px);
+  background: transparent;
+  color: var(--color-text);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+search-bar[variant="editorial"]:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+search-bar[variant="editorial"] input {
+  display: block;
+  height: 100%;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  line-height: normal;
+  outline: 0;
+}
+
+search-bar[variant="editorial"] input::placeholder {
+  color: var(--color-text-subtle);
+}
+
 search-bar svg {
+  display: block;
   height: 16px;
   width: 16px;
+  flex: 0 0 16px;
+  align-self: center;
   stroke-width: 2px;
 }
 

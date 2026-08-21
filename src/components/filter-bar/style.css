@@ -121,7 +121,111 @@ filter-bar[is-open] {
   pointer-events: none;
 }
 
+filter-bar[variant="editorial"] {
+  > .filter-bar__trigger.secondary-button {
+    height: 42px;
+    padding: 8px 12px;
+    border: var(--rule-thin) solid var(--color-rule-strong);
+    border-radius: var(--radius-subtle);
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    box-shadow: none;
+
+    &:hover,
+    &:active {
+      background: var(--color-surface-subtle);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+  }
+
+  > .filter-bar__popover.popover {
+    border: var(--rule-thin) solid var(--color-rule-strong);
+    border-radius: var(--radius-subtle);
+    background: var(--color-surface-raised);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--color-text) 14%, transparent);
+    color: var(--color-text);
+    font-family: var(--font-body);
+  }
+
+  .filter-bar__body {
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+
+    > custom-button.secondary-button {
+      justify-self: start;
+      border: var(--rule-thin) solid var(--color-rule-strong);
+      border-radius: var(--radius-subtle);
+      background: transparent;
+      font-family: var(--font-body);
+
+      &:hover,
+      &:active {
+        background: var(--color-surface-subtle);
+      }
+    }
+  }
+
+  .filter-bar__empty p {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+  }
+
+  .filter-bar__value-input {
+    height: 42px;
+    border: var(--rule-thin) solid var(--color-rule-strong);
+    border-radius: var(--radius-subtle);
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+  }
+
+  .filter-bar__value-input:focus {
+    border-color: var(--color-accent);
+    box-shadow: none;
+    outline: 2px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+    outline-offset: 1px;
+  }
+
+  .filter-bar__footer {
+    padding: var(--space-xs) var(--space-sm);
+    border-top: var(--rule-thin) solid var(--color-rule);
+
+    custom-button {
+      border-radius: var(--radius-subtle);
+      font-family: var(--font-body);
+    }
+
+    .secondary-button {
+      border: var(--rule-thin) solid var(--color-rule-strong);
+      background: transparent;
+    }
+
+    .primary-button {
+      background: var(--color-text);
+      color: var(--color-text-inverse);
+    }
+  }
+}
+
 @media (max-width: 680px) {
+  filter-bar[variant="editorial"] > .filter-bar__trigger.secondary-button {
+    width: 42px;
+    min-width: 42px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  filter-bar[variant="editorial"] > .filter-bar__trigger .button {
+    display: none;
+  }
+
   .filter-bar__row {
     grid-template-columns: minmax(0, 1fr) 32px;
   }

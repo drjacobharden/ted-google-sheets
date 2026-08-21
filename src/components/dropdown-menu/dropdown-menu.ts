@@ -33,6 +33,8 @@ export class DropdownMenu extends HTMLElement {
   #unsubscribeFromState: (() => void) | null = null;
   #value: string | null = null;
   #selection: HTMLElement | null = null;
+  #hoverOpenTimer: ReturnType<typeof setTimeout> | null = null;
+  #hoverCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    *
@@ -53,16 +55,24 @@ export class DropdownMenu extends HTMLElement {
 
       this.#renderTrigger();
       this.#renderItems();
+      this.#trigger.tabIndex = 0;
       this.#trigger.setAttribute("aria-haspopup", "menu");
       this.#trigger.setAttribute("aria-expanded", "false");
+      this.#menu.setAttribute("role", "menu");
     }
 
     if (this.#listening) return;
     this.#listening = true;
 
     this.#trigger.addEventListener("click", this);
+    this.#trigger.addEventListener("keydown", this);
     this.#menu.addEventListener("click", this);
+    this.#menu.addEventListener("keydown", this);
     this.#menu.addEventListener("popover-dismiss", this);
+    if (this.hasAttribute("open-on-hover")) {
+      this.addEventListener("pointerenter", this);
+      this.addEventListener("pointerleave", this);
+    }
     this.#unsubscribeFromState = appState.subscribe(
       "activeDropdownKey",
       (activeKey) => {
@@ -75,8 +85,13 @@ export class DropdownMenu extends HTMLElement {
     if (!this.#listening) return;
     this.#listening = false;
     this.#trigger.removeEventListener("click", this);
+    this.#trigger.removeEventListener("keydown", this);
     this.#menu.removeEventListener("click", this);
+    this.#menu.removeEventListener("keydown", this);
     this.#menu.removeEventListener("popover-dismiss", this);
+    this.removeEventListener("pointerenter", this);
+    this.removeEventListener("pointerleave", this);
+    this.#clearHoverTimers();
     this.#unsubscribeFromState?.();
     this.#unsubscribeFromState = null;
     if (appState.get("activeDropdownKey") === this.#menuKey) {
@@ -135,6 +150,9 @@ export class DropdownMenu extends HTMLElement {
         option.append(getIcon(icon));
       }
 
+      option.setAttribute("role", "menuitem");
+      option.tabIndex = -1;
+
       const label = document.createElement("span");
       label.textContent = title;
       option.append(label);
@@ -150,7 +168,7 @@ export class DropdownMenu extends HTMLElement {
         this.#selection = option;
         this.#selection.classList.add("is-selected");
         this.#value = key;
-        this.#trigger.label = title;
+        if (!this.hasAttribute("preserve-label")) this.#trigger.label = title;
       }
 
       if (destructive) {
@@ -175,6 +193,18 @@ export class DropdownMenu extends HTMLElement {
         this.#handleClick(event);
         break;
 
+      case "keydown":
+        this.#handleKeydown(event as KeyboardEvent);
+        break;
+
+      case "pointerenter":
+        this.#scheduleHoverOpen();
+        break;
+
+      case "pointerleave":
+        this.#scheduleHoverClose();
+        break;
+
       case "popover-dismiss":
         this.close();
         break;
@@ -194,14 +224,7 @@ export class DropdownMenu extends HTMLElement {
       if (visible) {
         this.close();
       } else {
-        appState.set("activeDropdownKey", this.#menuKey);
-        this.#menu.show(this.#trigger, {
-          side: "bottom",
-          align: "end",
-          gap: 4,
-        });
-        this.toggleAttribute("is-open", true);
-        this.#trigger.setAttribute("aria-expanded", "true");
+        this.open();
       }
     }
 
@@ -220,7 +243,9 @@ export class DropdownMenu extends HTMLElement {
     this.#selection = item;
     this.#selection?.classList.add("is-selected");
     this.#value = item.dataset.value ?? null;
-    this.#trigger.label = item.dataset.title!;
+    if (!this.hasAttribute("preserve-label")) {
+      this.#trigger.label = item.dataset.title!;
+    }
     this.#events.dispatch(
       {
         id: this.#menuKey,
@@ -262,6 +287,23 @@ export class DropdownMenu extends HTMLElement {
     }
   }
 
+  open(options: { focusFirst?: boolean } = {}) {
+    this.#clearHoverTimers();
+    appState.set("activeDropdownKey", this.#menuKey);
+    this.#menu.show(this.#trigger, {
+      side: "bottom",
+      align: this.hasAttribute("align-start") ? "start" : "end",
+      gap: 4,
+    });
+    this.toggleAttribute("is-open", true);
+    this.#trigger.setAttribute("aria-expanded", "true");
+    if (options.focusFirst) {
+      this.#menu
+        .querySelector<HTMLElement>(".dropdown-menu-item")
+        ?.focus();
+    }
+  }
+
   close() {
     if (appState.get("activeDropdownKey") === this.#menuKey) {
       appState.set("activeDropdownKey", null);
@@ -274,6 +316,63 @@ export class DropdownMenu extends HTMLElement {
     this.#menu.hide();
     this.#trigger.setAttribute("aria-expanded", "false");
     this.toggleAttribute("is-open", false);
+  }
+
+  #handleKeydown(event: KeyboardEvent) {
+    const items = [
+      ...this.#menu.querySelectorAll<HTMLElement>(".dropdown-menu-item"),
+    ];
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    if (event.currentTarget === this.#trigger) {
+      if (!["Enter", " ", "ArrowDown"].includes(event.key)) return;
+      event.preventDefault();
+      this.open({ focusFirst: true });
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      this.close();
+      this.#trigger.focus();
+      return;
+    }
+    if ((event.key === "Enter" || event.key === " ") && currentIndex >= 0) {
+      event.preventDefault();
+      this.#handleSelection(items[currentIndex]);
+      return;
+    }
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : event.key === "ArrowDown"
+            ? (currentIndex + 1) % items.length
+            : event.key === "ArrowUp"
+              ? (currentIndex - 1 + items.length) % items.length
+              : -1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    items[nextIndex]?.focus();
+  }
+
+  #scheduleHoverOpen() {
+    if (this.#hoverCloseTimer) clearTimeout(this.#hoverCloseTimer);
+    this.#hoverCloseTimer = null;
+    if (this.hasAttribute("is-open")) return;
+    this.#hoverOpenTimer = setTimeout(() => this.open(), 120);
+  }
+
+  #scheduleHoverClose() {
+    if (this.#hoverOpenTimer) clearTimeout(this.#hoverOpenTimer);
+    this.#hoverOpenTimer = null;
+    this.#hoverCloseTimer = setTimeout(() => this.close(), 180);
+  }
+
+  #clearHoverTimers() {
+    if (this.#hoverOpenTimer) clearTimeout(this.#hoverOpenTimer);
+    if (this.#hoverCloseTimer) clearTimeout(this.#hoverCloseTimer);
+    this.#hoverOpenTimer = null;
+    this.#hoverCloseTimer = null;
   }
 
   #events = createEventHandler("dropdown-selection", this);

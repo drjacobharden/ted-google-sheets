@@ -5,6 +5,14 @@ import { OverlayManager } from "../overlay-manager/overlay-manager";
 import TopNavBarTempString from "./template.html" with { type: "text" };
 import { CustomButton } from "../../components/button/button";
 import { appState } from "../../state/app-state";
+import type {
+  DropdownMenu,
+  DropdownSelectionEvent,
+} from "../../components/dropdown-menu/dropdown-menu";
+import {
+  BUDGETING_CONTENT_ROUTES,
+  getBudgetingRouteDefinition,
+} from "../../screens/budgeting/route-definitions";
 
 const TopNavBarTemp = document.createElement("template");
 TopNavBarTemp.innerHTML = TopNavBarTempString;
@@ -25,27 +33,27 @@ class TopNavBar extends HTMLElement {
   #nav: HTMLElement | null = null;
   #tooltipButtons: NodeListOf<HTMLElement> | null = null;
   #routeOutlet: HTMLElement | null = null;
+  #budgetingMenu!: DropdownMenu;
+  #mobileToggle!: HTMLElement;
+  #mobilePanel!: HTMLElement;
 
   async connectedCallback() {
     const clone = TopNavBarTemp.content.cloneNode(true) as DocumentFragment;
 
     this.append(clone);
-    this.classList.add("pad-screen");
 
-    const buttonWrapper = this.querySelector("#top-navigation-wrapper");
-    const buttons = NAVIGATION_BUTTONS.map((item) => {
-      const b = document.createElement("custom-button") as CustomButton;
-      b.classList.add("secondary-button");
-      b.label = item.title;
-      b.leadingIcon = item.icon as IconKeys;
-      b.dataset.tab = item.tab;
-
-      return b;
-    });
-
-    buttonWrapper?.replaceChildren(...buttons);
+    this.#budgetingMenu = this.querySelector<DropdownMenu>(
+      "#top-budgeting-menu",
+    )!;
+    this.#renderBudgetingMenu();
+    this.#budgetingMenu.addListener(this);
+    this.#mobileToggle = this.querySelector("#top-mobile-menu-toggle")!;
+    this.#mobilePanel = this.querySelector("#top-mobile-navigation")!;
+    this.#mobilePanel.inert = true;
+    this.#renderMobileNavigation();
 
     this.addEventListener("click", this);
+    document.addEventListener("keydown", this);
     window.addEventListener("app:route-changed", this);
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", this, { once: true });
@@ -163,6 +171,41 @@ class TopNavBar extends HTMLElement {
 
       case "app:route-changed":
         this.classList.remove("is-scrolled");
+        this.#closeMobileNavigation();
+        this.#renderBudgetingMenu(
+          (
+            event as CustomEvent<
+              import("../../router/types").RouteChangedEventDetail
+            >
+          ).detail.name,
+        );
+        this.#renderMobileNavigation(
+          (
+            event as CustomEvent<
+              import("../../router/types").RouteChangedEventDetail
+            >
+          ).detail.name,
+        );
+        break;
+
+      case "keydown":
+        if (
+          ["Enter", " "].includes((event as KeyboardEvent).key) &&
+          (event.target as Element | null)?.closest(
+            '[data-action="open-mobile-navigation"], [data-action="close-mobile-navigation"]',
+          )
+        ) {
+          event.preventDefault();
+          (event.target as HTMLElement).click();
+        } else if ((event as KeyboardEvent).key === "Escape") {
+          this.#closeMobileNavigation();
+        } else if ((event as KeyboardEvent).key === "Tab") {
+          this.#trapMobileNavigationFocus(event as KeyboardEvent);
+        }
+        break;
+
+      case "dropdown-selection":
+        this.#handleBudgetingSelection(event as DropdownSelectionEvent);
         break;
 
       case "DOMContentLoaded":
@@ -197,8 +240,149 @@ class TopNavBar extends HTMLElement {
     const target = event.target as HTMLElement | null;
     if (!target) return;
 
+    const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
+    if (action === "open-mobile-navigation") {
+      event.preventDefault();
+      this.#openMobileNavigation();
+      return;
+    }
+    if (action === "close-mobile-navigation") {
+      event.preventDefault();
+      this.#closeMobileNavigation();
+      return;
+    }
+
+    const mobileRoute = target.closest<HTMLElement>("[data-mobile-route]")
+      ?.dataset.mobileRoute as import("../../router/types").RouteName | undefined;
+    if (mobileRoute) {
+      event.preventDefault();
+      this.#navigateFromMobileMenu(mobileRoute);
+      return;
+    }
+
+    if (target.closest("#top-budgeting-menu")) return;
+
+    const newTransaction = target.closest('[data-action="new-transaction"]');
+    if (newTransaction) {
+      event.preventDefault();
+      const context = appState.get("budgetingContext");
+      const destination = router.isBudgetingRoute(router.currentRoute())
+        ? router.currentRoute()
+        : context.lastRoute;
+      router.navigate(
+        destination as import("../../router/types").BudgetingRouteName,
+        {
+          ...context.lastParams,
+          drawer: "new",
+          transactionId: "",
+        },
+      );
+      return;
+    }
+
     event.preventDefault();
     this.handleNavigationClick(target);
+  }
+
+  #renderBudgetingMenu(activeRoute = router.currentRoute()): void {
+    const activeDefinition = router.isBudgetingRoute(activeRoute)
+      ? getBudgetingRouteDefinition(activeRoute, router.currentParams())
+      : null;
+    this.#budgetingMenu.items = BUDGETING_CONTENT_ROUTES.map((item) => ({
+      key: item.route,
+      title: item.title,
+      icon: item.icon,
+      isDefaultValue: item.contentKey === activeDefinition?.contentKey,
+    }));
+  }
+
+  #renderMobileNavigation(activeRoute = router.currentRoute()): void {
+    const budgetingDefinition = router.isBudgetingRoute(activeRoute)
+      ? getBudgetingRouteDefinition(activeRoute, router.currentParams())
+      : null;
+    const investmentRoute = activeRoute === "investment-account-detail"
+      ? "investment-accounts"
+      : activeRoute;
+
+    this.querySelectorAll<HTMLElement>("[data-mobile-route]").forEach((item) => {
+      const route = item.dataset.mobileRoute;
+      const active = budgetingDefinition
+        ? item.dataset.contentKey === budgetingDefinition.contentKey
+        : route === investmentRoute;
+      item.classList.toggle("is-active", active);
+      if (active) item.setAttribute("aria-current", "page");
+      else item.removeAttribute("aria-current");
+    });
+
+    this.querySelectorAll<HTMLElement>("[data-mobile-section]").forEach(
+      (section) => {
+        section.classList.toggle(
+          "is-active",
+          Boolean(section.querySelector('[aria-current="page"]')),
+        );
+      },
+    );
+  }
+
+  #navigateFromMobileMenu(
+    route: import("../../router/types").RouteName,
+  ): void {
+    this.#closeMobileNavigation();
+    if (router.isBudgetingRoute(route)) {
+      const context = appState.get("budgetingContext");
+      router.navigate(route, {
+        year: String(context.year),
+      });
+      return;
+    }
+    router.navigate(route);
+  }
+
+  #openMobileNavigation(): void {
+    this.toggleAttribute("mobile-menu-open", true);
+    this.#mobileToggle.setAttribute("aria-expanded", "true");
+    this.#mobilePanel.setAttribute("aria-hidden", "false");
+    this.#mobilePanel.inert = false;
+    this.#mobilePanel
+      .querySelector<HTMLElement>('[data-action="close-mobile-navigation"]')
+      ?.focus();
+  }
+
+  #closeMobileNavigation(restoreFocus = true): void {
+    if (!this.hasAttribute("mobile-menu-open")) return;
+    this.removeAttribute("mobile-menu-open");
+    this.#mobileToggle.setAttribute("aria-expanded", "false");
+    this.#mobilePanel.setAttribute("aria-hidden", "true");
+    this.#mobilePanel.inert = true;
+    if (restoreFocus) this.#mobileToggle.focus();
+  }
+
+  #trapMobileNavigationFocus(event: KeyboardEvent): void {
+    if (!this.hasAttribute("mobile-menu-open")) return;
+    const focusable = Array.from(
+      this.#mobilePanel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), custom-button[tabindex="0"]',
+      ),
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  #handleBudgetingSelection(event: DropdownSelectionEvent): void {
+    const route = event.detail
+      .value as import("../../router/types").BudgetingRouteName;
+    const context = appState.get("budgetingContext");
+    router.navigate(route, {
+      year: String(context.year),
+    });
   }
 
   private handleNavigationClick(target: HTMLElement) {
@@ -245,6 +429,8 @@ class TopNavBar extends HTMLElement {
 
   disconnectedCallback() {
     this.removeEventListener("click", this);
+    document.removeEventListener("keydown", this);
+    this.#budgetingMenu?.removeListener(this);
     document.removeEventListener("DOMContentLoaded", this);
     this.#routeOutlet?.removeEventListener("scroll", this, true);
     window.removeEventListener("app:route-changed", this);
