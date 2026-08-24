@@ -11,26 +11,21 @@ let transactions: BudgetTransaction[] = [];
 let loaded = false;
 let referenceDataLoaded = false;
 let appDataPromise: Promise<unknown> | null = null;
-let budgetOverviewAssignmentId: string | null = null;
-
 function emit<T>(name: string, detail?: T): void { window.dispatchEvent(new CustomEvent(name, { detail })); }
 function buildBudgetOverviewState(
   sourceTransactions: BudgetTransaction[],
-  assignmentId: string | null,
 ): BudgetOverviewDerivedState {
   const monthlyTransactionSummaries = buildMonthlyTransactionSummaries(sourceTransactions);
   const annualSummaryCards = buildAnnualSummaryCards(
     sourceTransactions,
     APIs.investment.accounts(),
     APIs.investment.contributions(),
-    { assignmentId },
   );
   const years = [...new Set([
     ...Object.keys(monthlyTransactionSummaries).map(Number),
     ...Object.keys(annualSummaryCards.summaries).map(Number),
   ])].sort((a, b) => a - b);
   return {
-    assignmentId,
     monthlyTransactionSummaries,
     annualSummaryCards: annualSummaryCards.summaries,
     annualSpendTrendsByYear: Object.fromEntries(years.map((year) => [
@@ -45,14 +40,9 @@ function buildBudgetOverviewState(
 }
 
 function updateBudgetOverviewState(): void {
-  const filteredTransactions = budgetOverviewAssignmentId === null
-    ? transactions
-    : transactions.filter(
-        (transaction) => transaction.assignmentId === budgetOverviewAssignmentId,
-      );
   appState.set(
     "budgetOverview",
-    buildBudgetOverviewState(filteredTransactions, budgetOverviewAssignmentId),
+    buildBudgetOverviewState(transactions),
   );
 }
 
@@ -126,6 +116,11 @@ export async function initializeData(options: { refresh?: boolean; startup?: boo
   appDataPromise = APIs.budget.loadAppData({ refresh: options.refresh }).then(async data => {
     transactions = data.transactions ?? []; loaded = true; referenceDataLoaded = true; updateDerivedTransactionState();
     await APIs.investment.load();
+    await APIs.debt.load().catch(() => ({
+      accounts: APIs.debt.accounts(),
+      balances: APIs.debt.balances(),
+      payments: APIs.debt.payments(),
+    }));
     emit("budget:transactions-loaded", { source: "server" });
     emit("budget:data-refresh-complete", { source: "server" });
     return data;
@@ -164,6 +159,23 @@ export const appController = {
   getAnnualSummaryCards: () => appState.get("annualSummaryCards"),
   hasPaycheckDeductionHistory: () => appState.get("hasPaycheckDeductionHistory"),
   getBudgetOverview: () => appState.get("budgetOverview"),
+  getMonthlyLedger: (assignmentId: string | null) => {
+    const sourceTransactions = assignmentId === null
+      ? transactions
+      : transactions.filter(
+          (transaction) => transaction.assignmentId === assignmentId,
+        );
+    return {
+      monthlyTransactionSummaries:
+        buildMonthlyTransactionSummaries(sourceTransactions),
+      annualSummaryCards: buildAnnualSummaryCards(
+        sourceTransactions,
+        APIs.investment.accounts(),
+        APIs.investment.contributions(),
+        { assignmentId },
+      ).summaries,
+    };
+  },
   getBudgetOverviewAssignments: () => {
     const assignments = new Map<string, string>();
     transactions.forEach((transaction) => {
@@ -179,11 +191,6 @@ export const appController = {
     return [...assignments]
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  },
-  setBudgetOverviewAssignment: (assignmentId: string | null): void => {
-    if (budgetOverviewAssignmentId === assignmentId) return;
-    budgetOverviewAssignmentId = assignmentId;
-    updateBudgetOverviewState();
   },
   getTransaction: (id: string): BudgetTransaction | null => transactions.find(item => item.id === id) ?? null,
   areTransactionsLoaded: (): boolean => loaded,
