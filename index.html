@@ -18,24 +18,43 @@
     <link rel="stylesheet" href="css/branding.css" />
     <link rel="stylesheet" href="css/navigation-bar.css" />
     <link rel="stylesheet" href="css/responsiveness.css" />
-    <link rel="stylesheet" href="dist/bundle.css" />
+    <link rel="stylesheet" href="dist/bundle.css?v=11" />
 
-    <script src="dist/bundle.js"></script>
+    <script src="dist/bundle.js?v=11"></script>
   </head>
   <body>
-    <!-- <nav-bar></nav-bar> -->
     <overlay-manager></overlay-manager>
     <main class="app-shell">
       <!-- <navigation-bar></navigation-bar> -->
       <top-nav class="nav"></top-nav>
+      <budgeting-header></budgeting-header>
+      <investments-header></investments-header>
       <div id="route-outlet"></div>
       <!-- Dashboard tab -->
       <template id="route-dashboard">
         <dashboard-screen></dashboard-screen>
       </template>
-      <!-- Persistent budgeting workspace -->
-      <template id="route-budgeting">
-        <budgeting-shell></budgeting-shell>
+      <!-- Budgeting screens -->
+      <template id="route-budget-overview">
+        <budget-overview-screen></budget-overview-screen>
+      </template>
+      <template id="route-transactions">
+        <transaction-list-screen></transaction-list-screen>
+      </template>
+      <template id="route-categories">
+        <category-screen></category-screen>
+      </template>
+      <template id="route-vendors">
+        <vendors-screen></vendors-screen>
+      </template>
+      <template id="route-people">
+        <people-screen></people-screen>
+      </template>
+      <template id="route-entity-detail">
+        <entity-detail-screen></entity-detail-screen>
+      </template>
+      <template id="route-entity-archive">
+        <entity-archive-screen></entity-archive-screen>
       </template>
       <!-- Import tab -->
       <template id="route-import">
@@ -57,9 +76,19 @@
       <template id="route-investment-accounts">
         <investment-accounts-screen></investment-accounts-screen>
       </template>
+      <!-- Investment debts tab -->
+      <template id="route-investment-debts">
+        <investment-debts-screen></investment-debts-screen>
+      </template>
+      <template id="route-investment-ledger">
+        <investment-ledger-screen></investment-ledger-screen>
+      </template>
       <!-- Investment account detail -->
       <template id="route-investment-account-detail">
         <investment-account-detail-screen></investment-account-detail-screen>
+      </template>
+      <template id="route-investment-debt-detail">
+        <investment-debt-detail-screen></investment-debt-detail-screen>
       </template>
     </main>
   </body>
