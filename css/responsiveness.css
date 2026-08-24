@@ -160,7 +160,7 @@
   .entity-summary-grid {
     grid-template-columns: 1fr;
   }
-  .transaction-drawer {
+  .side-drawer {
     width: 100%;
     padding: 22px 18px;
   }
