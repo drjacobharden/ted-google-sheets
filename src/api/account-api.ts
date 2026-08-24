@@ -1,5 +1,6 @@
 import type { DebtAPIContract } from "./debt-api";
 import type { InvestmentAPIContract } from "./investment-api";
+import { readStorageRecords, writeStorageArray } from "../utilities/data-utilities";
 
 export type AccountType = "investment" | "debt";
 export type AccountActivityType = "contribution" | "payment" | "borrowing";
@@ -32,5 +33,14 @@ export function AccountAPI(investment: InvestmentAPIContract, debt: DebtAPIContr
     ...investment.contributions().map((item) => ({ ...item, activityType: "contribution" as const })),
     ...debt.payments().map((item) => ({ ...item, accountId: item.debtAccountId, activityType: item.kind })),
   ];
-  return { accounts, balances, activity, applyBootstrapData: (data) => { investment.applyBootstrapData(data); debt.applyBootstrapData(data); } };
+  // Seed normalized local keys once. The two legacy APIs remain only as UI
+  // adapters until those screens move to this contract; their pending data is
+  // retained rather than cleared during the staged migration.
+  const persistNormalized = () => {
+    writeStorageArray("myFinance.accounts.v1", accounts());
+    writeStorageArray("myFinance.accountBalances.v1", balances());
+    writeStorageArray("myFinance.accountActivity.v1", activity());
+  };
+  if (!readStorageRecords("myFinance.accounts.v1").length) persistNormalized();
+  return { accounts, balances, activity, applyBootstrapData: (data) => { investment.applyBootstrapData(data); debt.applyBootstrapData(data); persistNormalized(); } };
 }

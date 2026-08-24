@@ -215,6 +215,7 @@ export interface BudgetAPIContract {
 
 interface BudgetIntegrations {
   investment?: { hasUnsynced(): boolean; load(options?: { refresh?: boolean }): Promise<unknown>; applyBootstrapData(data: unknown): unknown };
+  debt?: { load(options?: { refresh?: boolean }): Promise<unknown>; applyBootstrapData(data: unknown): unknown };
   imports?: { listProfiles(options?: { refresh?: boolean }): Promise<unknown[]>; applyBootstrapData(data: unknown): unknown };
 }
 let integrations: BudgetIntegrations = {};
@@ -1757,6 +1758,7 @@ export function BudgetAPI(): BudgetAPIContract {
       writeConfirmedTransactionCache(data.transactions);
       const transactions = mergeServerTransactions(data.transactions);
       integrations.investment?.applyBootstrapData(data);
+      integrations.debt?.applyBootstrapData(data);
       integrations.imports?.applyBootstrapData(data);
       window.dispatchEvent(new CustomEvent("budget:reference-data-changed"));
       return { ...data, transactions };

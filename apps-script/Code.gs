@@ -3,11 +3,22 @@
 const APP = Object.freeze({
   spreadsheetIdProperty: "SPREADSHEET_ID",
   setupVersionProperty: "SETUP_VERSION",
-  setupVersion: "8",
-  apiVersion: 12,
+  setupVersion: "11",
+  apiVersion: 13,
   ledgerDirtyProperty: "LEDGER_DIRTY",
   incomeCategoryId: "00000000-0000-4000-8000-000000000001",
   sharedAssignmentId: "00000000-0000-4000-8000-000000000101",
+});
+
+// Read-only schemas used exclusively by the v11 migration. Runtime code must
+// use TABLES.accounts, TABLES.accountBalances, and TABLES.accountActivity.
+const LEGACY_ACCOUNT_TABLES = Object.freeze({
+  investmentAccounts: { name: "InvestmentAccounts", headers: ["ID", "Name", "Source", "Assignment ID", "Active", "Created At", "Updated At"], fields: ["id", "name", "source", "assignmentId", "active", "createdAt", "updatedAt"] },
+  investmentBalances: { name: "InvestmentBalances", headers: ["ID", "Account ID", "Month", "Ending Balance", "Notes", "Created At", "Created By", "Updated At", "Updated By", "As Of Date"], fields: ["id", "accountId", "month", "balance", "notes", "createdAt", "createdBy", "updatedAt", "updatedBy", "asOfDate"] },
+  investmentContributions: { name: "InvestmentContributions", headers: ["ID", "Account ID", "Month", "Amount", "Created At", "Created By", "Updated At", "Updated By", "Date", "Flow Type", "Transfer ID", "Counterparty Account ID"], fields: ["id", "accountId", "month", "amount", "createdAt", "createdBy", "updatedAt", "updatedBy", "date", "flowType", "transferId", "counterpartyAccountId"] },
+  debtAccounts: { name: "DebtAccounts", headers: ["ID", "Name", "Assignment ID", "Active", "Created At", "Updated At", "Interest Rate", "Lender"], fields: ["id", "name", "assignmentId", "active", "createdAt", "updatedAt", "interestRate", "lender"] },
+  debtBalances: { name: "DebtBalances", headers: ["ID", "Debt Account ID", "Month", "Balance", "Notes", "Created At", "Created By", "Updated At", "Updated By", "As Of Date"], fields: ["id", "debtAccountId", "month", "balance", "notes", "createdAt", "createdBy", "updatedAt", "updatedBy", "asOfDate"] },
+  debtPayments: { name: "DebtPayments", headers: ["ID", "Debt Account ID", "Date", "Month", "Amount", "Created At", "Created By", "Updated At", "Updated By", "Kind"], fields: ["id", "debtAccountId", "date", "month", "amount", "createdAt", "createdBy", "updatedAt", "updatedBy", "kind"] },
 });
 
 const TABLES = Object.freeze({
@@ -81,23 +92,24 @@ const TABLES = Object.freeze({
     ],
     fields: ["id", "firstName", "lastName", "active", "createdAt", "updatedAt"],
   },
-  investmentAccounts: {
-    name: "InvestmentAccounts",
-    headers: ["ID", "Name", "Source", "Assignment ID", "Active", "Created At", "Updated At"],
-    fields: ["id", "name", "source", "assignmentId", "active", "createdAt", "updatedAt"],
+  accounts: {
+    name: "Accounts",
+    headers: ["ID", "Name", "Type", "Assignment ID", "Active", "Created At", "Updated At", "Source", "Interest Rate", "Lender"],
+    fields: ["id", "name", "type", "assignmentId", "active", "createdAt", "updatedAt", "source", "interestRate", "lender"],
   },
-  investmentBalances: {
-    name: "InvestmentBalances",
+  accountBalances: {
+    name: "AccountBalances",
     headers: [
       "ID",
       "Account ID",
       "Month",
-      "Ending Balance",
+      "Balance",
       "Notes",
       "Created At",
       "Created By",
       "Updated At",
       "Updated By",
+      "As Of Date",
     ],
     fields: [
       "id",
@@ -109,15 +121,21 @@ const TABLES = Object.freeze({
       "createdBy",
       "updatedAt",
       "updatedBy",
+      "asOfDate",
     ],
   },
-  investmentContributions: {
-    name: "InvestmentContributions",
+  accountActivity: {
+    name: "AccountActivity",
     headers: [
       "ID",
       "Account ID",
+      "Date",
       "Month",
       "Amount",
+      "Activity Type",
+      "Flow Type",
+      "Transfer ID",
+      "Counterparty Account ID",
       "Created At",
       "Created By",
       "Updated At",
@@ -126,8 +144,13 @@ const TABLES = Object.freeze({
     fields: [
       "id",
       "accountId",
+      "date",
       "month",
       "amount",
+      "activityType",
+      "flowType",
+      "transferId",
+      "counterpartyAccountId",
       "createdAt",
       "createdBy",
       "updatedAt",
@@ -275,9 +298,9 @@ function handleRequest_(request) {
             "batchTransactions",
             "batchEntities",
             "batchTransactionUpdates",
-            "investmentAccounts",
-            "investmentMonthlyFlows",
-            "batchInvestmentMonths",
+            "accounts",
+            "accountMonthlyFlows",
+            "batchAccountMonths",
             "importProfiles",
             "importMappings",
           ],
@@ -372,8 +395,26 @@ function handleRequest_(request) {
             return archiveRecord_(TABLES.assignments, request.id);
           }),
         );
+      case "listAccounts":
+        return success_(listAccounts_());
+      case "saveAccount":
+        return success_(withScriptLock_(function () { return saveAccount_(request.account); }));
+      case "archiveAccount":
+        return success_(withScriptLock_(function () { return archiveRecord_(TABLES.accounts, request.id); }));
+      case "listAccountBalances":
+        return success_(listAccountBalances_());
+      case "listAccountActivity":
+        return success_(listAccountActivity_());
+      case "saveAccountMonth":
+        return success_(saveAccountMonths_([request.month]));
+      case "saveAccountMonths":
+        return success_(saveAccountMonths_(request.months));
+      case "deleteAccountActivity":
+        return success_(withScriptLock_(function () { return deleteAccountActivity_(request.id); }));
+      // Deprecated adapters for the staged UI migration. They all delegate to
+      // the unified sheets and never recreate legacy persistence.
       case "listInvestmentAccounts":
-        return success_(listInvestmentAccounts_());
+        return success_(listAccounts_().filter(function (item) { return item.type === "investment"; }));
       case "addInvestmentAccounts":
         return success_(addInvestmentAccounts_(request.accounts));
       case "addInvestmentAccount":
@@ -387,17 +428,31 @@ function handleRequest_(request) {
       case "archiveInvestmentAccount":
         return success_(
           withScriptLock_(function () {
-            return archiveRecord_(TABLES.investmentAccounts, request.id);
+            return archiveRecord_(TABLES.accounts, request.id);
           }),
         );
       case "listInvestmentBalances":
-        return success_(listInvestmentBalances_());
+        return success_(listAccountBalances_().filter(function (item) { return accountTypeById_(item.accountId) === "investment"; }));
       case "listInvestmentContributions":
-        return success_(listInvestmentContributions_());
+        return success_(listAccountActivity_().filter(function (item) { return item.activityType === "contribution"; }));
       case "saveInvestmentMonth":
-        return success_(saveInvestmentMonths_([request.month]));
+        return success_(saveAccountMonths_([request.month]));
       case "saveInvestmentMonths":
-        return success_(saveInvestmentMonths_(request.months));
+        return success_(saveAccountMonths_(request.months));
+      case "listDebtAccounts":
+        return success_(listAccounts_().filter(function (item) { return item.type === "debt"; }));
+      case "listDebtBalances":
+        return success_(listAccountBalances_().filter(function (item) { return accountTypeById_(item.accountId) === "debt"; }).map(legacyDebtBalance_));
+      case "listDebtPayments":
+        return success_(listAccountActivity_().filter(function (item) { return accountTypeById_(item.accountId) === "debt"; }).map(legacyDebtActivity_));
+      case "saveDebtAccount":
+        return success_(withScriptLock_(function () { return saveDebtAccount_(request.account); }));
+      case "saveDebtBalance":
+        return success_(withScriptLock_(function () { return saveDebtBalance_(request.balance); }));
+      case "saveDebtPayment":
+        return success_(withScriptLock_(function () { return saveDebtPayment_(request.payment); }));
+      case "deleteDebtPayment":
+        return success_(withScriptLock_(function () { return deleteDebtPayment_(request.id); }));
       case "listImportProfiles":
         return success_(listImportProfiles_());
       case "getImportProfileBundle":
@@ -479,10 +534,10 @@ function ensureDataModel_() {
   getTableSheet_(TABLES.vendors);
   getTableSheet_(TABLES.assignments);
   getTableSheet_(TABLES.users);
-  getTableSheet_(TABLES.investmentAccounts);
-  migrateInvestmentModelV6_();
-  getTableSheet_(TABLES.investmentBalances);
-  getTableSheet_(TABLES.investmentContributions);
+  getTableSheet_(TABLES.accounts);
+  getTableSheet_(TABLES.accountBalances);
+  getTableSheet_(TABLES.accountActivity);
+  migrateLegacyAccountsV11_();
   getTableSheet_(TABLES.importProfiles);
   getTableSheet_(TABLES.importVendorMappings);
   getTableSheet_(TABLES.importPersonMappings);
@@ -565,9 +620,9 @@ function bootstrapSpecs_() {
     TABLES.vendors,
     TABLES.assignments,
     TABLES.users,
-    TABLES.investmentAccounts,
-    TABLES.investmentBalances,
-    TABLES.investmentContributions,
+    TABLES.accounts,
+    TABLES.accountBalances,
+    TABLES.accountActivity,
     TABLES.importProfiles,
   ];
 }
@@ -669,10 +724,9 @@ function buildBootstrapPayload_(recordsBySheet) {
     importProfiles: active(recordsBySheet[TABLES.importProfiles.name]).map(
       publicImportProfile_,
     ),
-    investmentAccounts: recordsBySheet[TABLES.investmentAccounts.name],
-    investmentBalances: recordsBySheet[TABLES.investmentBalances.name],
-    investmentContributions:
-      recordsBySheet[TABLES.investmentContributions.name],
+    accounts: recordsBySheet[TABLES.accounts.name],
+    accountBalances: recordsBySheet[TABLES.accountBalances.name],
+    accountActivity: recordsBySheet[TABLES.accountActivity.name],
   };
 }
 
@@ -1248,7 +1302,7 @@ function fullUserName_(user) {
 const INVESTMENT_SOURCES = Object.freeze(["paycheck", "manual"]);
 
 function listInvestmentAccounts_() {
-  return readRecords_(TABLES.investmentAccounts, true);
+  return listAccounts_().filter(function (item) { return item.type === "investment"; });
 }
 
 function normalizeInvestmentAccount_(input, existing) {
@@ -1276,6 +1330,7 @@ function normalizeInvestmentAccount_(input, existing) {
       "Investment account ID",
     ),
     name: requiredName_(input.name),
+    type: "investment",
     source: source,
     assignmentId: assignmentId,
     active: existing ? existing.active !== false : true,
@@ -1283,6 +1338,8 @@ function normalizeInvestmentAccount_(input, existing) {
       ? existing.createdAt
       : normalizeDateTime_(input.createdAt || timestamp),
     updatedAt: normalizeDateTime_(input.updatedAt || timestamp),
+    interestRate: "",
+    lender: "",
   };
 }
 
@@ -1291,7 +1348,7 @@ function investmentAccountKey_(account) {
 }
 
 function investmentAccountsMatch_(left, right) {
-  return TABLES.investmentAccounts.fields.every(function (field) {
+  return TABLES.accounts.fields.every(function (field) {
     return (
       String(left[field] === undefined ? "" : left[field]) ===
       String(right[field] === undefined ? "" : right[field])
@@ -1309,10 +1366,10 @@ function addInvestmentAccounts_(inputs) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const sheet = requiredSheet_(getSpreadsheet_(), TABLES.investmentAccounts);
+    const sheet = requiredSheet_(getSpreadsheet_(), TABLES.accounts);
     const records = readRecordsFromSheet_(
       sheet,
-      TABLES.investmentAccounts,
+      TABLES.accounts,
       true,
     );
     const byId = new Map(
@@ -1362,7 +1419,7 @@ function addInvestmentAccounts_(inputs) {
     appendRows_(
       sheet,
       additions.map(function (item) {
-        return recordToRow_(TABLES.investmentAccounts, item);
+        return recordToRow_(TABLES.accounts, item);
       }),
     );
     return { saved: saved, reconciled: reconciled, failed: failed };
@@ -1372,17 +1429,17 @@ function addInvestmentAccounts_(inputs) {
 }
 
 function updateInvestmentAccount_(input) {
-  const sheet = getTableSheet_(TABLES.investmentAccounts);
+  const sheet = getTableSheet_(TABLES.accounts);
   const row = findRowById_(sheet, input && input.id);
   if (!row) throw new Error("That investment account could not be found.");
   const existing = rowToRecord_(
-    TABLES.investmentAccounts,
+    TABLES.accounts,
     sheet
-      .getRange(row, 1, 1, TABLES.investmentAccounts.headers.length)
+      .getRange(row, 1, 1, TABLES.accounts.headers.length)
       .getValues()[0],
   );
   const account = normalizeInvestmentAccount_(input, existing);
-  const duplicate = readRecords_(TABLES.investmentAccounts, true).find(
+  const duplicate = readRecords_(TABLES.accounts, true).find(
     function (item) {
       return (
         item.id !== account.id &&
@@ -1394,8 +1451,8 @@ function updateInvestmentAccount_(input) {
   if (duplicate)
     throw new Error("An investment account with that name already exists.");
   sheet
-    .getRange(row, 1, 1, TABLES.investmentAccounts.headers.length)
-    .setValues([recordToRow_(TABLES.investmentAccounts, account)]);
+    .getRange(row, 1, 1, TABLES.accounts.headers.length)
+    .setValues([recordToRow_(TABLES.accounts, account)]);
   return account;
 }
 
@@ -1405,11 +1462,102 @@ function validMonth_(value) {
   return month >= 1 && month <= 12;
 }
 
+function saveDebtAccount_(input) {
+  if (!input || typeof input !== "object") throw new Error("A debt account is required.");
+  const sheet = getTableSheet_(TABLES.accounts);
+  const row = findRowById_(sheet, input.id);
+  const existing = row ? rowToRecord_(TABLES.accounts, sheet.getRange(row, 1, 1, TABLES.accounts.headers.length).getValues()[0]) : null;
+  const timestamp = new Date().toISOString();
+  const assignmentId = requireUuid_(input.assignmentId || APP.sharedAssignmentId, "Assignment ID");
+  if (!readRecords_(TABLES.assignments, true).some(function (assignment) { return assignment.id === assignmentId; }))
+    throw new Error("Choose a valid assignment.");
+  const interestRate = Number(input.interestRate || 0);
+  if (!isFinite(interestRate) || interestRate < 0)
+    throw new Error("Interest rate must be nonnegative.");
+  const record = {
+    id: requireUuid_((existing && existing.id) || input.id || Utilities.getUuid(), "Debt account ID"),
+    name: requiredName_(input.name),
+    type: "debt",
+    assignmentId: assignmentId,
+    active: input.active !== false,
+    createdAt: existing ? existing.createdAt : normalizeDateTime_(input.createdAt || timestamp),
+    updatedAt: normalizeDateTime_(input.updatedAt || timestamp),
+    interestRate: interestRate,
+    lender: cleanText_(input.lender, 200),
+    source: "",
+  };
+  if (row) sheet.getRange(row, 1, 1, TABLES.accounts.headers.length).setValues([recordToRow_(TABLES.accounts, record)]);
+  else appendRows_(sheet, [recordToRow_(TABLES.accounts, record)]);
+  return record;
+}
+
+function saveDebtBalance_(input) {
+  if (!input || typeof input !== "object") throw new Error("A debt balance is required.");
+  const accountId = requireUuid_(input.accountId || input.debtAccountId, "Debt account ID");
+  if (!readRecords_(TABLES.accounts, true).some(function (item) { return item.id === accountId && item.active !== false && item.type === "debt"; })) throw new Error("Choose an active debt account.");
+  const asOfDate = cleanText_(input.asOfDate, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Choose a valid debt balance date.");
+  const value = Number(input.balance); if (!isFinite(value) || value < 0) throw new Error("Debt balances cannot be negative.");
+  const sheet = getTableSheet_(TABLES.accountBalances);
+  const records = readRecords_(TABLES.accountBalances, true);
+  const existing = records.find(function (item) { return item.accountId === accountId && item.month === asOfDate.slice(0, 7); });
+  const row = existing ? findRowById_(sheet, existing.id) : 0;
+  const timestamp = new Date().toISOString();
+  const record = {
+    id: requireUuid_((existing && existing.id) || input.id || Utilities.getUuid(), "Debt balance ID"), accountId: accountId,
+    month: asOfDate.slice(0, 7), balance: Math.round(value * 100) / 100, notes: cleanText_(input.notes, 1000),
+    createdAt: existing ? existing.createdAt : normalizeDateTime_(input.createdAt || timestamp), createdBy: requireUuid_((existing && existing.createdBy) || input.createdBy, "createdBy"),
+    updatedAt: normalizeDateTime_(input.updatedAt || timestamp), updatedBy: requireUuid_(input.updatedBy || input.createdBy, "updatedBy"), asOfDate: asOfDate,
+  };
+  if (row) sheet.getRange(row, 1, 1, TABLES.accountBalances.headers.length).setValues([recordToRow_(TABLES.accountBalances, record)]);
+  else appendRows_(sheet, [recordToRow_(TABLES.accountBalances, record)]);
+  return record;
+}
+
+function investmentMonthEnd_(month) {
+  const parts = String(month).split("-").map(Number);
+  return Utilities.formatDate(
+    new Date(Date.UTC(parts[0], parts[1], 0)),
+    "UTC",
+    "yyyy-MM-dd",
+  );
+}
+
+function saveDebtPayment_(input) {
+  if (!input || typeof input !== "object") throw new Error("A debt payment is required.");
+  const accountId = requireUuid_(input.accountId || input.debtAccountId, "Debt account ID");
+  if (!readRecords_(TABLES.accounts, true).some(function (item) { return item.id === accountId && item.active !== false && item.type === "debt"; })) throw new Error("Choose an active debt account.");
+  const date = cleanText_(input.date, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid payment date.");
+  const amount = Number(input.amount); if (!isFinite(amount) || amount <= 0) throw new Error("Debt payments must be positive.");
+  const sheet = getTableSheet_(TABLES.accountActivity), row = findRowById_(sheet, input.id);
+  const existing = row ? rowToRecord_(TABLES.accountActivity, sheet.getRange(row, 1, 1, TABLES.accountActivity.headers.length).getValues()[0]) : null;
+  const timestamp = new Date().toISOString();
+  const record = { id: requireUuid_((existing && existing.id) || input.id || Utilities.getUuid(), "Debt payment ID"), accountId: accountId, date: date, month: date.slice(0, 7), amount: Math.round(amount * 100) / 100, activityType: input.activityType === "borrowing" || input.kind === "borrowing" ? "borrowing" : "payment", flowType: "", transferId: "", counterpartyAccountId: "", createdAt: existing ? existing.createdAt : normalizeDateTime_(input.createdAt || timestamp), createdBy: requireUuid_((existing && existing.createdBy) || input.createdBy, "createdBy"), updatedAt: normalizeDateTime_(input.updatedAt || timestamp), updatedBy: requireUuid_(input.updatedBy || input.createdBy, "updatedBy") };
+  if (row) sheet.getRange(row, 1, 1, TABLES.accountActivity.headers.length).setValues([recordToRow_(TABLES.accountActivity, record)]); else appendRows_(sheet, [recordToRow_(TABLES.accountActivity, record)]);
+  return record;
+}
+
+function deleteDebtPayment_(id) {
+  const sheet = getTableSheet_(TABLES.accountActivity), row = findRowById_(sheet, id);
+  if (!row) return { id: id, deleted: true };
+  sheet.deleteRow(row); return { id: id, deleted: true };
+}
+
+function listAccounts_() { return readRecords_(TABLES.accounts, true); }
+function listAccountBalances_() { return readRecords_(TABLES.accountBalances, true); }
+function listAccountActivity_() { return readRecords_(TABLES.accountActivity, true); }
+function accountTypeById_(id) { const account = getRecordById_(TABLES.accounts, id); return account ? account.type : ""; }
+function legacyDebtBalance_(record) { return { ...record, debtAccountId: record.accountId }; }
+function legacyDebtActivity_(record) { return { ...record, debtAccountId: record.accountId, kind: record.activityType }; }
+function deleteAccountActivity_(id) { return deleteDebtPayment_(id); }
+function saveAccount_(input) { return input && input.type === "debt" ? saveDebtAccount_(input) : saveInvestmentAccount_(input); }
+function saveInvestmentAccount_(input) { const row = findRowById_(getTableSheet_(TABLES.accounts), input && input.id); return row ? updateInvestmentAccount_(input) : addInvestmentAccounts_([input]).saved[0]; }
+
 function listInvestmentBalances_() {
-  return readRecords_(TABLES.investmentBalances, true);
+  return readRecords_(TABLES.accountBalances, true);
 }
 function listInvestmentContributions_() {
-  return readRecords_(TABLES.investmentContributions, true);
+  return readRecords_(TABLES.accountActivity, true);
 }
 
 function investmentRecordMatches_(left, right, fields, numericFields) {
@@ -1440,6 +1588,9 @@ function normalizeInvestmentBalance_(input, existing, accounts, users) {
   if (!isFinite(balance) || balance < 0)
     throw new Error("Investment balances cannot be negative.");
   const timestamp = new Date().toISOString();
+  const asOfDate = cleanText_(input.asOfDate || investmentMonthEnd_(month), 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate) || asOfDate.slice(0, 7) !== month)
+    throw new Error("Balance date must be within the reporting month.");
   const createdBy = existing
     ? existing.createdBy
     : requireUuid_(input.createdBy, "createdBy");
@@ -1461,6 +1612,7 @@ function normalizeInvestmentBalance_(input, existing, accounts, users) {
     createdBy: createdBy,
     updatedAt: normalizeDateTime_(input.updatedAt || timestamp),
     updatedBy: updatedBy,
+    asOfDate: asOfDate,
   };
 }
 
@@ -1482,6 +1634,10 @@ function normalizeInvestmentContribution_(input, existing, accounts, users) {
   if (!isFinite(amount) || amount === 0)
     throw new Error("Investment contribution amounts must be nonzero.");
   const timestamp = new Date().toISOString();
+  const date = cleanText_(input.date || month + "-15", 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date.slice(0, 7) !== month)
+    throw new Error("Flow date must be within the reporting month.");
+  const flowType = input.flowType === "transfer" ? "transfer" : "external";
   const createdBy = existing
     ? existing.createdBy
     : requireUuid_(input.createdBy, "createdBy");
@@ -1494,6 +1650,7 @@ function normalizeInvestmentContribution_(input, existing, accounts, users) {
       "Investment contribution ID",
     ),
     accountId: accountId,
+    activityType: "contribution",
     month: month,
     amount: Math.round(amount * 100) / 100,
     createdAt: existing
@@ -1502,6 +1659,11 @@ function normalizeInvestmentContribution_(input, existing, accounts, users) {
     createdBy: createdBy,
     updatedAt: normalizeDateTime_(input.updatedAt || timestamp),
     updatedBy: updatedBy,
+    date: date,
+    flowType: flowType,
+    transferId: flowType === "transfer" ? cleanText_(input.transferId, 64) : "",
+    counterpartyAccountId:
+      flowType === "transfer" ? cleanText_(input.counterpartyAccountId, 64) : "",
   };
 }
 
@@ -1533,6 +1695,35 @@ function writeInvestmentRecords_(sheet, spec, records, previousCount) {
       .clearContent();
 }
 
+function saveAccountMonths_(inputs) {
+  if (!Array.isArray(inputs) || !inputs.length)
+    throw new Error("At least one account month is required.");
+  const accounts = new Map(listAccounts_().map(function (item) { return [item.id, item]; }));
+  const debtOperations = inputs.filter(function (operation) {
+    return operation && accounts.get(operation.accountId) && accounts.get(operation.accountId).type === "debt";
+  });
+  const investmentOperations = inputs.filter(function (operation) {
+    return operation && accounts.get(operation.accountId) && accounts.get(operation.accountId).type === "investment";
+  });
+  if (debtOperations.length && investmentOperations.length)
+    throw new Error("A batch may contain either investment or debt account months, not both.");
+  if (debtOperations.length) {
+    const saved = [], failed = [];
+    debtOperations.forEach(function (operation) {
+      try {
+        const balance = saveDebtBalance_({ ...(operation.balance && operation.balance.record), accountId: operation.accountId, debtAccountId: operation.accountId, asOfDate: (operation.balance && operation.balance.record && operation.balance.record.asOfDate) || investmentMonthEnd_(operation.month) });
+        const activity = operation.activity || operation.upserts || [];
+        activity.forEach(function (entry) {
+          saveDebtPayment_({ ...(entry.record || entry), accountId: operation.accountId, debtAccountId: operation.accountId, kind: (entry.record || entry).activityType || (entry.record || entry).kind });
+        });
+        saved.push({ id: operation.id || "", accountId: operation.accountId, month: operation.month, balance: balance, activity: listAccountActivity_().filter(function (item) { return item.accountId === operation.accountId && item.month === operation.month; }) });
+      } catch (error) { failed.push({ id: operation.id || "", error: errorMessage_(error) }); }
+    });
+    return { saved: saved, failed: failed };
+  }
+  return saveInvestmentMonths_(investmentOperations);
+}
+
 function saveInvestmentMonths_(inputs) {
   if (!Array.isArray(inputs) || !inputs.length)
     throw new Error("At least one investment month is required.");
@@ -1542,25 +1733,25 @@ function saveInvestmentMonths_(inputs) {
   lock.waitLock(30000);
   try {
     const spreadsheet = getSpreadsheet_();
-    const balanceSheet = requiredSheet_(spreadsheet, TABLES.investmentBalances);
+    const balanceSheet = requiredSheet_(spreadsheet, TABLES.accountBalances);
     const contributionSheet = requiredSheet_(
       spreadsheet,
-      TABLES.investmentContributions,
+      TABLES.accountActivity,
     );
     const balanceRecords = readRecordsFromSheet_(
       balanceSheet,
-      TABLES.investmentBalances,
+      TABLES.accountBalances,
       true,
     );
     const contributionRecords = readRecordsFromSheet_(
       contributionSheet,
-      TABLES.investmentContributions,
+      TABLES.accountActivity,
       true,
     );
     const accounts = new Map(
       readRecordsFromSheet_(
-        requiredSheet_(spreadsheet, TABLES.investmentAccounts),
-        TABLES.investmentAccounts,
+        requiredSheet_(spreadsheet, TABLES.accounts),
+        TABLES.accounts,
         true,
       ).map(function (item) {
         return [item.id, item];
@@ -1830,13 +2021,13 @@ function saveInvestmentMonths_(inputs) {
     if (saved.length) {
       writeInvestmentRecords_(
         balanceSheet,
-        TABLES.investmentBalances,
+        TABLES.accountBalances,
         [...balances.values()],
         balanceRecords.length,
       );
       writeInvestmentRecords_(
         contributionSheet,
-        TABLES.investmentContributions,
+        TABLES.accountActivity,
         [...contributions.values()],
         contributionRecords.length,
       );
@@ -1962,10 +2153,10 @@ function normalizeImportProfile_(input, existing) {
       "Investment account ID",
     );
     const account = getRecordById_(
-      TABLES.investmentAccounts,
+      TABLES.accounts,
       investmentAccountId,
     );
-    if (!account || account.active === false)
+    if (!account || account.active === false || account.type !== "investment")
       throw new Error("Choose an active investment account.");
   }
   const dateFormats = [
@@ -2717,7 +2908,7 @@ function getTableSheet_(spec) {
   let sheet = spreadsheet.getSheetByName(spec.name);
   if (!sheet) sheet = spreadsheet.insertSheet(spec.name);
   if (spec === TABLES.users) migrateLegacyUserHeaders_(sheet);
-  if (spec === TABLES.investmentAccounts)
+  if (spec === TABLES.accounts)
     migrateLegacyInvestmentHeaders_(sheet, spec);
   ensureSheetHeaders_(sheet, spec.headers, spec.name);
   sheet.setFrozenRows(1);
@@ -2806,28 +2997,86 @@ function derivedInvestmentContributionId_(snapshotId) {
   );
 }
 
+function migrateLegacyAccountsV11_() {
+  const spreadsheet = getSpreadsheet_();
+  const legacy = {};
+  Object.keys(LEGACY_ACCOUNT_TABLES).forEach(function (key) {
+    const spec = LEGACY_ACCOUNT_TABLES[key];
+    const sheet = spreadsheet.getSheetByName(spec.name);
+    if (!sheet) { legacy[key] = []; return; }
+    const header = sheet.getRange(1, 1, 1, spec.headers.length).getValues()[0];
+    if (!headersMatch_(header, spec.headers))
+      throw new Error("Cannot migrate " + spec.name + ": its headers do not match the legacy schema.");
+    legacy[key] = readRecordsFromSheet_(sheet, spec, true);
+  });
+  const accountIds = new Map();
+  function addAccount(record, type) {
+    if (!record || !record.id) return;
+    const unified = {
+      id: record.id, name: record.name, type: type,
+      assignmentId: record.assignmentId || APP.sharedAssignmentId,
+      active: record.active !== false, createdAt: record.createdAt,
+      updatedAt: record.updatedAt, source: type === "investment" ? record.source : "",
+      interestRate: type === "debt" ? record.interestRate : "",
+      lender: type === "debt" ? record.lender : "",
+    };
+    const previous = accountIds.get(unified.id);
+    if (previous && (previous.type !== unified.type || previous.name !== unified.name || previous.assignmentId !== unified.assignmentId))
+      throw new Error("Cannot migrate accounts: UUID " + unified.id + " exists in both legacy account tables with different records.");
+    accountIds.set(unified.id, unified);
+  }
+  legacy.investmentAccounts.forEach(function (item) { addAccount(item, "investment"); });
+  legacy.debtAccounts.forEach(function (item) { addAccount(item, "debt"); });
+  const balances = legacy.investmentBalances.map(function (item) { return { ...item, accountId: item.accountId }; })
+    .concat(legacy.debtBalances.map(function (item) { return { id: item.id, accountId: item.debtAccountId, month: item.month, balance: item.balance, notes: item.notes, createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy, asOfDate: item.asOfDate }; }));
+  const activity = legacy.investmentContributions.map(function (item) { return { id: item.id, accountId: item.accountId, date: item.date, month: item.month, amount: item.amount, activityType: "contribution", flowType: item.flowType, transferId: item.transferId, counterpartyAccountId: item.counterpartyAccountId, createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy }; })
+    .concat(legacy.debtPayments.map(function (item) { return { id: item.id, accountId: item.debtAccountId, date: item.date, month: item.month, amount: item.amount, activityType: item.kind === "borrowing" ? "borrowing" : "payment", flowType: "", transferId: "", counterpartyAccountId: "", createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy }; }));
+  function appendMissing(spec, records) {
+    const existing = readRecords_(spec, true);
+    const byId = new Map(existing.map(function (item) { return [item.id, item]; }));
+    const incoming = new Map();
+    records.forEach(function (record) {
+      const prior = incoming.get(record.id);
+      if (prior && JSON.stringify(recordToRow_(spec, prior)) !== JSON.stringify(recordToRow_(spec, record)))
+        throw new Error("Cannot migrate " + spec.name + ": legacy UUID " + record.id + " is used by different records.");
+      incoming.set(record.id, record);
+    });
+    const additions = [...incoming.values()].filter(function (record) {
+      const old = byId.get(record.id);
+      if (!old) return true;
+      if (JSON.stringify(recordToRow_(spec, old)) !== JSON.stringify(recordToRow_(spec, record)))
+        throw new Error("Cannot migrate " + spec.name + ": UUID " + record.id + " conflicts with existing unified data.");
+      return false;
+    });
+    appendRows_(getTableSheet_(spec), additions.map(function (item) { return recordToRow_(spec, item); }));
+  }
+  appendMissing(TABLES.accounts, [...accountIds.values()]);
+  appendMissing(TABLES.accountBalances, balances);
+  appendMissing(TABLES.accountActivity, activity);
+}
+
 function migrateInvestmentModelV6_() {
   const spreadsheet = getSpreadsheet_();
   const legacy = spreadsheet.getSheetByName("InvestmentSnapshots");
-  let balanceSheet = spreadsheet.getSheetByName(TABLES.investmentBalances.name);
+  let balanceSheet = spreadsheet.getSheetByName(TABLES.accountBalances.name);
   let contributionSheet = spreadsheet.getSheetByName(
-    TABLES.investmentContributions.name,
+    TABLES.accountActivity.name,
   );
   if (!balanceSheet)
-    balanceSheet = spreadsheet.insertSheet(TABLES.investmentBalances.name);
+    balanceSheet = spreadsheet.insertSheet(TABLES.accountBalances.name);
   if (!contributionSheet)
     contributionSheet = spreadsheet.insertSheet(
-      TABLES.investmentContributions.name,
+      TABLES.accountActivity.name,
     );
   ensureSheetHeaders_(
     balanceSheet,
-    TABLES.investmentBalances.headers,
-    TABLES.investmentBalances.name,
+    TABLES.accountBalances.headers,
+    TABLES.accountBalances.name,
   );
   ensureSheetHeaders_(
     contributionSheet,
-    TABLES.investmentContributions.headers,
-    TABLES.investmentContributions.name,
+    TABLES.accountActivity.headers,
+    TABLES.accountActivity.name,
   );
   if (!legacy || legacy.getLastRow() < 1) return;
 
@@ -2896,7 +3145,7 @@ function migrateInvestmentModelV6_() {
           .getRange(2, 1, legacy.getLastRow() - 1, headers.length)
           .getValues();
   const balances = new Map(
-    readRecordsFromSheet_(balanceSheet, TABLES.investmentBalances, true).map(
+    readRecordsFromSheet_(balanceSheet, TABLES.accountBalances, true).map(
       function (item) {
         return [item.id, item];
       },
@@ -2905,7 +3154,7 @@ function migrateInvestmentModelV6_() {
   const contributions = new Map(
     readRecordsFromSheet_(
       contributionSheet,
-      TABLES.investmentContributions,
+      TABLES.accountActivity,
       true,
     ).map(function (item) {
       return [item.id, item];
@@ -2954,13 +3203,13 @@ function migrateInvestmentModelV6_() {
     });
   writeInvestmentRecords_(
     balanceSheet,
-    TABLES.investmentBalances,
+    TABLES.accountBalances,
     [...balances.values()],
     Math.max(0, balanceSheet.getLastRow() - 1),
   );
   writeInvestmentRecords_(
     contributionSheet,
-    TABLES.investmentContributions,
+    TABLES.accountActivity,
     [...contributions.values()],
     Math.max(0, contributionSheet.getLastRow() - 1),
   );

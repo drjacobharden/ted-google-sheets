@@ -7,6 +7,7 @@ import {
 } from "../utilities/data-utilities";
 
 import type { BudgetTransaction } from "./budget-api";
+import { midpoint, monthEnd } from "../utilities/investment-returns";
 
 export type InvestmentSource = "manual" | "paycheck";
 
@@ -24,6 +25,7 @@ export interface InvestmentBalance {
   id: string;
   accountId: string;
   month: string;
+  asOfDate: string;
   balance: number;
   notes: string;
   createdAt: string;
@@ -39,7 +41,11 @@ export interface InvestmentContribution {
   id: string;
   accountId: string;
   month: string;
+  date: string;
   amount: number;
+  flowType: "external" | "transfer";
+  transferId?: string;
+  counterpartyAccountId?: string;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -65,7 +71,15 @@ export interface InvestmentMonthInput {
   notes?: string;
   balanceId?: string;
   existingContributions?: InvestmentContribution[];
-  contributions?: Array<{ id?: string; amount: number | string }>;
+  asOfDate?: string;
+  contributions?: Array<{
+    id?: string;
+    amount: number | string;
+    date?: string;
+    flowType?: "external" | "transfer";
+    transferId?: string;
+    counterpartyAccountId?: string;
+  }>;
 }
 
 export interface InvestmentData {
@@ -131,6 +145,12 @@ export interface InvestmentAPIContract {
     endingBalance: number | null | undefined,
     periodFlows: Array<{ amount?: number; contribution?: number }>,
   ): number | null;
+  queueTransfer(input: {
+    fromAccountId: string;
+    toAccountId: string;
+    date: string;
+    amount: number | string;
+  }): [InvestmentMonth | null, InvestmentMonth | null];
   hasUnsynced(): boolean;
   sync(): Promise<void> | null;
   retry(source: "investmentAccount" | "investmentMonth", id: string): void;
@@ -198,11 +218,13 @@ export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract):
   }
   /** Handles the migrateBalance operation for the investment data layer. */
   function migrateBalance(record) {
-    return { id: record.id, accountId: record.accountId, month: canonicalMonth(record.month), balance: Number(record.balance || 0), notes: record.notes || "", createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
+    const month = canonicalMonth(record.month || record.asOfDate);
+    return { id: record.id, accountId: record.accountId, month, asOfDate: /^\d{4}-\d{2}-\d{2}$/.test(record.asOfDate || "") ? record.asOfDate : monthEnd(month), balance: Number(record.balance || 0), notes: record.notes || "", createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
   }
   /** Handles the migrateContribution operation for the investment data layer. */
   function migrateContribution(record) {
-    return { id: record.id, accountId: record.accountId, month: canonicalMonth(record.month), amount: Number(record.amount || 0), createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
+    const month = canonicalMonth(record.month || record.date);
+    return { id: record.id, accountId: record.accountId, month, date: /^\d{4}-\d{2}-\d{2}$/.test(record.date || "") ? record.date : midpoint(month), amount: Number(record.amount || 0), flowType: record.flowType === "transfer" ? "transfer" : "external", transferId: record.transferId || undefined, counterpartyAccountId: record.counterpartyAccountId || undefined, createdAt: record.createdAt, createdBy: record.createdBy, updatedAt: record.updatedAt, updatedBy: record.updatedBy };
   }
   /** Handles the legacyContribution operation for the investment data layer. */
   function legacyContribution(snapshot) {
@@ -265,9 +287,9 @@ export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract):
   /** Handles the accounts operation for the investment data layer. */
   function accounts() { return read(KEYS.accounts).map(migrateAccount).sort((a, b) => a.name.localeCompare(b.name)); }
   /** Handles the balances operation for the investment data layer. */
-  function balances() { return read(KEYS.balances).map(migrateBalance).sort((a, b) => a.month.localeCompare(b.month)); }
+  function balances() { return read(KEYS.balances).map(migrateBalance).sort((a, b) => a.asOfDate.localeCompare(b.asOfDate)); }
   /** Handles the contributions operation for the investment data layer. */
-  function contributions() { return read(KEYS.contributions).map(migrateContribution).sort((a, b) => String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id))); }
+  function contributions() { return read(KEYS.contributions).map(migrateContribution).sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id))); }
   /** Handles the accountOutbox operation for the investment data layer. */
   function accountOutbox() { return migrateAccountOutbox(read(KEYS.accountOutbox)); }
   /** Handles the monthOutbox operation for the investment data layer. */
@@ -349,7 +371,11 @@ export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract):
 
   /** Handles the applyBootstrapData operation for the investment data layer. */
   function applyBootstrapData(data) {
-    applyServerData(data?.investmentAccounts, data?.investmentBalances, data?.investmentContributions);
+    applyServerData(
+      Array.isArray(data?.accounts) ? data.accounts.filter((item) => item?.type === "investment") : data?.investmentAccounts,
+      Array.isArray(data?.accountBalances) ? data.accountBalances.filter((item) => data.accounts?.some((account) => account.id === item.accountId && account.type === "investment")) : data?.investmentBalances,
+      Array.isArray(data?.accountActivity) ? data.accountActivity.filter((item) => item?.activityType === "contribution") : data?.investmentContributions,
+    );
     loaded = true;
     emit("budget:investments-changed");
     emit("budget:investments-loaded");
@@ -370,8 +396,9 @@ export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract):
     if (loadPromise) return loadPromise;
     loadPromise = (async () => {
       if (endpoint() && (!bootstrapped || options.refresh)) {
-        const [serverAccounts, serverBalances, serverContributions] = await Promise.all([request("listInvestmentAccounts", {}), request("listInvestmentBalances", {}), request("listInvestmentContributions", {})]);
-        applyServerData(serverAccounts, serverBalances, serverContributions);
+        const [serverAccounts, serverBalances, serverActivity] = await Promise.all([request("listAccounts", {}), request("listAccountBalances", {}), request("listAccountActivity", {})]);
+        const investmentIds = new Set(serverAccounts.filter((item) => item?.type === "investment").map((item) => item.id));
+        applyServerData(serverAccounts.filter((item) => investmentIds.has(item.id)), serverBalances.filter((item) => investmentIds.has(item.accountId)), serverActivity.filter((item) => item.activityType === "contribution"));
       }
       loaded = true;
       emit("budget:investments-changed");
@@ -407,13 +434,18 @@ export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract):
     const month = String(input.month || ""); if (!/^\d{4}-\d{2}$/.test(month) || Number(month.slice(5)) < 1 || Number(month.slice(5)) > 12) throw new Error("Choose a reporting month.");
     if (!accounts().some((account) => account.id === input.accountId && account.active !== false)) throw new Error("Choose an active investment account.");
     const numericBalance = Number(input.balance); if (!Number.isFinite(numericBalance) || numericBalance < 0) throw new Error("Enter a nonnegative ending balance.");
+    const asOfDate = String(input.asOfDate || monthEnd(month));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate) || canonicalMonth(asOfDate) !== month) throw new Error("Choose a balance date within the reporting month.");
     const timestamp = now(); const baseBalance = base?.balance || null;
-    const balance = { id: baseBalance?.id || input.balanceId || uuid(), accountId: input.accountId, month, balance: Math.round(numericBalance * 100) / 100, notes: String(input.notes || "").trim(), createdAt: baseBalance?.createdAt || timestamp, createdBy: baseBalance?.createdBy || user.id, updatedAt: timestamp, updatedBy: user.id };
+    const balance = { id: baseBalance?.id || input.balanceId || uuid(), accountId: input.accountId, month, asOfDate, balance: Math.round(numericBalance * 100) / 100, notes: String(input.notes || "").trim(), createdAt: baseBalance?.createdAt || timestamp, createdBy: baseBalance?.createdBy || user.id, updatedAt: timestamp, updatedBy: user.id };
     const known = new Map([...(base?.contributions || []), ...(input.existingContributions || [])].map((item) => [item.id, item]));
     const flowRecords = (input.contributions || []).filter((item) => item.amount !== "" && Number(item.amount) !== 0).map((item) => {
       const amount = Number(item.amount); if (!Number.isFinite(amount) || amount === 0) throw new Error("Contribution and withdrawal amounts must be positive values.");
       const existing = item.id ? known.get(item.id) : null;
-      return { id: item.id || uuid(), accountId: input.accountId, month, amount: Math.round(amount * 100) / 100, createdAt: existing?.createdAt || timestamp, createdBy: existing?.createdBy || user.id, updatedAt: timestamp, updatedBy: user.id };
+      const date = String(item.date || midpoint(month));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || canonicalMonth(date) !== month) throw new Error("Choose a flow date within the reporting month.");
+      const flowType = item.flowType === "transfer" ? "transfer" : "external";
+      return { id: item.id || uuid(), accountId: input.accountId, month, date, amount: Math.round(amount * 100) / 100, flowType, transferId: flowType === "transfer" ? item.transferId || existing?.transferId : undefined, counterpartyAccountId: flowType === "transfer" ? item.counterpartyAccountId || existing?.counterpartyAccountId : undefined, createdAt: existing?.createdAt || timestamp, createdBy: existing?.createdBy || user.id, updatedAt: timestamp, updatedBy: user.id };
     });
     return { accountId: input.accountId, month, balance, contributions: flowRecords };
   }
@@ -584,8 +616,26 @@ export function InvestmentAPI(budget: import("./budget-api").BudgetAPIContract):
   /** Handles the calculateGrowth operation for the investment data layer. */
   function calculateGrowth(openingBalance, endingBalance, periodFlows) { if (openingBalance === null || openingBalance === undefined || endingBalance === null || endingBalance === undefined) return null; return Number(endingBalance) - Number(openingBalance) - periodFlows.reduce((sum, item) => sum + Number(item.amount ?? item.contribution ?? 0), 0); }
 
+  function queueTransfer(input) {
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a positive transfer amount.");
+    if (input.fromAccountId === input.toAccountId) throw new Error("Choose two different investment accounts.");
+    const month = canonicalMonth(input.date);
+    const transferId = uuid();
+    const sourceMonth = rawMonthData(input.fromAccountId, month);
+    const destinationMonth = rawMonthData(input.toAccountId, month);
+    if (!sourceMonth.balance || !destinationMonth.balance) throw new Error("Record both accounts’ monthly balances before adding a transfer.");
+    if (monthOutbox().some((item) => item.failureCode === "conflict" && (item.accountId === input.fromAccountId || item.accountId === input.toAccountId) && item.month === month)) throw new Error("Resolve the affected month’s sync conflict before adding a transfer.");
+    const saveLeg = (accountId, counterpartyAccountId, signedAmount) => {
+      const current = rawMonthData(accountId, month);
+      if (!current.balance) throw new Error("Record the monthly balance before adding a transfer.");
+      return queueMonth({ accountId, month, balance: current.balance.balance, asOfDate: current.balance.asOfDate, balanceId: current.balance.id, notes: current.balance.notes, existingContributions: current.contributions, contributions: [...current.contributions, { amount: signedAmount, date: input.date, flowType: "transfer", transferId, counterpartyAccountId }] });
+    };
+    return [saveLeg(input.fromAccountId, input.toAccountId, -amount), saveLeg(input.toAccountId, input.fromAccountId, amount)];
+  }
+
   /** Handles the originalSyncItems operation for the investment data layer. */
-  const api = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, isLoaded, applyBootstrapData, addAccount, updateAccount, archiveAccount, queueMonth, queueImportedMonths, awaitImportedMonths, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard, getSyncItems: syncItems };
+  const api = { accounts: () => accounts().map(hydrateAccount), balances: () => balances().map(hydrateBalance), contributions: () => contributions().map(hydrateContribution), snapshots, monthData, load, isLoaded, applyBootstrapData, addAccount, updateAccount, archiveAccount, queueMonth, queueTransfer, queueImportedMonths, awaitImportedMonths, queueSnapshots, getConflict, resolveConflict, calculate, calculateGrowth, hasUnsynced, sync, retry, discard, getSyncItems: syncItems };
   window.addEventListener("online", () => { write(KEYS.accountOutbox, accountOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); write(KEYS.monthOutbox, monthOutbox().map((item) => item.status === "pending" ? { ...item, nextRetryAt: 0 } : item)); sync(); });
   window.addEventListener("offline", () => { if (retryTimer) clearTimeout(retryTimer); retryTimer = null; emit("budget:sync-changed"); }); scheduleNext();
   return api;
