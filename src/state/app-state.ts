@@ -16,7 +16,6 @@ export type AnnualSpendTrendsByYear = Record<
 >;
 
 export interface BudgetOverviewDerivedState {
-  assignmentId: string | null;
   annualSpendTrendsByYear: AnnualSpendTrendsByYear;
   monthlyTransactionSummaries: MonthlyTransactionSummaries;
   annualBudgetOverviews: AnnualBudgetOverviews;
@@ -25,7 +24,6 @@ export interface BudgetOverviewDerivedState {
 
 export interface BudgetingContext {
   year: number;
-  assignmentId: string | null;
   lastRoute: BudgetingRouteName;
   lastParams: Record<string, string>;
 }
@@ -162,17 +160,15 @@ function isBudgetingContext(value: unknown): value is BudgetingContext {
   const context = value as Partial<BudgetingContext>;
   return (
     Number.isInteger(context.year) &&
-    (context.assignmentId === null ||
-      typeof context.assignmentId === "string") &&
     typeof context.lastRoute === "string" &&
     [
-      "budgeting/overview",
-      "budgeting/transactions",
-      "budgeting/categories",
-      "budgeting/vendors",
-      "budgeting/people",
-      "budgeting/entity-detail",
-      "budgeting/entity-archive",
+      "budget-overview",
+      "transactions",
+      "categories",
+      "vendors",
+      "people",
+      "entity-detail",
+      "entity-archive",
     ].includes(context.lastRoute) &&
     Boolean(context.lastParams) &&
     typeof context.lastParams === "object" &&
@@ -201,7 +197,6 @@ export const appState = new StateStore<AppState>(
     annualSummaryCards: {},
     hasPaycheckDeductionHistory: false,
     budgetOverview: {
-      assignmentId: null,
       annualSpendTrendsByYear: {},
       monthlyTransactionSummaries: {},
       annualBudgetOverviews: {},
@@ -209,8 +204,7 @@ export const appState = new StateStore<AppState>(
     },
     budgetingContext: {
       year: new Date().getFullYear(),
-      assignmentId: null,
-      lastRoute: "budgeting/overview",
+      lastRoute: "budget-overview",
       lastParams: {},
     },
   },
