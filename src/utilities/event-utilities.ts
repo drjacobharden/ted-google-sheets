@@ -10,6 +10,7 @@ type EventDetails<T = any> = Readonly<{
   "date-range-changed": { range: DateRange; step: DatePickerStep };
   "checkbox-selection": { isOn: boolean };
   "dropdown-selection": { id: string; value: string; title: string };
+  "search-action-pressed": { input: string };
   "filters-changed": { filters: AppliedFilter<any>[] };
   "table-sort-request": { key: string };
   "segmented-control-selection": { value: string; title: string };

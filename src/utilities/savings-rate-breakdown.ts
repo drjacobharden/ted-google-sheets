@@ -13,6 +13,10 @@ export interface SavingsRateBreakdown {
   spendPercent: number;
 }
 
+export interface ActiveMonth {
+  hasData: boolean;
+}
+
 const finite = (value: number): number =>
   Number.isFinite(value) ? value : 0;
 const clamp = (value: number, minimum: number, maximum: number): number =>
@@ -63,6 +67,15 @@ export function savingsRateBreakdown({
     deductionsPercent,
     spendPercent,
   };
+}
+
+/** Divides a yearly total only by months that contain financial data. */
+export function activeMonthAverage(
+  total: number,
+  months: ReadonlyArray<ActiveMonth>,
+): number | null {
+  const activeMonths = months.filter(({ hasData }) => hasData).length;
+  return activeMonths === 0 ? null : finite(total) / activeMonths;
 }
 
 /** Returns the signed percentage-point change when both years have income. */

@@ -2,6 +2,64 @@
 import { APIs } from "../api/api";
 import { DateUtils } from "./date-utilities";
 import { escapeHTML, money, netFlows } from "./view-formatters";
+import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interpolateValue } from "./investment-returns";
+
+  function targetEnd(year) {
+    const today = new Date().toISOString().slice(0, 10);
+    return year === new Date().getFullYear() ? today : `${year}-12-31`;
+  }
+
+  function valuesForAccount(accountId, dates) {
+    const source = APIs.investment.balances().filter((item) => item.accountId === accountId)
+      .map((item) => ({ date: item.asOfDate, value: Number(item.balance || 0) }));
+    return dates.map((date) => interpolateValue(source, date)).filter(Boolean);
+  }
+
+  function accountPerformance(accountId, year, forcedCutoff = "") {
+    const rows = APIs.investment.balances().filter((item) => item.accountId === accountId);
+    const cutoff = forcedCutoff || rows.filter((item) => item.asOfDate <= targetEnd(year)).at(-1)?.asOfDate;
+    if (!cutoff) return { rate: null, dollarReturn: null, estimated: false, reason: "No closing balance" };
+    const boundaries = annualBoundaries(year, cutoff);
+    const values = valuesForAccount(accountId, boundaries);
+    if (values.length !== boundaries.length) return { rate: null, dollarReturn: null, estimated: false, start: boundaries[0], end: cutoff, reason: "Add an opening and closing balance" };
+    const flows = APIs.investment.contributions().filter((item) => item.accountId === accountId && item.date > boundaries[0] && item.date <= cutoff);
+    const linked = chainLinkedReturn(values, flows);
+    return { ...linked, dollarReturn: dollarReturn(values[0].value, values.at(-1).value, flows), opening: values[0].value, ending: values.at(-1).value };
+  }
+
+  function portfolioPerformance(year) {
+    const investmentAccounts = APIs.investment.accounts().filter((item) => item.active !== false);
+    const debtAccounts = APIs.debt.accounts().filter((item) => item.active !== false);
+    const target = targetEnd(year);
+    const latestInvestment = investmentAccounts.map((account) => APIs.investment.balances().filter((item) => item.accountId === account.id && item.asOfDate <= target).at(-1)?.asOfDate || "");
+    const latestDebt = debtAccounts.map((account) => APIs.debt.balances().filter((item) => item.debtAccountId === account.id && item.asOfDate <= target).at(-1)?.asOfDate || "");
+    const cutoff = commonCutoff([...latestInvestment, ...latestDebt]);
+    if (!cutoff) return { available: false, reason: "Add opening and closing balances for every active account.", staleAccounts: [] };
+    const boundaries = annualBoundaries(year, cutoff);
+    const investmentSeries = boundaries.map((date) => {
+      const values = investmentAccounts.map((account) => valuesForAccount(account.id, [date])[0]);
+      return values.every(Boolean) ? { date, value: values.reduce((sum, item) => sum + item.value, 0), interpolated: values.some((item) => item.interpolated) } : null;
+    });
+    const debtSeries = boundaries.map((date) => {
+      const values = debtAccounts.map((account) => interpolateValue(APIs.debt.balances().filter((item) => item.debtAccountId === account.id).map((item) => ({ date: item.asOfDate, value: Number(item.balance || 0) })), date));
+      return values.every(Boolean) ? { date, value: values.reduce((sum, item) => sum + item.value, 0), interpolated: values.some((item) => item.interpolated) } : debtAccounts.length ? null : { date, value: 0, interpolated: false };
+    });
+    if (investmentSeries.some((item) => !item) || debtSeries.some((item) => !item)) return { available: false, cutoff, reason: "Add balances around the prior year-end so the opening value can be calculated.", staleAccounts: [] };
+    const externalFlows = APIs.investment.contributions().filter((item) => item.flowType !== "transfer" && item.date > boundaries[0] && item.date <= cutoff);
+    const linked = chainLinkedReturn(investmentSeries, externalFlows);
+    const openingInvestments = investmentSeries[0].value;
+    const endingInvestments = investmentSeries.at(-1).value;
+    const openingDebt = debtSeries[0].value;
+    const endingDebt = debtSeries.at(-1).value;
+    const contributions = externalFlows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const investmentReturn = dollarReturn(openingInvestments, endingInvestments, externalFlows);
+    const debtReduction = openingDebt - endingDebt;
+    const openingNetWorth = openingInvestments - openingDebt;
+    const endingNetWorth = endingInvestments - endingDebt;
+    const netWorthGrowth = endingNetWorth - openingNetWorth;
+    const staleAccounts = [...investmentAccounts.map((item, index) => ({ name: item.name, date: latestInvestment[index] })), ...debtAccounts.map((item, index) => ({ name: item.name, date: latestDebt[index] }))].filter((item) => item.date === cutoff).map((item) => item.name);
+    return { available: true, cutoff, start: boundaries[0], rate: linked.rate, estimated: linked.estimated || debtSeries.some((item) => item.interpolated), openingNetWorth, endingNetWorth, netWorthGrowth, netWorthGrowthRate: openingNetWorth > 0 ? netWorthGrowth / openingNetWorth : null, contributions, investmentReturn, debtReduction, openingDebt, endingDebt, staleAccounts };
+  }
 
   function currentMonth() {
     const today = new Date();
@@ -272,7 +330,7 @@ import { escapeHTML, money, netFlows } from "./view-formatters";
       : legacyTrendSeries();
   }
 
-  function renderTrendSVG(series, includeContributions) {
+  function renderTrendSVG(series, includeContributions, fullYear = null) {
     if (!series.months.length) {
       return '<div class="investment-empty">Add monthly balances to build your trend.</div>';
     }
@@ -287,11 +345,14 @@ import { escapeHTML, money, netFlows } from "./view-formatters";
     const span = Math.max(max - min, 1);
     const plotWidth = width - plot.left - plot.right;
     const plotHeight = height - plot.top - plot.bottom;
+    const axisMonths = fullYear
+      ? monthsBetween(`${fullYear}-01`, `${fullYear}-12`)
+      : series.months;
     const x = (index) =>
       plot.left +
-      (series.months.length === 1
+      (axisMonths.length === 1
         ? plotWidth / 2
-        : (index * plotWidth) / (series.months.length - 1));
+        : (index * plotWidth) / (axisMonths.length - 1));
     const y = (value) => plot.top + ((max - value) / span) * plotHeight;
     const coordinates = (values) =>
       values.map((value, index) => ({
@@ -302,14 +363,16 @@ import { escapeHTML, money, netFlows } from "./view-formatters";
       }));
     const balancePoints = coordinates(series.balances);
     const contributionPoints = coordinates(series.contributions);
-    const xLabelStep = Math.max(1, Math.ceil((series.months.length - 1) / 5));
+    const xLabelStep = fullYear
+      ? 1
+      : Math.max(1, Math.ceil((axisMonths.length - 1) / 5));
     const xLabelIndexes = new Set(
-      series.months
+      axisMonths
         .map((_, index) => index)
         .filter(
           (index) =>
             index === 0 ||
-            index === series.months.length - 1 ||
+            index === axisMonths.length - 1 ||
             index % xLabelStep === 0,
         ),
     );
@@ -321,7 +384,7 @@ import { escapeHTML, money, netFlows } from "./view-formatters";
       points
         .map(
           (point, index) =>
-            `<circle class="${className}" data-trend-series="${label.toLowerCase().replaceAll(" ", "-")}" data-trend-index="${index}" cx="${point.x}" cy="${point.y}" r="3.5"><title>${formatMonth(point.month)} — ${label}: ${money(point.value)}</title></circle>`,
+            `<circle class="${className}" data-trend-series="${label.toLowerCase().replaceAll(" ", "-")}" data-trend-index="${index}" cx="${point.x}" cy="${point.y}" r="3"><title>${formatMonth(point.month)} — ${label}: ${money(point.value)}</title></circle>`,
         )
         .join("");
     const ariaLabel = includeContributions
@@ -338,11 +401,11 @@ import { escapeHTML, money, netFlows } from "./view-formatters";
       ${includeContributions ? `<path class="trend-line trend-contribution-line" d="${line(contributionPoints)}"/>` : ""}
       ${circles(balancePoints, "trend-balance-point", "Balance")}
       ${includeContributions ? circles(contributionPoints, "trend-contribution-point", "Net contributions") : ""}
-      <g class="trend-x-labels" aria-hidden="true">${[...xLabelIndexes].map((index) => `<text x="${x(index)}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === series.months.length - 1 ? "end" : "middle"}">${formatMonth(series.months[index])}</text>`).join("")}</g>
+      <g class="trend-x-labels" aria-hidden="true">${[...xLabelIndexes].map((index) => `<text x="${x(index)}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === axisMonths.length - 1 ? "end" : "middle"}">${formatMonth(axisMonths[index]).split(" ")[0]}</text>`).join("")}</g>
       <g class="trend-scrub-layer" aria-hidden="true" hidden>
         <line class="trend-scrub-guide" x1="${plot.left}" y1="${plot.top}" x2="${plot.left}" y2="${height - plot.bottom}"/>
-        <circle class="trend-scrub-balance-marker" r="6"/>
-        ${includeContributions ? '<circle class="trend-scrub-contribution-marker" r="6"/>' : ""}
+        <circle class="trend-scrub-balance-marker" r="3"/>
+        ${includeContributions ? '<circle class="trend-scrub-contribution-marker" r="3"/>' : ""}
       </g>
       <rect class="trend-scrub-hitbox" x="${plot.left}" y="${plot.top}" width="${plotWidth}" height="${plotHeight}" fill="transparent" tabindex="0" role="slider" aria-label="Explore investment trend by month" aria-valuemin="1" aria-valuemax="${series.months.length}" aria-valuenow="1"/>
     </svg>`;
@@ -352,13 +415,18 @@ import { escapeHTML, money, netFlows } from "./view-formatters";
     return renderTrendSVG(
       trendSeries(options),
       options?.includeContributions === true,
+      options?.fullYear || null,
     );
   }
 
   function mountTrend(container, options = {}) {
     const includeContributions = options.includeContributions === true;
     const series = trendSeries(options);
-    container.innerHTML = renderTrendSVG(series, includeContributions);
+    container.innerHTML = renderTrendSVG(
+      series,
+      includeContributions,
+      options.fullYear || null,
+    );
     const svg = container.querySelector("svg");
     if (!svg || !series.months.length) return () => {};
 
@@ -508,5 +576,7 @@ import { escapeHTML, money, netFlows } from "./view-formatters";
     monthRangeFromDates,
     mountTrend,
     sourceLabel,
+    accountPerformance,
+    portfolioPerformance,
     trendSVG,
   };
