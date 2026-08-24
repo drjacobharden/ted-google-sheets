@@ -1,6 +1,7 @@
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
 import { InvestmentView } from "../../utilities/investment-view";
+import { midpoint, monthEnd } from "../../utilities/investment-returns";
 import { createTransactionRow } from "../../utilities/transaction-row";
 import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
@@ -2177,6 +2178,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
               accountId: row.accountId ?? "",
               month: row.month ?? "",
               balance: row.balance ?? 0,
+              asOfDate: /^\d{4}-\d{2}-\d{2}$/.test(String(row.balanceSourceDate || "")) ? String(row.balanceSourceDate) : monthEnd(row.month ?? ""),
               balanceId: row.existing?.balance?.id || "",
               existingContributions: row.existing?.contributions || [],
               contributions: row.flows
@@ -2185,7 +2187,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
                     Number.isFinite(Number(flow.amount)) &&
                     Number(flow.amount) !== 0,
                 )
-                .map((flow) => ({ amount: Number(flow.amount) })),
+                .map((flow) => ({ amount: Number(flow.amount), date: /^\d{4}-\d{2}-\d{2}$/.test(flow.sourceDate) ? flow.sourceDate : midpoint(row.month ?? ""), flowType: "external" as const })),
               notes: row.existing?.balance?.notes || "",
             })),
           );

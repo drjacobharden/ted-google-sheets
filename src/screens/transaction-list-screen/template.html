@@ -1,0 +1,24 @@
+<section class="transaction-ledger editorial-theme" data-screen="transactions">
+  <header class="transaction-ledger__intro">
+    <div>
+      <h1>Transaction ledger</h1>
+      <p id="transaction-ledger-subtitle">Showing all transactions recorded for the selected year.</p>
+    </div>
+    <div class="transaction-ledger__tools" aria-label="Transaction list controls">
+      <dropdown-menu
+        id="transaction-month-selector"
+        variant="editorial"
+        label="All months"
+        aria-label="Select transaction month"
+      ></dropdown-menu>
+      <search-bar
+        id="transaction-search"
+        variant="editorial"
+        placeholder="search by name"
+        aria-label="Search transactions by name"
+      ></search-bar>
+      <filter-bar id="transaction-list-filter" variant="editorial"></filter-bar>
+    </div>
+  </header>
+  <table-list aria-label="Transactions"></table-list>
+</section>

@@ -1,6 +1,12 @@
 import type { BudgetTransaction } from "../../api/budget-api";
+import type {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownSelectionEvent,
+} from "../../components/dropdown-menu/dropdown-menu";
 import type { AppliedFilter } from "../../components/filter-bar/filter-bar";
-import { PageControl } from "../../components/page-control/page-control";
+import type { FilterBar } from "../../components/filter-bar/filter-bar";
+import type { SearchBar } from "../../components/search-bar/search-bar";
 import {
   Table,
   type SortDirection,
@@ -9,7 +15,6 @@ import {
 } from "../../components/table/table";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
-import { DateRange, DateUtils } from "../../utilities/date-utilities";
 import {
   addListener,
   handleCustomEvent,
@@ -17,30 +22,46 @@ import {
 } from "../../utilities/event-utilities";
 import { money } from "../../utilities/view-formatters";
 import { appState } from "../../state/app-state";
+import { filterForBudgetingContext } from "../budgeting/budgeting-context";
 import {
-  budgetingYearRange,
-  filterForBudgetingContext,
-} from "../budgeting/budgeting-context";
+  editorialPeriod,
+  matchesLedgerFilterGroups,
+  signedTransactionAmount,
+} from "../../utilities/entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
+
+function ledgerDate(dateId: string): string {
+  const match = dateId.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[2]}.${match[3]}.${match[1].slice(-2)}` : dateId;
+}
+
+const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "long" });
+const monthItems: DropdownMenuItem[] = [
+  { key: "all", title: "All months", isDefaultValue: true },
+  ...Array.from({ length: 12 }, (_, index) => ({
+    key: String(index + 1).padStart(2, "0"),
+    title: monthFormatter.format(new Date(2024, index, 1)),
+  })),
+];
 
 export class TransactionScreen
   extends HTMLElement
   implements EventListenerObject
 {
   #table!: Table<BudgetTransaction>;
-  #pagination!: PageControl;
-  #resizeObserver: ResizeObserver | null = null;
-  #capacityFrame = 0;
+  #filterBar!: FilterBar<BudgetTransaction>;
+  #monthSelector!: DropdownMenu;
+  #search!: SearchBar;
+  #subtitle!: HTMLElement;
 
-  #dateRange: DateRange = DateUtils.defaultRange;
+  #selectedMonth: string | null = null;
+  #query = "";
   #filters: AppliedFilter<BudgetTransaction>[] = [];
   #sortKey: keyof BudgetTransaction | null = null;
   #sortDirection: SortDirection | null = null;
-  #page = 1;
-  #pageSize = 10;
   #listening = false;
   #unsubscribeBudgetingContext: (() => void) | null = null;
 
@@ -51,17 +72,20 @@ export class TransactionScreen
       this.dataset.screen = "transactions";
       this.append(template.content.cloneNode(true));
       this.#table = this.querySelector("table-list")!;
-      this.#pagination = this.querySelector("page-control")!;
-      this.#dateRange = budgetingYearRange(
-        appState.get("budgetingContext").year,
-      );
+      this.#filterBar = this.querySelector("filter-bar")!;
+      this.#monthSelector = this.querySelector("#transaction-month-selector")!;
+      this.#search = this.querySelector("#transaction-search")!;
+      this.#subtitle = this.querySelector("#transaction-ledger-subtitle")!;
+      this.#monthSelector.items = monthItems;
+      this.#configureFilters();
     }
     if (this.#listening) return;
     this.#listening = true;
 
     addListener("filters-changed", this, this);
     addListener("table-sort-request", this, this);
-    this.addEventListener("page-change", this);
+    this.#monthSelector.addListener(this);
+    this.#search.addEventListener("search-changed", this);
     this.#table.addEventListener("click", this);
     this.#table.addEventListener("keydown", this);
 
@@ -76,20 +100,11 @@ export class TransactionScreen
       window.addEventListener(eventName, this);
     }
 
-    this.#resizeObserver = new ResizeObserver(() =>
-      this.#scheduleCapacityUpdate(),
-    );
-    this.#resizeObserver.observe(this.#table);
     this.#unsubscribeBudgetingContext = appState.subscribe(
       "budgetingContext",
-      (context) => {
-        this.#dateRange = budgetingYearRange(context.year);
-        this.#page = 1;
-        this.#repaint();
-      },
+      () => this.#repaint(),
     );
     this.#repaint();
-    this.#scheduleCapacityUpdate();
   }
 
   disconnectedCallback(): void {
@@ -97,7 +112,8 @@ export class TransactionScreen
     this.#listening = false;
     removeListener("filters-changed", this, this);
     removeListener("table-sort-request", this, this);
-    this.removeEventListener("page-change", this);
+    this.#monthSelector.removeListener(this);
+    this.#search.removeEventListener("search-changed", this);
     this.#table.removeEventListener("click", this);
     this.#table.removeEventListener("keydown", this);
 
@@ -112,9 +128,6 @@ export class TransactionScreen
       window.removeEventListener(eventName, this);
     }
 
-    this.#resizeObserver?.disconnect();
-    this.#resizeObserver = null;
-    cancelAnimationFrame(this.#capacityFrame);
     this.#unsubscribeBudgetingContext?.();
     this.#unsubscribeBudgetingContext = null;
   }
@@ -127,7 +140,6 @@ export class TransactionScreen
           event,
           ({ filters }) => {
             this.#filters = filters;
-            this.#page = 1;
             this.#repaint();
           },
         );
@@ -136,13 +148,24 @@ export class TransactionScreen
       case "table-sort-request":
         handleCustomEvent("table-sort-request", event, ({ key }) => {
           this.#cycleSort(key as keyof BudgetTransaction);
-          this.#page = 1;
           this.#repaint();
         });
         break;
 
-      case "page-change":
-        this.#page = (event as CustomEvent<{ page: number }>).detail.page;
+      case "dropdown-selection": {
+        const selection = event as DropdownSelectionEvent;
+        if (selection.currentTarget !== this.#monthSelector) break;
+        this.#selectedMonth = selection.detail.value === "all"
+          ? null
+          : selection.detail.value;
+        this.#repaint();
+        break;
+      }
+
+      case "search-changed":
+        this.#query = (event as CustomEvent<{ value: string }>).detail.value
+          .trim()
+          .toLowerCase();
         this.#repaint();
         break;
 
@@ -152,6 +175,7 @@ export class TransactionScreen
         break;
 
       default:
+        this.#configureFilters();
         this.#repaint();
         break;
     }
@@ -163,109 +187,131 @@ export class TransactionScreen
         key: "date",
         title: "Date",
         dataType: "string",
-        formatter: (value: string) =>
-          DateUtils.shortDateFormatter.format(DateUtils.fromDateId(value)),
-      },
-      { key: "category", title: "Category", dataType: "string" },
-      { key: "vendor", title: "Vendor", dataType: "string" },
-      {
-        key: "assignment",
-        title: "Assignment",
-        dataType: "string",
-        prominence: "background",
+        formatter: ledgerDate,
+        sizing: "narrow",
+        cellClass: "transaction-date",
       },
       {
         key: "notes",
-        title: "Note",
+        title: "Description",
         dataType: "string",
-        formatter: (value) => (value === "" ? "---" : value),
+        formatter: (value, row) =>
+          String(value ?? "").trim() || row.category || "Uncategorized",
+        subline: (row) => row.vendor || "No vendor",
+        prominence: "bold",
+        sizing: 35,
+        cellClass: "transaction-description",
+      },
+      {
+        key: "category",
+        title: "Category",
+        dataType: "string",
+        prominence: "tag",
+        sizing: 20,
+        cellClass: "transaction-category",
+      },
+      {
+        key: "vendor",
+        title: "Vendor",
+        dataType: "string",
         sizing: 25,
+        cellClass: "transaction-vendor",
       },
       {
         key: "amount",
         title: "Amount",
         dataType: "number",
-        formatter: (value: number, row) =>
-          money(row.type === "expense" ? -value : value),
+        formatter: (_value: number, row) => money(signedTransactionAmount(row)),
         textAlign: "right",
-        prominence: "bold",
         sizing: "narrow",
-        color: (row) =>
-          row.type === "income" ? "var(--success-dark)" : "var(--text)",
-        sorter: (row) => (row.type === "expense" ? -row.amount : row.amount),
+        cellClass: "transaction-amount",
+        sorter: signedTransactionAmount,
       },
     ];
   }
 
   #tableData(rows: readonly BudgetTransaction[]): TableData<BudgetTransaction> {
+    const visibleTotal = rows.reduce(
+      (total, row) => total + signedTransactionAmount(row),
+      0,
+    );
+
     return {
-      columns: ["checkbox", ...this.#columns(), "options"],
+      columns: this.#columns(),
       rows,
+      footer: {
+        cells: [null, "Total", null, null, money(visibleTotal)],
+        ariaLabel: `Transaction total ${money(visibleTotal)}`,
+      },
+      interactiveRows: true,
       sort:
         this.#sortKey && this.#sortDirection
           ? { key: this.#sortKey, direction: this.#sortDirection }
           : null,
-      rowActions: [
-        {
-          key: "edit",
-          title: "Edit transaction",
-          icon: "pencil",
-          selectionIcon: "none",
-        },
-        {
-          key: "delete",
-          title: "Delete transaction",
-          destructive: true,
-          icon: "trash",
-          selectionIcon: "none",
-        },
-      ],
     };
   }
 
   #repaint(): void {
+    const year = appState.get("budgetingContext").year;
+    this.#subtitle.textContent = `Showing all transactions recorded for ${editorialPeriod(year, this.#selectedMonth)}`;
     const rows = this.#sortedRows(this.#filteredRows());
-    const totalPages = Math.max(1, Math.ceil(rows.length / this.#pageSize));
-    this.#page = Math.min(this.#page, totalPages);
-    const start = (this.#page - 1) * this.#pageSize;
-
-    this.#table.data = this.#tableData(rows.slice(start, start + this.#pageSize));
-    this.#pagination.totalPages = totalPages;
-    this.#pagination.currentPage = this.#page;
+    this.#table.data = this.#tableData(rows);
   }
 
   #filteredRows(): BudgetTransaction[] {
     return filterForBudgetingContext(appController.getTransactions())
-      .filter((row) => DateUtils.isInRange(row.date, this.#dateRange))
-      .filter((row) => this.#filters.every((filter) => this.#matches(row, filter)));
+      .filter(
+        (row) => this.#selectedMonth === null || row.date.slice(5, 7) === this.#selectedMonth,
+      )
+      .filter((row) => {
+        if (!this.#query) return true;
+        return [row.notes, row.category, row.vendor, row.assignment]
+          .some((value) => String(value ?? "").toLowerCase().includes(this.#query));
+      })
+      .filter((row) =>
+        matchesLedgerFilterGroups(row, this.#filters, (item, key) =>
+          key === "amount" ? signedTransactionAmount(item) : item[key],
+        ),
+      );
   }
 
-  #matches(
-    row: BudgetTransaction,
-    filter: AppliedFilter<BudgetTransaction>,
-  ): boolean {
-    const rawValue = row[filter.key];
-    const value =
-      typeof rawValue === "string" ? rawValue.toLowerCase() : rawValue;
-    const expected =
-      typeof filter.value === "string"
-        ? filter.value.toLowerCase()
-        : filter.value;
-
-    switch (filter.operator) {
-      case "Equals":
-        return value === expected;
-      case "Does not equal":
-        return value !== expected;
-      case "Greater than":
-        return Number(value) > Number(expected);
-      case "Less than":
-        return Number(value) < Number(expected);
-      case "Contains":
-        return String(value ?? "").includes(String(expected));
-      case "Starts with":
-        return String(value ?? "").startsWith(String(expected));
+  #filterValues(key: "category" | "vendor" | "assignment"): string[] {
+    const values = new Map<string, string>();
+    for (const transaction of appController.getTransactions()) {
+      const value = String(transaction[key] ?? "").trim();
+      if (value) values.set(value.toLocaleLowerCase("en-US"), value);
     }
+    return [...values.values()].sort((left, right) => left.localeCompare(right));
+  }
+
+  #configureFilters(): void {
+    this.#filterBar.availableFilters = [
+      {
+        key: "category",
+        title: "Category",
+        dataType: this.#filterValues("category"),
+        searchable: true,
+      },
+      {
+        key: "vendor",
+        title: "Vendor",
+        dataType: this.#filterValues("vendor"),
+        searchable: true,
+      },
+      {
+        key: "assignment",
+        title: "Assignment",
+        dataType: this.#filterValues("assignment"),
+        searchable: true,
+      },
+      { key: "notes", title: "Description", dataType: "string" },
+      { key: "amount", title: "Amount", dataType: "number" },
+      {
+        key: "type",
+        title: "Transaction type",
+        dataType: ["Income", "Expense"],
+      },
+    ];
   }
 
   #sortedRows(rows: BudgetTransaction[]): BudgetTransaction[] {
@@ -300,19 +346,6 @@ export class TransactionScreen
     }
   }
 
-  #scheduleCapacityUpdate(): void {
-    cancelAnimationFrame(this.#capacityFrame);
-    this.#capacityFrame = requestAnimationFrame(() => {
-      const pageSize = this.#table.visibleRowCapacity;
-      if (pageSize > 0 && pageSize !== this.#pageSize) {
-        const firstVisibleIndex = (this.#page - 1) * this.#pageSize;
-        this.#pageSize = pageSize;
-        this.#page = Math.floor(firstVisibleIndex / pageSize) + 1;
-        this.#repaint();
-      }
-    });
-  }
-
   #openSelectedRow(event: Event): void {
     if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") {
       return;
@@ -322,7 +355,7 @@ export class TransactionScreen
     );
     if (!row) return;
     const rows = this.#sortedRows(this.#filteredRows());
-    const transaction = rows[(this.#page - 1) * this.#pageSize + row.rowIndex - 1];
+    const transaction = rows[row.rowIndex - 1];
     if (!transaction) return;
     if (event instanceof KeyboardEvent) event.preventDefault();
     router.updateParams({ drawer: "edit", transactionId: transaction.id });

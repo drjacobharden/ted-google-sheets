@@ -18,9 +18,9 @@ type ArchivedCollections = Record<ArchiveCollection, BudgetEntity[]>;
 interface ArchiveSettings { collection: ArchiveCollection; singular: string; plural: string; route: RouteName; }
 
 const SETTINGS_BY_KIND: Record<EntityKind, ArchiveSettings> = {
-  category: { collection: "categories", singular: "category", plural: "categories", route: "budgeting/categories" },
-  vendor: { collection: "vendors", singular: "vendor", plural: "vendors", route: "budgeting/vendors" },
-  assignment: { collection: "assignments", singular: "person", plural: "people", route: "budgeting/people" },
+  category: { collection: "categories", singular: "category", plural: "categories", route: "categories" },
+  vendor: { collection: "vendors", singular: "vendor", plural: "vendors", route: "vendors" },
+  assignment: { collection: "assignments", singular: "person", plural: "people", route: "people" },
 };
 
 /** Displays archived budget entities and opens them for reactivation. */
@@ -147,7 +147,6 @@ export class EntityArchiveScreen extends HTMLElement implements EventListenerObj
       const context = appState.get("budgetingContext");
       router.navigate(this.#settings.route, {
         year: String(context.year),
-        assignment: context.assignmentId ?? "all",
       });
       return;
     }

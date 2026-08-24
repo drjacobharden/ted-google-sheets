@@ -1,251 +1,241 @@
 // @ts-nocheck
 import { APIs } from "../../api/api";
 import { router } from "../../router/router";
-import { appController } from "../../state/app-controller";
-import { DateUtils } from "../../utilities/date-utilities";
-import { InvestmentView } from "../../utilities/investment-view";
 import { showToast } from "../../components/toast-stack/toast-service";
 import templateString from "./template.html" with { type: "text" };
-export class InvestmentAccountDrawerScreen extends HTMLElement { connectedCallback(): void { if (!this.dataset.initialized) { this.dataset.initialized = "true"; this.innerHTML = templateString; } } }
-if (!customElements.get("investment-account-drawer-screen")) customElements.define("investment-account-drawer-screen", InvestmentAccountDrawerScreen);
-document.addEventListener("DOMContentLoaded", () => {
-  const backdrop = document.getElementById(
-    "investment-account-drawer-backdrop",
+import { PeopleSelect } from "../../components/people-select/people-select";
+
+export class InvestmentAccountDrawerScreen extends HTMLElement {
+  connectedCallback(): void {
+    if (!this.dataset.initialized) {
+      this.dataset.initialized = "true";
+      this.innerHTML = templateString;
+    }
+  }
+}
+if (!customElements.get("investment-account-drawer-screen")) {
+  customElements.define(
+    "investment-account-drawer-screen",
+    InvestmentAccountDrawerScreen,
   );
-  const drawer = document.getElementById("investment-account-drawer");
-  const form = document.getElementById("investment-account-edit-form");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const root = document.querySelector("investment-account-drawer-screen");
+  const backdrop = root.querySelector("#investment-account-drawer-backdrop");
+  const drawer = backdrop.querySelector(".side-drawer");
+  const form = root.querySelector("#investment-account-edit-form");
+  const header = backdrop.querySelector("drawer-header");
+  const kindControl = root.querySelector("#investment-account-kind");
+  const investmentFields = root.querySelector("#investment-account-fields");
+  const debtFields = root.querySelector("#debt-account-fields");
+  const sourceSelect = root.querySelector("#investment-account-source");
+  const assignmentSelect = root.querySelector("people-select") as PeopleSelect;
+  const footnote = root.querySelector("#investment-account-footnote");
   const message = form.querySelector(".form-message");
-  const submit = form.querySelector('[type="submit"]');
+  const submit = form.querySelector('custom-button[type="submit"]');
+  const archive = form.querySelector("[data-account-archive]");
   const appShell = document.querySelector(".app-shell");
+  let kind = "investment";
   let accountId = "";
   let initialState = "";
   let openedRouteKey = "";
   let returnFocus = null;
-  let closing = false;
-  let closeTimer = 0;
-  let closeAnimationHandler = null;
+
+  kindControl.items = [
+    { key: "investment", title: "Investment", isDefaultValue: true },
+    { key: "debt", title: "Debt" },
+  ];
+
+  sourceSelect.items = [
+    { key: "manual", title: "Manual transfer", isDefaultValue: true },
+    { key: "paycheck", title: "Paycheck deduction" },
+  ];
 
   function formState() {
     return JSON.stringify({
+      kind,
       name: form.elements.name.value.trim(),
-      source: form.elements.source.value,
-      assignmentId: form.elements.assignmentId.value,
+      source: sourceSelect.selection,
+      assignmentId: assignmentSelect.value,
+      lender: form.elements.lender.value.trim(),
+      interestRate: form.elements.interestRate.value,
     });
   }
 
-  function finishClose() {
-    if (!closing) return;
-    closing = false;
-    window.clearTimeout(closeTimer);
-    if (closeAnimationHandler) {
-      drawer.removeEventListener("transitionend", closeAnimationHandler);
+  function setKind(next) {
+    kind = next === "debt" ? "debt" : "investment";
+    kindControl.selection = kind;
+    investmentFields.hidden = kind !== "investment";
+    debtFields.hidden = kind !== "debt";
+    footnote.textContent =
+      kind === "debt"
+        ? "Debt balances and dated activity are tracked separately from budget expenses."
+        : "Paycheck deductions count toward Total savings. Manual transfers allocate savings that the budget has already counted.";
+  }
+
+  function show() {
+    returnFocus = document.activeElement;
+    backdrop.classList.remove("is-closing", "is-open");
+    backdrop.hidden = false;
+    void drawer.offsetWidth;
+
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    if (reducedMotion) {
+      form.elements.name.focus({ preventScroll: true });
+    } else {
+      drawer.addEventListener("transitionend", handleDrawerOpened);
     }
-    closeTimer = 0;
-    closeAnimationHandler = null;
+
+    backdrop.classList.add("is-open");
+    document.body.classList.add("drawer-open");
+    appShell.inert = true;
+  }
+
+  function handleDrawerOpened(event) {
+    if (event.target !== drawer || event.propertyName !== "transform") {
+      return;
+    }
+
+    drawer.removeEventListener("transitionend", handleDrawerOpened);
+    form.elements.name.focus({ preventScroll: true });
+  }
+
+  function finishClose() {
     backdrop.hidden = true;
     backdrop.classList.remove("is-open", "is-closing");
     document.body.classList.remove("drawer-open");
     appShell.inert = false;
-    accountId = "";
-    initialState = "";
-    (returnFocus && document.contains(returnFocus)
-      ? returnFocus
-      : document.getElementById("edit-investment-account")
-    )?.focus();
+    openedRouteKey = "";
+    returnFocus?.focus?.();
   }
 
-  function close(force = false, { updateRoute = true } = {}) {
-    if (closing || backdrop.hidden) return true;
+  function close(force = false, updateRoute = true) {
+    if (backdrop.hidden) return true;
     if (
       !force &&
       formState() !== initialState &&
       !window.confirm("Discard your unsaved account changes?")
-    ) {
+    )
       return false;
-    }
-    closing = true;
     backdrop.classList.remove("is-open");
     backdrop.classList.add("is-closing");
-    closeAnimationHandler = (event) => {
-      if (event.target === drawer && event.propertyName === "transform") {
-        finishClose();
-      }
-    };
-    drawer.addEventListener("transitionend", closeAnimationHandler);
-    const reducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    )?.matches;
-    closeTimer = window.setTimeout(finishClose, reducedMotion ? 0 : 320);
-    if (
-      updateRoute &&
-      router.currentParams().drawer === "investment-account"
-    ) {
+    window.setTimeout(
+      finishClose,
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 300,
+    );
+    if (updateRoute)
       router.updateParams({
         drawer: null,
         investmentAccountId: null,
+        investmentLedgerSource: null,
       });
-    }
     return true;
-  }
-
-  function handleOpened(event) {
-    if (event.target !== drawer || event.propertyName !== "transform") return;
-    drawer.removeEventListener("transitionend", handleOpened);
-    form.elements.name.select();
-  }
-
-  function open(id) {
-    const account = APIs.investment.accounts().find(
-      (item) => item.id === id && item.active !== false,
-    );
-    if (!account) return false;
-    accountId = id;
-    returnFocus = document.activeElement;
-    form.elements.name.value = account.name;
-    form.elements.source.value = account.source;
-    form.elements.assignmentId.replaceChildren(
-      ...APIs.budget.listAllPeople().map((assignment) => {
-        const option = document.createElement("option");
-        option.value = assignment.id;
-        option.textContent = assignment.name;
-        return option;
-      }),
-    );
-    form.elements.assignmentId.value =
-      account.assignmentId || APIs.budget.SHARED_ASSIGNMENT_ID;
-    message.textContent = "";
-    message.className = "form-message";
-    submit.disabled = false;
-    initialState = formState();
-
-    window.clearTimeout(closeTimer);
-    if (closeAnimationHandler) {
-      drawer.removeEventListener("transitionend", closeAnimationHandler);
-    }
-    closing = false;
-    closeTimer = 0;
-    closeAnimationHandler = null;
-    backdrop.classList.remove("is-open", "is-closing");
-    backdrop.hidden = false;
-    void drawer.offsetWidth;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      form.elements.name.select();
-    } else {
-      drawer.addEventListener("transitionend", handleOpened);
-    }
-    backdrop.classList.add("is-open");
-    document.body.classList.add("drawer-open");
-    appShell.inert = true;
-    return true;
-  }
-
-  function clearRoute() {
-    router.updateParams({
-      drawer: null,
-      investmentAccountId: null,
-    });
   }
 
   function openFromRoute() {
     const params = router.currentParams();
-    const routeKey = `${params.drawer || ""}:${params.investmentAccountId || ""}`;
     if (params.drawer !== "investment-account") {
-      openedRouteKey = "";
-      if (!backdrop.hidden) close(true, { updateRoute: false });
+      if (!backdrop.hidden) close(true, false);
       return;
     }
+    const nextKind =
+      params.investmentLedgerSource === "debt-account" ? "debt" : "investment";
+    const id = params.investmentAccountId || "";
+    const routeKey = `${nextKind}:${id}`;
     if (routeKey === openedRouteKey && !backdrop.hidden) return;
-    if (!params.investmentAccountId) {
-      clearRoute();
-      return;
-    }
-    const exists = APIs.investment.accounts().some(
-      (item) => item.id === params.investmentAccountId,
-    );
-    if (!exists && !APIs.investment.isLoaded()) return;
-    if (open(params.investmentAccountId)) openedRouteKey = routeKey;
-    else clearRoute();
+    kind = nextKind;
+    accountId = id;
+    const account = id
+      ? (kind === "debt"
+          ? APIs.debt.accounts()
+          : APIs.investment.accounts()
+        ).find((item) => item.id === id)
+      : null;
+    if (id && !account) return;
+    setKind(kind);
+    kindControl.hidden = Boolean(account);
+    form.elements.name.value = account?.name || "";
+    sourceSelect.selection = account?.source || "manual";
+    form.elements.lender.value = account?.lender || "";
+    form.elements.interestRate.value = account?.interestRate || "";
+    account?.assignmentId && (assignmentSelect.value = account?.assignmentId);
+    archive.hidden = !account;
+    header.title = account ? `Edit ${kind} account` : `Add ${kind} account`;
+    submit.label = account ? "Save changes" : "Add account";
+    message.textContent = "";
+    message.className = "form-message";
+    initialState = formState();
+    openedRouteKey = routeKey;
+    if (backdrop.hidden) show();
   }
 
+  kindControl.addEventListener("segmented-control-selection", (event) =>
+    setKind(event.detail.value),
+  );
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      return;
-    }
-    submit.disabled = true;
-    message.textContent = "";
+    if (!form.reportValidity()) return;
+    submit.setAttribute("disabled", "");
     try {
-      await APIs.investment.updateAccount({
-        id: accountId,
+      const common = {
         name: form.elements.name.value,
-        source: form.elements.source.value,
-        assignmentId: form.elements.assignmentId.value,
-      });
+        assignmentId: assignmentSelect.value,
+      };
+      if (kind === "debt") {
+        const input = {
+          ...common,
+          lender: form.elements.lender.value,
+          interestRate: Number(form.elements.interestRate.value || 0),
+        };
+        if (accountId)
+          await APIs.debt.updateAccount({ id: accountId, ...input });
+        else APIs.debt.addAccount(input);
+      } else {
+        const input = { ...common, source: sourceSelect.selection };
+        if (accountId)
+          await APIs.investment.updateAccount({ id: accountId, ...input });
+        else APIs.investment.addAccount(input);
+      }
       initialState = formState();
+      showToast(
+        `${kind === "debt" ? "Debt" : "Investment"} account ${accountId ? "updated" : "added"}.`,
+      );
       close(true);
-      showToast("Investment account updated.");
     } catch (error) {
       message.className = "form-message error";
-      message.textContent = error.message;
+      message.textContent =
+        error instanceof Error ? error.message : "Unable to save account.";
     } finally {
-      submit.disabled = false;
+      submit.removeAttribute("disabled");
     }
   });
-
-  form
-    .querySelector("[data-account-archive]")
-    .addEventListener("click", async () => {
-      if (
-        !window.confirm(
-          "Archive this investment account? Its history will remain available.",
-        )
-      ) {
-        return;
-      }
-      try {
-        await APIs.investment.archiveAccount(accountId);
-        close(true, { updateRoute: false });
-        router.navigate("investment-accounts");
-        showToast("Investment account archived.");
-      } catch (error) {
-        message.className = "form-message error";
-        message.textContent = error.message;
-      }
-    });
-
-  form
-    .querySelector("[data-account-cancel]")
-    .addEventListener("click", () => close());
-
+  archive.addEventListener("click", async () => {
+    if (
+      !accountId ||
+      !window.confirm(
+        "Archive this account? Its history will remain available.",
+      )
+    )
+      return;
+    if (kind === "debt") await APIs.debt.archiveAccount(accountId);
+    else await APIs.investment.archiveAccount(accountId);
+    initialState = formState();
+    close(true);
+    showToast("Account archived.");
+  });
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });
   document.addEventListener("keydown", (event) => {
-    if (backdrop.hidden) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = [
-      ...drawer.querySelectorAll(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    ].filter((element) => !element.hidden);
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    if (event.key === "Escape" && !backdrop.hidden) close();
   });
   window.addEventListener("app:route-changed", openFromRoute);
   window.addEventListener("budget:investments-loaded", openFromRoute);
-  window.addEventListener("drawer:close-requested", close);
+  window.addEventListener("budget:debts-changed", openFromRoute);
+  window.addEventListener("drawer:close-requested", () => close());
+  openFromRoute();
 });

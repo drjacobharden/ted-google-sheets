@@ -1,47 +1,83 @@
-    <div class="drawer-overlay" id="investment-account-drawer-backdrop" hidden>
-      <aside
-        class="transaction-drawer"
-        id="investment-account-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="investment-account-drawer-title"
-        tabindex="-1"
-      >
-        <drawer-header
-          id="investment-account-drawer-header"
-          title="Edit investment account"
-          eyebrow="Account details"
-        ></drawer-header>
+<drawer-overlay
+  id="investment-account-drawer-backdrop"
+  title="Add account"
+  hidden
+>
+  <form id="investment-account-edit-form" class="edit-form">
+    <segmented-control
+      id="investment-account-kind"
+      variant="text"
+      aria-label="Account type"
+    ></segmented-control>
+    <div class="drawer-form-grid">
+      <label class="form-field transaction-field--wide">
+        <span>Name</span>
+        <input name="name" required />
+      </label>
+      <div id="investment-account-fields">
+        <label class="form-field">
+          <span>Source</span>
+          <dropdown-menu
+            id="investment-account-source"
+            variant="editorial"
+            aria-label="Account source"
+            label="Manual transfer"
+            align-center
+          ></dropdown-menu>
+        </label>
+      </div>
+      <div id="debt-account-fields" hidden>
+        <label class="form-field">
+          <span>Lender</span>
+          <input name="lender" />
+        </label>
+        <label class="form-field"
+          ><span>Interest rate</span
+          ><span class="percentage-field"
+            ><input
+              name="interestRate"
+              type="number"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+            /><span aria-hidden="true">%</span></span
+          ></label
+        >
+      </div>
+      <people-select class="transaction-field--wide"></people-select>
 
-        <form id="investment-account-edit-form">
-          <div class="drawer-form-grid">
-            <label class="form-field"
-              ><span>Name</span><input name="name" required /></label
-            ><label class="form-field"
-              ><span>Source</span
-              ><select name="source" required>
-                <option value="manual">Manual transfer</option>
-                <option value="paycheck">Paycheck deduction</option>
-              </select></label
-            >
-            <label class="form-field"
-              ><span>Assignment</span
-              ><select name="assignmentId" required></select
-            ></label>
-          </div>
-          <p class="form-footnote">
-            Paycheck deductions count toward Total savings. Manual transfers
-            allocate savings that the budget has already counted.
-          </p>
-          <p class="form-message" role="status"></p>
-          <footer class="transaction-drawer-actions">
-            <button class="secondary-button" type="button" data-account-archive>
-              Archive</button
-            ><button class="secondary-button" type="button" data-account-cancel>
-              Cancel</button
-            ><button class="primary-button" type="submit">Save changes</button>
-          </footer>
-        </form>
-      </aside>
+      <!-- <label class="form-field transaction-field--wide">
+        <span>Assignment</span>
+        <dropdown-menu
+          id="investment-account-assignment"
+          variant="editorial"
+          aria-label="Assignment"
+          label="Shared"
+          align-center
+        ></dropdown-menu>
+      </label> -->
     </div>
-    <!-- Investment contribution right sidebar -->
+    <p class="form-footnote" id="investment-account-footnote">
+      Paycheck deductions count toward Total savings. Manual transfers allocate
+      savings that the budget has already counted.
+    </p>
+    <p class="form-message" role="status"></p>
+    <div class="drawer-controls">
+      <footer class="drawer-actions">
+        <custom-button
+          class="destructive-action"
+          type="button"
+          label="Archive account"
+          leading-icon="box"
+          data-account-archive
+          hidden
+        ></custom-button>
+        <custom-button
+          class="primary-button"
+          type="submit"
+          label="Save changes"
+        ></custom-button>
+      </footer>
+    </div>
+  </form>
+</drawer-overlay>

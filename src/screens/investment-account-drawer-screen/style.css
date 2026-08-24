@@ -1,0 +1,92 @@
+investment-account-drawer-screen {
+  :is(#investment-account-fields, #debt-account-fields) {
+    display: contents;
+  }
+
+  .percentage-field {
+    display: flex;
+    height: 48px;
+    align-items: center;
+    border: var(--rule-thin) solid var(--color-rule-strong);
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+
+    input {
+      width: 100%;
+      min-width: 0;
+      height: 46px;
+      padding-inline: var(--space-xs);
+      border: 0 !important;
+      outline: 0;
+      background: transparent;
+      color: var(--color-text);
+      font: inherit;
+    }
+
+    > span {
+      padding-right: var(--space-xs);
+    }
+  }
+
+  .form-field {
+    input {
+      width: 100%;
+      min-height: 48px;
+      padding-inline: var(--space-xs);
+      border: var(--rule-thin) solid var(--color-rule-strong);
+      border-radius: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--color-text);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-regular);
+      line-height: var(--leading-normal);
+      box-shadow: none;
+
+      &:focus,
+      &:focus-visible {
+        border-color: var(--color-accent-strong);
+        outline: 0;
+        box-shadow: none;
+      }
+    }
+  }
+
+  :is(#investment-account-source, #investment-account-assignment) {
+    position: relative;
+    display: block;
+    width: 100%;
+
+    > .dropdown-trigger.secondary-button {
+      width: 100%;
+      height: 48px;
+      border-radius: 0;
+      background: transparent;
+      font-size: var(--text-sm);
+      font-weight: var(--weight-regular);
+
+      &:focus-visible {
+        border-color: var(--color-accent-strong);
+        outline: 0;
+      }
+    }
+
+    > .popover.dropdown-menu-list {
+      position: absolute;
+      top: calc(100% + 4px) !important;
+      right: auto;
+      left: 0 !important;
+      width: 100%;
+      border-radius: 0;
+      background: var(--color-surface-overlay);
+    }
+  }
+
+  .form-footnote {
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+  }
+}

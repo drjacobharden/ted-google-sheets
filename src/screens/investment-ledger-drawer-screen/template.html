@@ -1,0 +1,66 @@
+<drawer-overlay
+  id="investment-ledger-drawer-backdrop"
+  title="New ledger entry"
+  hidden
+>
+  <form id="investment-ledger-entry-form" class="edit-form" novalidate>
+    <label
+      class="form-field transaction-field transaction-field--wide investment-ledger-entry-type"
+    >
+      <span>Entry type</span>
+      <dropdown-menu
+        id="investment-ledger-type-control"
+        variant="editorial"
+        aria-label="Investment ledger entry type"
+      ></dropdown-menu>
+    </label>
+    <input type="hidden" name="type" value="investment" />
+
+    <div class="drawer-form-grid">
+      <currency-input
+        class="transaction-field transaction-field--amount"
+      ></currency-input>
+      <date-picker
+        class="transaction-field transaction-field--date"
+        name="date"
+        optional
+      ></date-picker>
+      <label class="form-field transaction-field transaction-field--wide">
+        <span>Account</span>
+        <span class="native-select-shell">
+          <select name="accountId" required></select>
+          <custom-icon icon="chevronDown" aria-hidden="true"></custom-icon>
+        </span>
+      </label>
+    </div>
+    <p
+      class="form-message"
+      id="investment-ledger-entry-message"
+      aria-live="polite"
+    ></p>
+    <div class="drawer-controls">
+      <footer class="drawer-actions">
+        <custom-button
+          class="transaction-delete-button"
+          id="delete-investment-ledger-entry"
+          type="button"
+          label="Delete entry"
+          leading-icon="trash"
+          hidden
+        ></custom-button>
+        <custom-button
+          label="Save changes"
+          class="primary-button"
+          type="submit"
+        ></custom-button>
+      </footer>
+      <div class="metadata" id="investment-ledger-entry-metadata" hidden>
+        <p>
+          <strong class="text-90">Entry ID: </strong>
+          <code class="text-90" id="investment-ledger-entry-id"></code>
+        </p>
+        <p class="text-80 muted" id="investment-ledger-created-footnote"></p>
+      </div>
+    </div>
+  </form>
+</drawer-overlay>

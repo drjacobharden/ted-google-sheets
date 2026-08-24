@@ -1,0 +1,95 @@
+investments-header {
+  display: block;
+  width: min(100%, var(--page-max-width));
+  padding-inline: var(--section-inline-padding);
+  margin-inline: auto;
+  box-sizing: border-box;
+  color: var(--color-text);
+  font-family: var(--font-body);
+
+  .investments-header__utility-row {
+    display: flex;
+    min-height: 84px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    padding-block: var(--space-md);
+  }
+
+  .investments-header__scope {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .investments-header__scope dropdown-menu .dropdown-trigger {
+    min-width: 96px;
+    height: 42px;
+    padding-inline: 12px;
+    border-radius: var(--radius-subtle);
+    color: var(--color-text);
+  }
+
+  .investments-header__year-step.square {
+    width: 42px;
+    height: 42px;
+    border-color: var(--color-rule-strong);
+    border-radius: var(--radius-subtle);
+    color: var(--color-text);
+  }
+
+  .investments-header__year-step[disabled] {
+    cursor: default !important;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  #investments-primary-action {
+    border-radius: var(--radius-subtle);
+    background: var(--color-text);
+    font-family: var(--font-body);
+  }
+
+  .investments-header__sections {
+    position: relative;
+    border-bottom: 1px solid var(--color-text);
+    margin-bottom: 40px;
+  }
+
+  #investments-section-selector .segmented-control__list {
+    width: max-content;
+    gap: 12px;
+  }
+
+  #investments-section-selector .segmented-control__item {
+    flex: 0 0 auto;
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  investments-header {
+    .investments-header__utility-row {
+      min-height: 0;
+      gap: var(--space-xs);
+      padding-block: var(--space-md);
+      margin-bottom: var(--space-lg);
+      border-bottom: var(--rule-thin) solid var(--color-rule);
+    }
+
+    .investments-header__sections {
+      display: none;
+    }
+
+    #investments-primary-action > span {
+      display: none;
+    }
+
+    #investments-primary-action {
+      width: var(--button-height);
+      padding: 0;
+    }
+  }
+}

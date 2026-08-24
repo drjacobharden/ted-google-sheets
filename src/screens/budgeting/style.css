@@ -1,71 +1,155 @@
-budgeting-shell {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
+budgeting-header {
+  display: block;
+  width: min(100%, var(--page-max-width));
+  padding-inline: var(--section-inline-padding);
+  margin-inline: auto;
+  box-sizing: border-box;
+  color: var(--color-text);
+  font-family: var(--font-body);
 
-  .budgeting-shell__header {
+  .budgeting-header__utility-row {
     display: flex;
-    min-height: var(--button-height);
-    flex: 0 0 auto;
+    min-height: 84px;
     align-items: center;
     justify-content: space-between;
-    gap: 24px;
-    margin: 24px 0;
+    gap: var(--space-lg);
+    padding-block: var(--space-md);
   }
 
-  .budgeting-shell__breadcrumbs,
-  .budgeting-shell__actions,
-  #budgeting-breadcrumb-tail {
+  .budgeting-header__scope,
+  .budgeting-header__actions {
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 8px;
   }
 
-  #budgeting-breadcrumb-tail:empty {
-    display: none;
-  }
-
-  .budgeting-shell__breadcrumb {
-    overflow: hidden;
-    max-width: 240px;
-    color: var(--muted);
-    text-overflow: ellipsis;
+  .budgeting-header__scope {
+    gap: 6px;
     white-space: nowrap;
   }
 
-  .budgeting-shell__outlet {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-    flex-direction: column;
+  .budgeting-header__scope-separator {
+    color: var(--color-text-subtle);
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-light);
+  }
 
-    > * {
-      min-height: 0;
+  .budgeting-header__scope dropdown-menu .dropdown-trigger {
+    min-width: 96px;
+    height: 42px;
+    padding-inline: 12px;
+    border-radius: var(--radius-subtle);
+    color: var(--color-text);
+
+    span {
+      color: inherit;
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      letter-spacing: var(--tracking-wide);
     }
 
-    > .screen {
+    &:hover {
+      background: var(--color-surface-subtle);
+      color: var(--color-text);
+    }
+  }
+
+  .budgeting-header__year-step.square {
+    width: 42px;
+    height: 42px;
+    border-color: var(--color-rule-strong);
+    border-radius: var(--radius-subtle);
+    color: var(--color-text);
+
+    &:hover {
+      background: var(--color-surface-subtle);
+    }
+
+    &[disabled] {
+      cursor: default !important;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+  }
+
+  .budgeting-header__actions {
+    gap: 8px;
+
+    custom-button {
+      border-radius: var(--radius-subtle);
+      font-family: var(--font-body);
+    }
+
+    .primary-button {
+      background: var(--color-text);
+
+      &:hover {
+        background: var(--paper-900);
+      }
+    }
+
+    .budgeting-header__compact-action.square {
+      width: auto;
+      padding: 3.5px 15px 3.5px 12px;
+    }
+
+    .tertiary {
+      border-color: var(--color-rule);
+
+      &:hover {
+        background: var(--color-surface-subtle);
+      }
+    }
+  }
+
+  .budgeting-header__sections {
+    position: relative;
+    border-bottom: 1px solid var(--color-text);
+    margin-bottom: 40px;
+  }
+
+  #budgeting-section-selector {
+    .segmented-control__list {
+      width: max-content;
+      gap: 12px;
+    }
+
+    .segmented-control__item {
       flex: 0 0 auto;
-      min-height: auto;
       padding-inline: 0;
-      overflow: visible;
-      overscroll-behavior: auto;
-      scrollbar-gutter: auto;
     }
   }
 }
 
-@media (max-width: 900px) {
-  budgeting-shell {
-    .budgeting-shell__header {
-      align-items: flex-start;
-      flex-direction: column;
+@media (max-width: 720px) {
+  budgeting-header {
+    .budgeting-header__utility-row {
+      min-height: 0;
+      align-items: center;
+      gap: var(--space-xs);
+      padding-block: var(--space-md);
+      margin-bottom: var(--space-lg);
+      border-bottom: var(--rule-thin) solid var(--color-rule);
     }
 
-    .budgeting-shell__breadcrumbs {
-      width: 100%;
-      overflow-x: auto;
+    .budgeting-header__actions {
+      width: auto;
+      flex: 0 0 auto;
+      justify-content: flex-end;
+    }
+
+    .budgeting-header__sections {
+      display: none;
+    }
+
+    .budgeting-header__compact-action.square {
+      width: var(--button-height);
+      padding: 0;
+
+      > span {
+        display: none;
+      }
     }
   }
 }

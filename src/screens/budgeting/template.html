@@ -1,28 +1,32 @@
-<header class="budgeting-shell__header">
-  <div class="budgeting-shell__breadcrumbs">
-    <h1 class="fw-medium text-400">Budgeting</h1>
-    <custom-icon icon="chevronRight" class="muted"></custom-icon>
-    <dropdown-menu
-      id="budgeting-content-selector"
-      variant="ghost"
-      hide-trailing-chevron
-    ></dropdown-menu>
-    <div id="budgeting-breadcrumb-tail"></div>
-    <custom-icon icon="chevronRight" class="muted"></custom-icon>
+<header class="budgeting-header__utility-row">
+  <div class="budgeting-header__scope" aria-label="Budgeting scope">
+    <custom-button
+      id="budgeting-year-previous"
+      class="budgeting-header__year-step square tertiary"
+      data-year-step="previous"
+      leading-icon="chevronLeft"
+      aria-label="Previous year"
+    ></custom-button>
     <dropdown-menu
       id="budgeting-year-selector"
-      variant="ghost"
-      hide-trailing-chevron
+      variant="editorial"
       aria-label="Budget year"
     ></dropdown-menu>
-    <custom-icon icon="chevronRight" class="muted"></custom-icon>
-    <dropdown-menu
-      id="budgeting-assignment-selector"
-      variant="ghost"
-      hide-trailing-chevron
-      aria-label="Assignment filter"
-    ></dropdown-menu>
+    <custom-button
+      id="budgeting-year-next"
+      class="budgeting-header__year-step square tertiary"
+      data-year-step="next"
+      leading-icon="chevronRight"
+      aria-label="Next year"
+    ></custom-button>
   </div>
-  <div id="budgeting-header-actions" class="budgeting-shell__actions"></div>
+  <div id="budgeting-header-actions" class="budgeting-header__actions"></div>
 </header>
-<div id="budgeting-view-outlet" class="budgeting-shell__outlet"></div>
+
+<nav class="budgeting-header__sections" aria-label="Budgeting screens">
+  <segmented-control
+    id="budgeting-section-selector"
+    variant="section-tabs"
+    aria-label="Budgeting screen"
+  ></segmented-control>
+</nav>

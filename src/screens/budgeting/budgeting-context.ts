@@ -18,10 +18,7 @@ export function filterForBudgetingContext(
   context = currentBudgetingContext(),
 ): BudgetTransaction[] {
   const yearPrefix = `${context.year}-`;
-  return transactions.filter(
-    (transaction) =>
-      transaction.date.startsWith(yearPrefix) &&
-      (context.assignmentId === null ||
-        transaction.assignmentId === context.assignmentId),
+  return transactions.filter((transaction) =>
+    transaction.date.startsWith(yearPrefix),
   );
 }

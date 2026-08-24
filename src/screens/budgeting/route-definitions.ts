@@ -1,13 +1,6 @@
 import type { IconKeys } from "../../icons";
-import { APIs } from "../../api/api";
 import type { BudgetingContext } from "../../state/app-state";
 import type { BudgetingRouteName, RouteParams } from "../../router/types";
-
-export interface BreadcrumbItem {
-  title: string;
-  route?: BudgetingRouteName;
-  params?: RouteParams;
-}
 
 export interface HeaderAction {
   id: string;
@@ -17,7 +10,6 @@ export interface HeaderAction {
 }
 
 export interface BudgetingHeaderConfig {
-  breadcrumbs: BreadcrumbItem[];
   actions: HeaderAction[];
 }
 
@@ -26,7 +18,6 @@ export interface BudgetingRouteDefinition {
   contentKey: "overview" | "transactions" | "categories" | "vendors" | "people";
   title: string;
   icon: IconKeys;
-  componentTag: string;
   getHeaderConfig(
     context: BudgetingContext,
     params: RouteParams,
@@ -49,40 +40,34 @@ const IMPORT_TRANSACTIONS: HeaderAction = {
 const BASE_DEFINITIONS: Record<
   Exclude<
     BudgetingRouteName,
-    "budgeting/entity-detail" | "budgeting/entity-archive"
+    "entity-detail" | "entity-archive"
   >,
   BudgetingRouteDefinition
 > = {
-  "budgeting/overview": {
-    route: "budgeting/overview",
+  "budget-overview": {
+    route: "budget-overview",
     contentKey: "overview",
     title: "Overview",
     icon: "dashboard",
-    componentTag: "budget-overview-screen",
     getHeaderConfig: () => ({
-      breadcrumbs: [],
       actions: [IMPORT_TRANSACTIONS, NEW_TRANSACTION],
     }),
   },
-  "budgeting/transactions": {
-    route: "budgeting/transactions",
+  transactions: {
+    route: "transactions",
     contentKey: "transactions",
     title: "Transactions",
     icon: "transactions",
-    componentTag: "transaction-list-screen",
     getHeaderConfig: () => ({
-      breadcrumbs: [],
       actions: [IMPORT_TRANSACTIONS, NEW_TRANSACTION],
     }),
   },
-  "budgeting/categories": {
-    route: "budgeting/categories",
+  categories: {
+    route: "categories",
     contentKey: "categories",
     title: "Categories",
     icon: "label",
-    componentTag: "category-screen",
     getHeaderConfig: () => ({
-      breadcrumbs: [],
       actions: [
         {
           id: "new-category",
@@ -93,17 +78,15 @@ const BASE_DEFINITIONS: Record<
       ],
     }),
   },
-  "budgeting/vendors": {
-    route: "budgeting/vendors",
+  vendors: {
+    route: "vendors",
     contentKey: "vendors",
     title: "Vendors",
     icon: "cart",
-    componentTag: "vendors-screen",
     getHeaderConfig: () => ({
-      breadcrumbs: [],
       actions: [
         {
-          id: "focus-vendor-form",
+          id: "new-vendor",
           label: "Add vendor",
           icon: "plus",
           kind: "primary",
@@ -111,17 +94,15 @@ const BASE_DEFINITIONS: Record<
       ],
     }),
   },
-  "budgeting/people": {
-    route: "budgeting/people",
+  people: {
+    route: "people",
     contentKey: "people",
     title: "People",
     icon: "people",
-    componentTag: "people-screen",
     getHeaderConfig: () => ({
-      breadcrumbs: [],
       actions: [
         {
-          id: "focus-person-form",
+          id: "new-person",
           label: "Add person",
           icon: "plus",
           kind: "primary",
@@ -132,14 +113,14 @@ const BASE_DEFINITIONS: Record<
 };
 
 function entityCollection(kind: string | undefined): {
-  route: "budgeting/categories" | "budgeting/vendors" | "budgeting/people";
+  route: "categories" | "vendors" | "people";
   contentKey: "categories" | "vendors" | "people";
   title: string;
   icon: IconKeys;
 } {
   if (kind === "vendor") {
     return {
-      route: "budgeting/vendors",
+      route: "vendors",
       contentKey: "vendors",
       title: "Vendors",
       icon: "cart",
@@ -147,14 +128,14 @@ function entityCollection(kind: string | undefined): {
   }
   if (kind === "assignment") {
     return {
-      route: "budgeting/people",
+      route: "people",
       contentKey: "people",
       title: "People",
       icon: "people",
     };
   }
   return {
-    route: "budgeting/categories",
+    route: "categories",
     contentKey: "categories",
     title: "Categories",
     icon: "label",
@@ -170,13 +151,11 @@ export function getBudgetingRouteDefinition(
   }
 
   const collection = entityCollection(params.kind);
-  if (route === "budgeting/entity-archive") {
+  if (route === "entity-archive") {
     return {
       ...collection,
       route,
-      componentTag: "entity-archive-screen",
       getHeaderConfig: () => ({
-        breadcrumbs: [{ title: "Archived" }],
         actions: [],
       }),
     };
@@ -185,13 +164,11 @@ export function getBudgetingRouteDefinition(
   return {
     ...collection,
     route,
-    componentTag: "entity-detail-screen",
     getHeaderConfig: () => {
       const kind =
         params.kind === "vendor" || params.kind === "assignment"
           ? params.kind
           : "category";
-      const entity = params.id ? APIs.budget.getEntity(kind, params.id) : null;
       const label =
         kind === "assignment"
           ? "person"
@@ -199,7 +176,6 @@ export function getBudgetingRouteDefinition(
             ? "vendor"
             : "category";
       return {
-        breadcrumbs: [{ title: entity?.name ?? "Loading…" }],
         actions: [
           {
             id: "edit-entity",

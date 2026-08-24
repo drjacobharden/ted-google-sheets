@@ -7,6 +7,10 @@ import { InvestmentView } from "../../utilities/investment-view";
 import { showToast } from "../../components/toast-stack/toast-service";
 import templateString from "./template.html" with { type: "text" };
 import { CustomButton } from "../../components/button/button";
+import {
+  addListener,
+  handleCustomEvent,
+} from "../../utilities/event-utilities";
 export class TransactionDrawerScreen extends HTMLElement {
   connectedCallback(): void {
     if (!this.dataset.initialized) {
@@ -17,30 +21,25 @@ export class TransactionDrawerScreen extends HTMLElement {
 }
 if (!customElements.get("transaction-drawer-screen"))
   customElements.define("transaction-drawer-screen", TransactionDrawerScreen);
+
 document.addEventListener("DOMContentLoaded", () => {
   const { createdDateTimeFormatter, toISODate } = DateUtils;
 
   const backdrop = document.getElementById("transaction-drawer-backdrop");
-  const drawer = document.getElementById("transaction-drawer");
+  const drawer = backdrop.querySelector(".side-drawer");
   const form = document.getElementById("transaction-edit-form");
-  const header = document.getElementById("transaction-drawer-header");
-  const typeControl = form.querySelector("#transaction-type-control");
+  const header = backdrop.querySelector("drawer-header");
   const typeInput = form.elements.type;
-
-  typeControl.items = [
-    { key: "expense", title: "Expense", isDefaultValue: true },
-    { key: "income", title: "Income" },
-  ];
 
   const message = document.getElementById("transaction-edit-message");
   const datePickerElement = form.querySelector('date-picker[name="date"]');
   const appShell = document.querySelector(".app-shell");
-  const cancelButton = document.getElementById("cancel-transaction-edit");
+  const deleteButton = document.getElementById("delete-transaction");
 
   const saveButton = form.querySelector(
     'custom-button[type="submit"]',
   ) as CustomButton;
-  const transactionMetadata = form.querySelector(".transaction-metadata");
+  const transactionMetadata = backdrop.querySelector(".metadata");
   const batchEntryToggle = document.getElementById("batch-entry-toggle");
   const batchEntryInput = form.elements.batchEntry;
   const transactionIdElement = document.getElementById("transaction-edit-id");
@@ -61,6 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let returnFocus = null;
   let activeType = "expense";
   let expenseDraft = { categoryId: "", vendorId: "" };
+  let incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID };
   let closing = false;
   let closeTimer = 0;
   let closeAnimationHandler = null;
@@ -86,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
     batchEntryInput.checked = false;
     activeType = "expense";
     expenseDraft = { categoryId: "", vendorId: "" };
+    incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID };
 
     categorySelect.clearFallbackSelection();
     vendorSelect.clearFallbackSelection();
@@ -101,6 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
     saveButton.label = "Add transaction";
     transactionMetadata.hidden = true;
     batchEntryToggle.hidden = false;
+    deleteButton.hidden = true;
 
     initialFormState = formState();
     showDrawer();
@@ -162,6 +164,12 @@ document.addEventListener("DOMContentLoaded", () => {
             vendorId: record.vendorId || "",
           }
         : { categoryId: "", vendorId: "" };
+    incomeDraft = {
+      categoryId:
+        record.type === "income"
+          ? record.categoryId || APIs.budget.INCOME_CATEGORY_ID
+          : APIs.budget.INCOME_CATEGORY_ID,
+    };
 
     populateFormFromRecord(record);
 
@@ -169,6 +177,7 @@ document.addEventListener("DOMContentLoaded", () => {
     saveButton.label = "Save changes";
     transactionMetadata.hidden = false;
     batchEntryToggle.hidden = true;
+    deleteButton.hidden = false;
     batchEntryInput.checked = false;
     transactionIdElement.textContent = record.id;
 
@@ -250,6 +259,10 @@ document.addEventListener("DOMContentLoaded", () => {
     activeType = typeInput.value === "income" ? "income" : "expense";
     if (activeType === "expense") {
       expenseDraft = { categoryId, vendorId };
+    } else {
+      incomeDraft = {
+        categoryId: categoryId || APIs.budget.INCOME_CATEGORY_ID,
+      };
     }
     updateTypeFields(activeType);
     peopleSelect.value = assignmentId;
@@ -281,9 +294,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateTypeFields(type) {
     const income = type === "income";
-    categorySelect.type = type;
+    categorySelect.hidden = false;
+    categorySelect.type = income ? "income" : "expense";
     categorySelect.value = income
-      ? APIs.budget.INCOME_CATEGORY_ID
+      ? incomeDraft.categoryId
       : expenseDraft.categoryId;
     vendorSelect.hidden = income;
     vendorSelect.value = income ? "" : expenseDraft.vendorId;
@@ -293,7 +307,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function setTransactionTypeSelection(type) {
     const nextType = type === "income" ? "income" : "expense";
     typeInput.value = nextType;
-    typeControl.selection = nextType;
   }
 
   function formState() {
@@ -326,6 +339,7 @@ document.addEventListener("DOMContentLoaded", () => {
     openedBase = null;
     initialFormState = "";
     expenseDraft = { categoryId: "", vendorId: "" };
+    incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID };
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
       : document.querySelector('[data-tab="budgeting"]')
@@ -454,12 +468,35 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast("Transaction updated. Syncing…");
   }
 
+  async function deleteCurrentTransaction() {
+    if (
+      deleteButton.hasAttribute("disabled") ||
+      mode !== "edit" ||
+      !transactionId ||
+      !window.confirm("Delete this transaction? This cannot be undone.")
+    )
+      return;
+    deleteButton.setAttribute("disabled", "");
+    try {
+      await APIs.budget.deleteTransaction(transactionId, openedBase);
+      drawerDirty = false;
+      showToast("Transaction deleted.");
+      close(true);
+    } catch (error) {
+      message.className = "form-message error";
+      message.textContent = error.message;
+    } finally {
+      deleteButton.removeAttribute("disabled");
+    }
+  }
+
   function resetForBatchEntry(date) {
     setTransactionTypeSelection("expense");
     form.elements.amount.value = "";
     form.elements.notes.value = "";
     activeType = "expense";
     expenseDraft = { categoryId: "", vendorId: "" };
+    incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID };
     categorySelect.clearFallbackSelection();
     vendorSelect.clearFallbackSelection();
     peopleSelect.clearFallbackSelection();
@@ -471,23 +508,29 @@ document.addEventListener("DOMContentLoaded", () => {
     form.elements.amount.focus({ preventScroll: true });
   }
 
-  typeControl.addEventListener("segmented-control-selection", (event) => {
-    const nextType = event.detail.value === "income" ? "income" : "expense";
-    if (activeType === "expense" && nextType === "income") {
-      expenseDraft = {
-        categoryId: categorySelect.value,
-        vendorId: vendorSelect.value,
-      };
-    }
-    typeInput.value = nextType;
-    updateTypeFields(nextType);
-    if (trackDrawerChanges) drawerDirty = true;
+  addListener("segmented-control-selection", drawer, (event) => {
+    handleCustomEvent("segmented-control-selection", event, ({ value }) => {
+      const nextType = value === "income" ? "income" : "expense";
+      if (activeType === "expense") {
+        expenseDraft = {
+          categoryId: categorySelect.value,
+          vendorId: vendorSelect.value,
+        };
+      } else {
+        incomeDraft.categoryId = categorySelect.value;
+      }
+      // typeInput.value = nextType;
+      updateTypeFields(nextType);
+      if (trackDrawerChanges) drawerDirty = true;
+    });
   });
 
   categorySelect.addEventListener("category-selected", () => {
     if (trackDrawerChanges) drawerDirty = true;
     if (activeType === "expense") {
       expenseDraft.categoryId = categorySelect.value;
+    } else {
+      incomeDraft.categoryId = categorySelect.value;
     }
   });
   vendorSelect.addEventListener("vendor-selected", () => {
@@ -500,6 +543,7 @@ document.addEventListener("DOMContentLoaded", () => {
   //    - 2: Process the data and get it ready to submit to the spreadsheet
   //    - 3: Queue the submission for editing or creating
   form.addEventListener("submit", handleSubmit);
+  saveButton.addEventListener("click", () => form.requestSubmit());
   form.addEventListener("input", () => {
     if (trackDrawerChanges) drawerDirty = true;
   });
@@ -581,7 +625,7 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   window.addEventListener("drawer:close-requested", close);
 
-  cancelButton.addEventListener("click", () => close());
+  deleteButton.addEventListener("click", deleteCurrentTransaction);
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });

@@ -1,0 +1,38 @@
+<header class="investments-header__utility-row">
+  <div class="investments-header__scope" aria-label="Investment year">
+    <custom-button
+      id="investments-year-previous"
+      class="investments-header__year-step square tertiary"
+      data-year-step="previous"
+      leading-icon="chevronLeft"
+      aria-label="Previous year"
+    ></custom-button>
+    <dropdown-menu
+      id="investments-year-selector"
+      variant="editorial"
+      aria-label="Investment year"
+    ></dropdown-menu>
+    <custom-button
+      id="investments-year-next"
+      class="investments-header__year-step square tertiary"
+      data-year-step="next"
+      leading-icon="chevronRight"
+      aria-label="Next year"
+    ></custom-button>
+  </div>
+  <custom-button
+    id="investments-primary-action"
+    class="primary-button"
+    label="Add investment entry"
+    leading-icon="plus"
+    data-balance
+  ></custom-button>
+</header>
+
+<nav class="investments-header__sections" aria-label="Investment screens">
+  <segmented-control
+    id="investments-section-selector"
+    variant="section-tabs"
+    aria-label="Investment screen"
+  ></segmented-control>
+</nav>

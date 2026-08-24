@@ -1,507 +1,423 @@
 // @ts-nocheck
 import { APIs } from "../../api/api";
 import { router } from "../../router/router";
-import { appController } from "../../state/app-controller";
-import { DateUtils } from "../../utilities/date-utilities";
 import { InvestmentView } from "../../utilities/investment-view";
+import { monthEnd } from "../../utilities/investment-returns";
 import { showToast } from "../../components/toast-stack/toast-service";
-import { money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
-export class InvestmentMonthDrawerScreen extends HTMLElement { connectedCallback(): void { if (!this.dataset.initialized) { this.dataset.initialized = "true"; this.innerHTML = templateString; } } }
-if (!customElements.get("investment-month-drawer-screen")) customElements.define("investment-month-drawer-screen", InvestmentMonthDrawerScreen);
-document.addEventListener("DOMContentLoaded", () => {
-  const { createdDateTimeFormatter } = DateUtils;
-  const backdrop = document.getElementById("investment-month-drawer-backdrop");
-  const drawer = document.getElementById("investment-month-drawer");
-  const form = document.getElementById("investment-month-form");
-  const header = document.getElementById("investment-drawer-header");
-  const accountSelect = form.elements.accountId;
-  const monthPicker = form.querySelector("month-picker");
-  const balanceInput = form.elements.balance;
-  const contributionList = document.getElementById(
-    "investment-contribution-list",
+import {
+  addListener,
+  handleCustomEvent,
+} from "../../utilities/event-utilities";
+
+export class InvestmentMonthDrawerScreen extends HTMLElement {
+  connectedCallback(): void {
+    if (!this.dataset.initialized) {
+      this.dataset.initialized = "true";
+      this.innerHTML = templateString;
+    }
+  }
+}
+
+if (!customElements.get("investment-month-drawer-screen")) {
+  customElements.define(
+    "investment-month-drawer-screen",
+    InvestmentMonthDrawerScreen,
   );
-  const withdrawalList = document.getElementById("investment-withdrawal-list");
-  const message = document.getElementById("investment-month-message");
-  const existingNotice = document.getElementById("investment-month-existing");
-  const conflictPanel = document.getElementById("investment-month-conflict");
-  const metadata = document.getElementById("investment-balance-metadata");
-  const createdLabel = document.getElementById("investment-balance-created");
-  const batchToggle = document.getElementById("investment-batch-toggle");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const root = document.querySelector("investment-month-drawer-screen");
+  const backdrop = root.querySelector("#investment-month-drawer-backdrop");
+  const drawer = backdrop.querySelector(".side-drawer");
+  const form = root.querySelector("#investment-month-form");
+  const header = backdrop.querySelector("drawer-header");
+  const investmentAccountSelect = root.querySelector("investment-account-select");
+  const debtAccountSelect = root.querySelector("debt-account-select");
+  const monthPicker = form.querySelector("month-picker");
+  const balanceInput = form?.querySelector(".investment-month-balance");
+  const investmentFields = root.querySelector(
+    "#investment-month-investment-fields",
+  );
+  const debtFields = root.querySelector("#investment-month-debt-fields");
+  const contributionList = root.querySelector("#investment-contribution-list");
+  const withdrawalList = root.querySelector("#investment-withdrawal-list");
+  const paymentList = root.querySelector("#debt-payment-list");
+  const borrowingList = root.querySelector("#debt-borrowing-list");
+  const message = root.querySelector("#investment-month-message");
+  const submit = form.querySelector('custom-button[type="submit"]');
+  const batchToggle = root.querySelector("#investment-batch-toggle");
   const batchInput = form.elements.batchEntry;
-  const submit = form.querySelector('[type="submit"]');
+  const metadata = root.querySelector("#investment-balance-metadata");
+  const balanceId = root.querySelector("#investment-balance-id");
   const appShell = document.querySelector(".app-shell");
-  let mode = "create";
-  let target = { accountId: "", month: "" };
-  let reviewId = "";
-  let initialDraftState = "";
+
+  let kind = "investment";
+  let existingBalance = null;
+  let initialState = "";
   let openedRouteKey = "";
   let returnFocus = null;
-  let closing = false;
-  let closeTimer = 0;
-  let closeAnimationHandler = null;
-  let suppressSingleDefault = false;
 
-  function flowRow(record, type) {
-    const amount = Math.abs(Number(record?.amount || 0));
-    return `<div class="investment-flow-row" data-flow-id="${record?.id || ""}"><label><span class="sr-only">${type} amount</span><span class="currency-prefix">$</span><input type="number" min="0" step="0.01" inputmode="decimal" value="${amount || ""}" aria-label="${type} amount" /></label><button type="button" data-remove-flow aria-label="Remove ${type.toLowerCase()}">×</button></div>`;
+  function activeAccountSelect() {
+    return kind === "debt" ? debtAccountSelect : investmentAccountSelect;
   }
 
-  function flowTotal(value) {
-    return (value?.contributions || []).reduce(
-      (sum, item) => sum + Number(item.amount || 0),
-      0,
-    );
+  const defaultDate = () =>
+    `${monthPicker.value || InvestmentView.currentMonth()}-15`;
+
+  function flowRow(record, label) {
+    return `
+    <div class="investment-flow-row" data-flow-id="${record?.id || ""}">
+      <currency-input data-flow-amount value="${Math.abs(Number(record?.amount || 0)) || ""}" aria-label="${label} amount"></currency-input>
+      <date-picker data-flow-date optional alignment="center" value="${record?.date || ""}" aria-label="${label} date"></date-picker>
+      <custom-button class="tertiary square" data-remove-flow leading-icon="close" aria-label="Remove ${label.toLowerCase()}" type="button"></custom-button>
+    </div>`;
   }
 
-  function draftState() {
+  function flowAmountInput(row) {
+    return row.querySelector("currency-input input");
+  }
+
+  function state() {
     return JSON.stringify({
+      kind,
+      accountId: activeAccountSelect().value,
+      month: monthPicker.value,
       balance: balanceInput.value,
-      contributions: [...contributionList.querySelectorAll("input")].map(
-        (input) => input.value,
-      ),
-      withdrawals: [...withdrawalList.querySelectorAll("input")].map(
-        (input) => input.value,
-      ),
+      flows: [...form.querySelectorAll(".investment-flow-row")].map((row) => ({
+        id: row.dataset.flowId,
+        amount: flowAmountInput(row).value,
+        date: row.querySelector("[data-flow-date]").value,
+      })),
     });
   }
 
   function isDirty() {
-    return !backdrop.hidden && draftState() !== initialDraftState;
+    return !backdrop.hidden && state() !== initialState;
   }
 
-  function collectFlows() {
-    const collect = (list, sign) =>
-      [...list.querySelectorAll(".investment-flow-row")].flatMap((row) => {
-        const raw = row.querySelector("input").value;
-        if (raw === "" || Number(raw) === 0) return [];
-        const amount = Number(raw);
-        if (!Number.isFinite(amount) || amount < 0) {
-          throw new Error(
-            "Enter contribution and withdrawal amounts as positive values.",
-          );
-        }
-        return [{ id: row.dataset.flowId || "", amount: sign * amount }];
-      });
-    return [...collect(contributionList, 1), ...collect(withdrawalList, -1)];
+  function populateAccounts(selected = "") {
+    investmentAccountSelect.value = kind === "investment" ? selected : "";
+    debtAccountSelect.value = kind === "debt" ? selected : "";
   }
 
-  function updateTotals() {
-    const contributions = [
-      ...contributionList.querySelectorAll("input"),
-    ].reduce((sum, input) => sum + Number(input.value || 0), 0);
-    const withdrawals = [...withdrawalList.querySelectorAll("input")].reduce(
-      (sum, input) => sum + Number(input.value || 0),
-      0,
-    );
-    document.getElementById("investment-gross-contributions").textContent =
-      money(contributions);
-    document.getElementById("investment-total-withdrawals").textContent =
-      money(withdrawals);
-    document.getElementById("investment-net-contribution").textContent = money(
-      contributions - withdrawals,
-    );
-  }
-
-  function setEntryDisabled(disabled) {
-    balanceInput.disabled = disabled;
-    form
-      .querySelectorAll(
-        "#add-investment-contribution, #add-investment-withdrawal, .investment-flow-list input, .investment-flow-list button",
-      )
-      .forEach((element) => {
-        element.disabled = disabled;
-      });
-    submit.disabled = disabled;
-  }
-
-  function populateAccounts() {
-    const active = APIs.investment.accounts().filter(
-      (item) => item.active !== false,
-    );
-    accountSelect.replaceChildren(
-      new Option("Choose an account", ""),
-      ...active.map((account) => new Option(account.name, account.id)),
-    );
-    return active;
-  }
-
-  function clearValues() {
-    balanceInput.value = "";
+  function clearLists() {
     contributionList.replaceChildren();
     withdrawalList.replaceChildren();
-    conflictPanel.hidden = true;
-    existingNotice.hidden = true;
-    metadata.hidden = true;
-    message.textContent = "";
-    message.className = "form-message";
-    updateTotals();
+    paymentList.replaceChildren();
+    borrowingList.replaceChildren();
   }
 
-  function populateConflict(conflict) {
-    conflictPanel.hidden = !conflict;
-    if (!conflict) return;
-    document.getElementById("investment-month-sheet-balance").textContent =
-      money(conflict.current.balance?.balance);
-    document.getElementById("investment-month-sheet-flow").textContent =
-      `${money(flowTotal(conflict.current))} net contribution`;
-    document.getElementById("investment-month-draft-balance").textContent =
-      money(conflict.draft.balance?.balance);
-    document.getElementById("investment-month-draft-flow").textContent =
-      `${money(flowTotal(conflict.draft))} net contribution`;
-  }
+  function populateTarget(accountId, month) {
+    monthPicker.value = month || InvestmentView.currentMonth();
+    populateAccounts(accountId);
+    clearLists();
+    existingBalance = null;
 
-  function populateTarget(accountId, month, conflict = null) {
-    const checked = batchInput.checked;
-    const value =
-      conflict?.draft || APIs.investment.monthData(accountId, month);
-    target = { accountId, month };
-    reviewId = conflict?.id || "";
-    accountSelect.value = accountId;
-    monthPicker.value = month;
-    clearValues();
+    if (kind === "investment" && accountId) {
+      const value = APIs.investment.monthData(accountId, monthPicker.value);
+      existingBalance = value?.balance || null;
+      balanceInput.value = value?.balance?.balance ?? "";
+      contributionList.innerHTML = (value?.contributions || [])
+        .filter((item) => item.amount > 0)
+        .map((item) => flowRow(item, "Contribution"))
+        .join("");
+      withdrawalList.innerHTML = (value?.contributions || [])
+        .filter((item) => item.amount < 0)
+        .map((item) => flowRow(item, "Withdrawal"))
+        .join("");
+    } else if (kind === "debt" && accountId) {
+      existingBalance =
+        APIs.debt
+          .balances()
+          .find(
+            (item) =>
+              item.debtAccountId === accountId &&
+              item.month === monthPicker.value,
+          ) || null;
+      balanceInput.value = existingBalance?.balance ?? "";
+      const flows = APIs.debt
+        .payments()
+        .filter(
+          (item) =>
+            item.debtAccountId === accountId &&
+            item.month === monthPicker.value,
+        );
+      paymentList.innerHTML = flows
+        .filter((item) => item.kind !== "borrowing")
+        .map((item) => flowRow(item, "Payment"))
+        .join("");
+      borrowingList.innerHTML = flows
+        .filter((item) => item.kind === "borrowing")
+        .map((item) => flowRow(item, "New borrowing"))
+        .join("");
+    } else balanceInput.value = "";
 
-    if (!accountId) {
-      mode = "create";
-      batchToggle.hidden = false;
-      batchInput.checked = checked;
-      header.title = "Add monthly balance";
-      submit.textContent = "Add balance";
-      setEntryDisabled(true);
-      initialDraftState = draftState();
-      return;
-    }
-
-    const existing = Boolean(value.balance);
-    mode = existing ? "edit" : "create";
-    balanceInput.value = value.balance?.balance ?? "";
-    contributionList.innerHTML = value.contributions
-      .filter((item) => item.amount > 0)
-      .map((item) => flowRow(item, "Contribution"))
-      .join("");
-    withdrawalList.innerHTML = value.contributions
-      .filter((item) => item.amount < 0)
-      .map((item) => flowRow(item, "Withdrawal"))
-      .join("");
-    populateConflict(conflict);
-    existingNotice.hidden = !existing;
+    const existing = Boolean(existingBalance);
+    header.title = existing ? `Edit ${kind} month` : `New ${kind} entry`;
+    submit.label = existing ? "Save changes" : "Add entry";
+    metadata.hidden = !existing;
+    balanceId.textContent = existingBalance?.id || "";
     batchToggle.hidden = existing;
     if (existing) batchInput.checked = false;
-    else batchInput.checked = checked;
-    metadata.hidden = !existing;
-    if (existing) {
-      const createdAt = new Date(value.balance.createdAt);
-      const createdWhen = Number.isNaN(createdAt.getTime())
-        ? "unknown date"
-        : createdDateTimeFormatter.format(createdAt);
-      createdLabel.textContent = `Created by ${value.balance.createdByName || "Unknown"} on ${createdWhen}`;
-    }
-    const account = APIs.investment.accounts().find(
-      (item) => item.id === accountId,
+    message.textContent = "";
+    message.className = "form-message";
+    initialState = state();
+  }
+
+  function setKind(nextKind, accountId = "") {
+    kind = nextKind === "debt" ? "debt" : "investment";
+    investmentFields.hidden = kind !== "investment";
+    debtFields.hidden = kind !== "debt";
+    investmentAccountSelect.hidden = kind !== "investment";
+    debtAccountSelect.hidden = kind !== "debt";
+
+    balanceInput.label =
+      kind === "debt" ? "Outstanding balance" : "Ending balance";
+
+    populateTarget(
+      accountId,
+      monthPicker.value || InvestmentView.currentMonth(),
     );
-    header.title = existing
-      ? `Edit ${account?.name || "investment"} balance`
-      : "Add monthly balance";
-    submit.textContent = existing ? "Save changes" : "Add balance";
-    setEntryDisabled(false);
-    updateTotals();
-    initialDraftState = draftState();
   }
 
-  function finishClose() {
-    if (!closing) return;
-    closing = false;
-    window.clearTimeout(closeTimer);
-    if (closeAnimationHandler) {
-      drawer.removeEventListener("transitionend", closeAnimationHandler);
-    }
-    closeTimer = 0;
-    closeAnimationHandler = null;
-    backdrop.hidden = true;
-    backdrop.classList.remove("is-open", "is-closing");
-    document.body.classList.remove("drawer-open");
-    appShell.inert = false;
-    target = { accountId: "", month: "" };
-    reviewId = "";
-    initialDraftState = "";
-    (returnFocus && document.contains(returnFocus)
-      ? returnFocus
-      : document.querySelector("[data-balance]")
-    )?.focus();
-  }
-
-  function close(force = false, { updateRoute = true } = {}) {
-    if (closing || backdrop.hidden) return true;
-    if (
-      !force &&
-      isDirty() &&
-      !window.confirm("Discard your unsaved investment changes?")
-    ) {
-      return false;
-    }
-    closing = true;
-    backdrop.classList.remove("is-open");
-    backdrop.classList.add("is-closing");
-    closeAnimationHandler = (event) => {
-      if (event.target === drawer && event.propertyName === "transform") {
-        finishClose();
-      }
-    };
-    drawer.addEventListener("transitionend", closeAnimationHandler);
-    const reducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    )?.matches;
-    closeTimer = window.setTimeout(finishClose, reducedMotion ? 0 : 320);
-    if (
-      updateRoute &&
-      router.currentParams().drawer === "investment-month"
-    ) {
-      router.updateParams({
-        drawer: null,
-        investmentAccountId: null,
-        investmentMonth: null,
-        investmentReviewId: null,
-      });
-    }
-    return true;
-  }
-
-  function focusFirstField() {
-    (accountSelect.value ? balanceInput : accountSelect).focus({
-      preventScroll: true,
-    });
-  }
-
-  function handleOpened(event) {
-    if (event.target !== drawer || event.propertyName !== "transform") return;
-    drawer.removeEventListener("transitionend", handleOpened);
-    focusFirstField();
-  }
-
-  function showDrawer() {
-    if (!backdrop.hidden) return;
+  function show() {
     returnFocus = document.activeElement;
-    window.clearTimeout(closeTimer);
-    if (closeAnimationHandler) {
-      drawer.removeEventListener("transitionend", closeAnimationHandler);
-    }
-    closing = false;
-    closeTimer = 0;
-    closeAnimationHandler = null;
-    backdrop.classList.remove("is-open", "is-closing");
+    backdrop.classList.remove("is-closing", "is-open");
     backdrop.hidden = false;
     void drawer.offsetWidth;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      focusFirstField();
+
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    if (reducedMotion) {
+      (activeAccountSelect().value ? balanceInput : activeAccountSelect()).focus({
+        preventScroll: true,
+      });
     } else {
-      drawer.addEventListener("transitionend", handleOpened);
+      drawer.addEventListener("transitionend", handleDrawerOpened);
     }
+
     backdrop.classList.add("is-open");
     document.body.classList.add("drawer-open");
     appShell.inert = true;
   }
 
-  function clearRoute() {
-    router.updateParams({
-      drawer: null,
-      investmentAccountId: null,
-      investmentMonth: null,
-      investmentReviewId: null,
+  function handleDrawerOpened(event) {
+    if (event.target !== drawer || event.propertyName !== "transform") {
+      return;
+    }
+
+    drawer.removeEventListener("transitionend", handleDrawerOpened);
+    (activeAccountSelect().value ? balanceInput : activeAccountSelect()).focus({
+      preventScroll: true,
     });
+  }
+
+  function finishClose() {
+    backdrop.hidden = true;
+    backdrop.classList.remove("is-open", "is-closing");
+    document.body.classList.remove("drawer-open");
+    appShell.inert = false;
+    openedRouteKey = "";
+    returnFocus?.focus?.();
+  }
+
+  function close(force = false, updateRoute = true) {
+    if (backdrop.hidden) return true;
+    if (
+      !force &&
+      isDirty() &&
+      !window.confirm("Discard your unsaved ledger changes?")
+    )
+      return false;
+    backdrop.classList.remove("is-open");
+    backdrop.classList.add("is-closing");
+    window.setTimeout(
+      finishClose,
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 300,
+    );
+    if (updateRoute)
+      router.updateParams({
+        drawer: null,
+        investmentAccountId: null,
+        investmentMonth: null,
+        investmentReviewId: null,
+        investmentLedgerSource: null,
+      });
+    return true;
   }
 
   function openFromRoute() {
     const params = router.currentParams();
     if (params.drawer !== "investment-month") {
-      openedRouteKey = "";
-      if (!backdrop.hidden) close(true, { updateRoute: false });
+      if (!backdrop.hidden) close(true, false);
       return;
     }
-    if (!APIs.investment.isLoaded()) {
-      APIs.investment.load().catch(() => {});
-      return;
-    }
-    const accounts = populateAccounts();
-    let accountId = params.investmentAccountId || "";
-    let month = params.investmentMonth || InvestmentView.currentMonth();
-    let conflict = null;
-    if (params.investmentReviewId) {
-      conflict = APIs.investment.getConflict(params.investmentReviewId);
-      if (!conflict?.current) {
-        showToast("That conflict is no longer available.", {
-          type: "error",
-          sticky: true,
-        });
-        clearRoute();
+    const nextKind =
+      params.investmentLedgerSource === "debt" ? "debt" : "investment";
+    const month = params.investmentMonth || InvestmentView.currentMonth();
+    const accountId = params.investmentAccountId || "";
+    const routeKey = `${nextKind}:${accountId}:${month}`;
+    if (routeKey === openedRouteKey && !backdrop.hidden) return;
+    kind = nextKind;
+    monthPicker.value = month;
+    setKind(kind, accountId);
+    openedRouteKey = routeKey;
+    if (backdrop.hidden) show();
+  }
+
+  function addFlow(list, label) {
+    list.insertAdjacentHTML("beforeend", flowRow(null, label));
+    list
+      .querySelector(".investment-flow-row:last-child currency-input input")
+      ?.focus();
+  }
+
+  function collect(list, sign = 1) {
+    return [...list.querySelectorAll(".investment-flow-row")].flatMap((row) => {
+      const amount = Number(flowAmountInput(row).value || 0);
+      if (!amount) return [];
+      if (!Number.isFinite(amount) || amount < 0)
+        throw new Error("Enter flow amounts as positive values.");
+      return [
+        {
+          id: row.dataset.flowId || undefined,
+          amount: sign * amount,
+          date: row.querySelector("[data-flow-date]").value || defaultDate(),
+        },
+      ];
+    });
+  }
+
+  async function saveDebtMonth() {
+    const accountId = activeAccountSelect().value;
+    const month = monthPicker.value;
+    await APIs.debt.saveBalance({
+      id: existingBalance?.id,
+      debtAccountId: accountId,
+      asOfDate: monthEnd(month),
+      balance: balanceInput.value,
+    });
+    const existing = APIs.debt
+      .payments()
+      .filter(
+        (item) => item.debtAccountId === accountId && item.month === month,
+      );
+    const drafts = [
+      ...collect(paymentList).map((item) => ({ ...item, kind: "payment" })),
+      ...collect(borrowingList).map((item) => ({ ...item, kind: "borrowing" })),
+    ];
+    const retained = new Set(drafts.map((item) => item.id).filter(Boolean));
+    await Promise.all(
+      existing
+        .filter((item) => !retained.has(item.id))
+        .map((item) => APIs.debt.deletePayment(item.id)),
+    );
+    await Promise.all(
+      drafts.map((item) =>
+        APIs.debt.savePayment({ ...item, debtAccountId: accountId }),
+      ),
+    );
+  }
+
+  addListener("segmented-control-selection", drawer, (event) => {
+    handleCustomEvent("segmented-control-selection", event, ({ value }) => {
+      if (value === kind) return;
+      if (
+        isDirty() &&
+        !window.confirm("Discard this draft and change entry type?")
+      ) {
         return;
       }
-      conflict.id = params.investmentReviewId;
-      accountId = conflict.draft.accountId;
-      month = conflict.draft.month;
-    } else if (!accountId && accounts.length === 1 && !suppressSingleDefault) {
-      accountId = accounts[0].id;
-    }
-    suppressSingleDefault = false;
-    const routeKey = `${params.drawer}:${accountId}:${month}:${params.investmentReviewId || ""}`;
-    if (routeKey === openedRouteKey && !backdrop.hidden) return;
-    if (accountId && !accounts.some((item) => item.id === accountId)) {
-      clearRoute();
-      return;
-    }
-    populateTarget(accountId, month, conflict);
-    showDrawer();
-    openedRouteKey = routeKey;
-  }
 
-  function changeTarget() {
-    const next = { accountId: accountSelect.value, month: monthPicker.value };
-    if (
-      isDirty() &&
-      !window.confirm("Discard this draft and load another account or month?")
-    ) {
-      accountSelect.value = target.accountId;
-      monthPicker.value = target.month;
-      return;
-    }
-    reviewId = "";
-    router.updateParams({
-      investmentAccountId: next.accountId || null,
-      investmentMonth: next.month,
-      investmentReviewId: null,
-    });
-  }
-
-  function addFlow(type) {
-    const list = type === "Contribution" ? contributionList : withdrawalList;
-    list.insertAdjacentHTML("beforeend", flowRow(null, type));
-    list.querySelector(".investment-flow-row:last-child input")?.focus();
-    updateTotals();
-  }
-
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-balance]");
-    if (!button) return;
-    event.preventDefault();
-    const accounts = APIs.investment.accounts().filter(
-      (item) => item.active !== false,
-    );
-    router.updateParams({
-      drawer: "investment-month",
-      investmentAccountId: accounts.length === 1 ? accounts[0].id : null,
-      investmentMonth: InvestmentView.currentMonth(),
-      investmentReviewId: null,
+      setKind(event.detail.value);
     });
   });
-  accountSelect.addEventListener("change", changeTarget);
-  monthPicker.addEventListener("change", changeTarget);
-  document
-    .getElementById("add-investment-contribution")
-    .addEventListener("click", () => addFlow("Contribution"));
-  document
-    .getElementById("add-investment-withdrawal")
-    .addEventListener("click", () => addFlow("Withdrawal"));
-  form.addEventListener("input", updateTotals);
-  form.addEventListener("click", (event) => {
-    const remove = event.target.closest("[data-remove-flow]");
-    if (!remove) return;
-    remove.closest(".investment-flow-row").remove();
-    updateTotals();
-  });
-  drawer.addEventListener("click", (event) => {
-    if (monthPicker.contains(event.target)) return;
-    const trigger = monthPicker.querySelector(".month-picker-trigger");
-    if (trigger?.getAttribute("aria-expanded") === "true") trigger.click();
-  });
-  form.addEventListener("submit", (event) => {
+
+  function handleAccountSelection() {
+    populateTarget(activeAccountSelect().value, monthPicker.value);
+  }
+  investmentAccountSelect.addEventListener("investment-account-selected", handleAccountSelection);
+  debtAccountSelect.addEventListener("debt-account-selected", handleAccountSelection);
+  monthPicker.addEventListener("change", () =>
+    populateTarget(activeAccountSelect().value, monthPicker.value),
+  );
+  root
+    .querySelector("#add-investment-contribution")
+    .addEventListener("click", () => addFlow(contributionList, "Contribution"));
+  root
+    .querySelector("#add-investment-withdrawal")
+    .addEventListener("click", () => addFlow(withdrawalList, "Withdrawal"));
+  root
+    .querySelector("#add-debt-payment")
+    .addEventListener("click", () => addFlow(paymentList, "Payment"));
+  root
+    .querySelector("#add-debt-borrowing")
+    .addEventListener("click", () => addFlow(borrowingList, "New borrowing"));
+  form.addEventListener("click", (event) =>
+    event.target
+      .closest("[data-remove-flow]")
+      ?.closest(".investment-flow-row")
+      ?.remove(),
+  );
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    message.textContent = "";
-    if (!accountSelect.value) {
-      accountSelect.focus();
+    if (!activeAccountSelect().value || !monthPicker.value || !form.reportValidity())
       return;
-    }
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      return;
-    }
+    submit.setAttribute("disabled", "");
     try {
-      const input = {
-        accountId: accountSelect.value,
-        month: monthPicker.value,
-        balance: balanceInput.value,
-        contributions: collectFlows(),
-      };
-      if (reviewId) APIs.investment.resolveConflict(reviewId, input);
-      else APIs.investment.queueMonth(input);
-      initialDraftState = draftState();
-      showToast(
-        "Monthly investment update saved locally and syncing.",
-      );
-      if (mode === "create" && batchInput.checked) {
+      if (kind === "investment") {
+        const current = APIs.investment.monthData(
+          activeAccountSelect().value,
+          monthPicker.value,
+        );
+        APIs.investment.queueMonth({
+          accountId: activeAccountSelect().value,
+          month: monthPicker.value,
+          balance: balanceInput.value,
+          asOfDate: monthEnd(monthPicker.value),
+          balanceId: current?.balance?.id,
+          existingContributions: current?.contributions || [],
+          contributions: [
+            ...collect(contributionList, 1),
+            ...collect(withdrawalList, -1),
+          ].map((item) => ({ ...item, flowType: "external" })),
+        });
+      } else await saveDebtMonth();
+      initialState = state();
+      showToast(`${kind === "debt" ? "Debt" : "Investment"} month saved.`);
+      if (!existingBalance && batchInput.checked) {
         const preservedMonth = monthPicker.value;
-        suppressSingleDefault = true;
-        populateAccounts();
         populateTarget("", preservedMonth);
         batchInput.checked = true;
         message.className = "form-message success";
-        message.textContent = "Balance added. Choose the next account.";
-        initialDraftState = draftState();
-        accountSelect.focus({ preventScroll: true });
+        message.textContent = "Entry added. Choose the next account.";
+        initialState = state();
+        activeAccountSelect().focus();
         router.updateParams({
           investmentAccountId: null,
           investmentMonth: preservedMonth,
-          investmentReviewId: null,
+          investmentLedgerSource: kind,
         });
-      } else {
-        close(true);
-      }
+      } else close(true);
     } catch (error) {
       message.className = "form-message error";
-      message.textContent = error.message;
+      message.textContent =
+        error instanceof Error ? error.message : "Unable to save this month.";
+    } finally {
+      submit.removeAttribute("disabled");
     }
   });
-  document
-    .getElementById("investment-month-use-sheet")
-    .addEventListener("click", () => {
-      if (!reviewId) return;
-      APIs.investment.discard("investmentMonth", reviewId);
-      initialDraftState = draftState();
-      close(true);
-      showToast("Google Sheet values restored.");
-    });
-  document
-    .getElementById("cancel-investment-month")
-    .addEventListener("click", () => close());
-  // document
-  //   .getElementById("close-investment-month-drawer")
-  //   .addEventListener("click", () => close());
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });
   document.addEventListener("keydown", (event) => {
-    if (backdrop.hidden) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = [
-      ...drawer.querySelectorAll(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    ].filter((element) => !element.hidden);
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    if (event.key === "Escape" && !backdrop.hidden) close();
   });
   window.addEventListener("app:route-changed", openFromRoute);
   window.addEventListener("budget:investments-loaded", openFromRoute);
-  window.addEventListener("drawer:close-requested", close);
+  window.addEventListener("drawer:close-requested", () => close());
+  openFromRoute();
 });
