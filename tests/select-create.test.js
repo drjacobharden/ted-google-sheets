@@ -7,7 +7,10 @@ function loadUtils() {
   const context = { window: {} };
   vm.createContext(context);
   vm.runInContext(
-    fs.readFileSync("src/components/select-create-controller/select-create-controller.ts", "utf8"),
+    fs.readFileSync(
+      "src/components/select-create-controller/select-create-controller.ts",
+      "utf8",
+    ),
     context,
   );
   return context.window.SelectCreateUtils;
@@ -41,10 +44,7 @@ test("an open select stays closed when its trigger is clicked", () => {
     "utf8",
   );
 
-  assert.match(
-    controller,
-    /#trigger\.addEventListener\("pointerdown", this\)/,
-  );
+  assert.match(controller, /#trigger\.addEventListener\("pointerdown", this\)/);
   assert.match(
     controller,
     /event\.currentTarget === this\.#trigger && this\.isOpen[\s\S]*?event\.preventDefault\(\)/,
@@ -52,7 +52,10 @@ test("an open select stays closed when its trigger is clicked", () => {
 });
 
 test("category adapter keeps creation explicit and form-readable", () => {
-  const source = fs.readFileSync("src/components/category-select/category-select.ts", "utf8");
+  const source = fs.readFileSync(
+    "src/components/category-select/category-select.ts",
+    "utf8",
+  );
   const controller = fs.readFileSync(
     "src/components/select-create-controller/select-create-controller.ts",
     "utf8",
@@ -66,41 +69,73 @@ test("category adapter keeps creation explicit and form-readable", () => {
   assert.match(source, /new CustomEvent\("category-created"/);
   assert.match(source, /was added\. Syncing…/);
   assert.doesNotMatch(source, /category-add-requested/);
-  assert.match(controller, /#addButton\.addEventListener\("pointerdown", this\)/);
+  assert.match(
+    controller,
+    /#addButton\.addEventListener\("pointerdown", this\)/,
+  );
   assert.match(controller, /event\.currentTarget === this\.#addButton/);
-  assert.match(source, /this\.#type === "all"[\s\S]*BudgetAPI\.listCategories\(\)/);
+  assert.match(
+    source,
+    /this\.#type === "all"[\s\S]*BudgetAPI\.listCategories\(\)/,
+  );
   assert.match(source, /create-type/);
-  assert.match(source, /this\.#type === "all" \? this\.#createType : this\.#type/);
+  assert.match(
+    source,
+    /this\.#type === "all" \? this\.#createType : this\.#type/,
+  );
   assert.match(source, /allowCreate: true/);
   assert.match(controller, /#allowCreate/);
 });
 
 test("vendor and people adapters use searchable select-create fields", () => {
-  const vendor = fs.readFileSync("src/components/vendor-input/vendor-input.ts", "utf8");
-  const people = fs.readFileSync("src/components/people-select/people-select.ts", "utf8");
+  const vendor = fs.readFileSync(
+    "src/components/vendor-input/vendor-input.ts",
+    "utf8",
+  );
+  const people = fs.readFileSync(
+    "src/components/people-select/people-select.ts",
+    "utf8",
+  );
   const html = fs.readFileSync("index.html", "utf8");
 
   assert.match(vendor, /name="vendorId"/);
   assert.match(vendor, /Search or add vendor/);
   assert.match(vendor, /BudgetAPI\.addVendor\(\{ name \}\)/);
   assert.match(vendor, /new CustomEvent\("vendor-created"/);
-  assert.match(vendor, /Object\.prototype\.hasOwnProperty\.call\(this, "value"\)/);
+  assert.match(
+    vendor,
+    /Object\.prototype\.hasOwnProperty\.call\(this, "value"\)/,
+  );
   assert.match(people, /name="assignmentId"/);
   assert.match(people, /Search or add person/);
   assert.match(people, /BudgetAPI\.addPerson\(\{ name \}\)/);
   assert.match(people, /new CustomEvent\("person-created"/);
-  assert.match(people, /Object\.prototype\.hasOwnProperty\.call\(this, "value"\)/);
+  assert.match(
+    people,
+    /Object\.prototype\.hasOwnProperty\.call\(this, "value"\)/,
+  );
   assert.match(people, /hasAttribute\("allow-empty"\)/);
   assert.match(html, /<people-select><\/people-select>/);
   assert.doesNotMatch(html, /<select name="assignmentId"/);
 });
 
 test("searchable selectors expose import-only deferred option providers", () => {
-  const controller = fs.readFileSync("src/components/select-create-controller/select-create-controller.ts", "utf8");
-  assert.match(controller, /configure\(\{ getOptions, createOption, onCreate \}/);
-  ["vendor-input.js", "category-select.js", "people-select.js"].forEach((file) => {
-    assert.match(fs.readFileSync(`js/components/${file}`, "utf8"), /configureOptions\(options\)/);
-  });
+  const controller = fs.readFileSync(
+    "src/components/select-create-controller/select-create-controller.ts",
+    "utf8",
+  );
+  assert.match(
+    controller,
+    /configure\(\{ getOptions, createOption, onCreate \}/,
+  );
+  ["vendor-input.js", "category-select.js", "people-select.js"].forEach(
+    (file) => {
+      assert.match(
+        fs.readFileSync(`js/components/${file}`, "utf8"),
+        /configureOptions\(options\)/,
+      );
+    },
+  );
 });
 
 test("transaction drawer reads custom component values directly", () => {
@@ -113,13 +148,22 @@ test("transaction drawer reads custom component values directly", () => {
   assert.match(drawer, /form\.querySelector\("people-select"\)/);
   assert.match(drawer, /date: datePickerElement\.value/);
   assert.match(drawer, /categoryId: categorySelect\.value/);
-  assert.match(drawer, /vendorId: type === "income" \? "" : vendorSelect\.value/);
+  assert.match(
+    drawer,
+    /vendorId: type === "income" \? "" : vendorSelect\.value/,
+  );
   assert.match(drawer, /assignmentId: peopleSelect\.value/);
-  assert.doesNotMatch(drawer, /closeInlinePerson|resetVendor|populateAssignments/);
+  assert.doesNotMatch(
+    drawer,
+    /closeInlinePerson|resetVendor|populateAssignments/,
+  );
 });
 
 test("transaction drawer preserves an expense draft across type changes", () => {
-  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
+  const drawer = fs.readFileSync(
+    "src/screens/transaction-drawer-screen/transaction-drawer-screen.ts",
+    "utf8",
+  );
 
   assert.match(drawer, /let expenseDraft = \{ categoryId: "", vendorId: "" \}/);
   assert.match(
@@ -130,22 +174,37 @@ test("transaction drawer preserves an expense draft across type changes", () => 
     drawer,
     /categorySelect\.value = income[\s\S]*expenseDraft\.categoryId/,
   );
-  assert.match(drawer, /vendorSelect\.value = income \? "" : expenseDraft\.vendorId/);
+  assert.match(
+    drawer,
+    /vendorSelect\.value = income \? "" : expenseDraft\.vendorId/,
+  );
 });
 
 test("transaction drawer branches synchronously between create and edit", () => {
-  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
+  const drawer = fs.readFileSync(
+    "src/screens/transaction-drawer-screen/transaction-drawer-screen.ts",
+    "utf8",
+  );
 
-  assert.match(drawer, /if \(mode === "create"\) \{\s*createTransaction\(draft\)/);
+  assert.match(
+    drawer,
+    /if \(mode === "create"\) \{\s*createTransaction\(draft\)/,
+  );
   assert.match(drawer, /queueTransaction\(draft\)/);
   assert.match(drawer, /queueTransactionUpdate\(draft, openedBase\)/);
-  assert.doesNotMatch(drawer, /async function (handleSubmit|createTransaction)/);
+  assert.doesNotMatch(
+    drawer,
+    /async function (handleSubmit|createTransaction)/,
+  );
   assert.doesNotMatch(drawer, /Ready for another/);
 });
 
 test("transaction drawer validates custom fields and owns both create buttons", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
+  const drawer = fs.readFileSync(
+    "src/screens/transaction-drawer-screen/transaction-drawer-screen.ts",
+    "utf8",
+  );
 
   assert.equal((html.match(/data-new-transaction/g) || []).length, 2);
   assert.match(drawer, /if \(!datePickerElement\.value\)/);
@@ -157,8 +216,14 @@ test("transaction drawer validates custom fields and owns both create buttons", 
 
 test("transaction drawer supports signed refunds and create-only batch entry", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const currency = fs.readFileSync("src/components/currency-input/currency-input.ts", "utf8");
-  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
+  const currency = fs.readFileSync(
+    "src/components/currency-input/currency-input.ts",
+    "utf8",
+  );
+  const drawer = fs.readFileSync(
+    "src/screens/transaction-drawer-screen/transaction-drawer-screen.ts",
+    "utf8",
+  );
   const row = fs.readFileSync("src/utilities/transaction-row.ts", "utf8");
 
   assert.match(html, /id="batch-entry-toggle"/);
@@ -175,15 +240,21 @@ test("transaction drawer supports signed refunds and create-only batch entry", (
 test("transaction drawer anchors controls and fully removes the income vendor row", () => {
   const html = fs.readFileSync("index.html", "utf8");
   const css = fs.readFileSync("styles.css", "utf8");
-  const drawer = fs.readFileSync("src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "utf8");
+  const drawer = fs.readFileSync(
+    "src/screens/transaction-drawer-screen/transaction-drawer-screen.ts",
+    "utf8",
+  );
 
-  assert.match(html, /class="transaction-drawer-controls"/);
+  assert.match(html, /class="drawer-controls"/);
   assert.match(
     html,
-    /class="transaction-drawer-controls"[\s\S]*class="transaction-drawer-actions"[\s\S]*id="batch-entry-toggle"[\s\S]*class="transaction-metadata"/,
+    /class="drawer-controls"[\s\S]*class="drawer-controls"[\s\S]*id="batch-entry-toggle"[\s\S]*class="metadata"/,
   );
-  assert.match(css, /#transaction-edit-form\s*\{[\s\S]*flex: 1;[\s\S]*flex-direction: column/);
-  assert.match(css, /\.transaction-drawer-controls\s*\{[\s\S]*margin-top: auto/);
+  assert.match(
+    css,
+    /#transaction-edit-form\s*\{[\s\S]*flex: 1;[\s\S]*flex-direction: column/,
+  );
+  assert.match(css, /\.drawer-controls\s*\{[\s\S]*margin-top: auto/);
   assert.match(drawer, /vendorSelect\.hidden = income/);
   assert.doesNotMatch(drawer, /vendorField\.hidden = income/);
 });

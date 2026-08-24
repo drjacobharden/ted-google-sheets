@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { BudgetTransaction, TransactionType } from "../src/api/budget-api";
 import { buildAnnualBudgetOverviews } from "../src/utilities/annual-budget-overview";
 import {
+  activeMonthAverage,
   savingsRateBreakdown,
   savingsRateChange,
 } from "../src/utilities/savings-rate-breakdown";
@@ -114,6 +115,23 @@ describe("annual budget overviews", () => {
 });
 
 describe("savings rate chart breakdown", () => {
+  test("averages totals across only the months that contain data", () => {
+    expect(
+      activeMonthAverage(1_200, [
+        { hasData: true },
+        { hasData: false },
+        { hasData: true },
+        { hasData: true },
+      ]),
+    ).toBe(400);
+    expect(
+      activeMonthAverage(1_200, [
+        { hasData: false },
+        { hasData: false },
+      ]),
+    ).toBeNull();
+  });
+
   test("partitions gross income into savings, deductions, and spend", () => {
     const breakdown = savingsRateBreakdown({
       income: 800,

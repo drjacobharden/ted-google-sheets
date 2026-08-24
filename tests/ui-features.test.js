@@ -11,15 +11,31 @@ function loadDateRange() {
     document: { addEventListener: () => {}, querySelectorAll: () => [] },
     HTMLElement: class {},
     customElements: { define: () => {} },
-    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+    CustomEvent: class {
+      constructor(type, init) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    },
     toISODate,
-    fromISODate: (value) => value ? new Date(`${value}T00:00:00`) : null,
+    fromISODate: (value) => (value ? new Date(`${value}T00:00:00`) : null),
     shortDateFormatter: new Intl.DateTimeFormat("en-US"),
-    monthFormatter: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }),
-    Intl, Date, Set,
+    monthFormatter: new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      year: "numeric",
+    }),
+    Intl,
+    Date,
+    Set,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync("src/components/date-range-picker/date-range-picker.ts", "utf8"), context);
+  vm.runInContext(
+    fs.readFileSync(
+      "src/components/date-range-picker/date-range-picker.ts",
+      "utf8",
+    ),
+    context,
+  );
   return context.window.DateRangePickerUtils;
 }
 
@@ -47,16 +63,35 @@ test("date presets use inclusive local calendar boundaries", () => {
 
 test("custom date selection keeps draft ranges ordered and supports a single day", () => {
   const { resolveDraftSelection } = loadDateRange();
-  const select = (...args) => JSON.parse(JSON.stringify(resolveDraftSelection(...args)));
-  assert.deepEqual(select("", "", "2026-07-14"), { start: "2026-07-14", end: "" });
-  assert.deepEqual(select("2026-07-14", "", "2026-07-20"), { start: "2026-07-14", end: "2026-07-20" });
-  assert.deepEqual(select("2026-07-14", "", "2026-07-10"), { start: "2026-07-10", end: "2026-07-14" });
-  assert.deepEqual(select("2026-07-14", "", "2026-07-14"), { start: "2026-07-14", end: "2026-07-14" });
-  assert.deepEqual(select("2026-07-14", "2026-07-20", "2026-08-01"), { start: "2026-08-01", end: "" });
+  const select = (...args) =>
+    JSON.parse(JSON.stringify(resolveDraftSelection(...args)));
+  assert.deepEqual(select("", "", "2026-07-14"), {
+    start: "2026-07-14",
+    end: "",
+  });
+  assert.deepEqual(select("2026-07-14", "", "2026-07-20"), {
+    start: "2026-07-14",
+    end: "2026-07-20",
+  });
+  assert.deepEqual(select("2026-07-14", "", "2026-07-10"), {
+    start: "2026-07-10",
+    end: "2026-07-14",
+  });
+  assert.deepEqual(select("2026-07-14", "", "2026-07-14"), {
+    start: "2026-07-14",
+    end: "2026-07-14",
+  });
+  assert.deepEqual(select("2026-07-14", "2026-07-20", "2026-08-01"), {
+    start: "2026-08-01",
+    end: "",
+  });
 });
 
 test("calendar day buttons remain attached across range updates", () => {
-  const component = fs.readFileSync("src/components/date-range-picker/date-range-picker.ts", "utf8");
+  const component = fs.readFileSync(
+    "src/components/date-range-picker/date-range-picker.ts",
+    "utf8",
+  );
   assert.match(component, /this\.\#grid\.replaceChildren\(\.\.\.buttons\)/);
   assert.match(component, /const buttons = this\.\#grid\.children/);
   assert.doesNotMatch(component, /#renderCalendar\(\)[\s\S]*replaceChildren/);
@@ -64,7 +99,10 @@ test("calendar day buttons remain attached across range updates", () => {
 
 test("custom date Apply uses a disabled cursor rather than a loading cursor", () => {
   const css = fs.readFileSync("styles.css", "utf8");
-  assert.match(css, /\.range-calendar-actions \.primary-button:disabled\s*\{\s*cursor: not-allowed;/);
+  assert.match(
+    css,
+    /\.range-calendar-actions \.primary-button:disabled\s*\{\s*cursor: not-allowed;/,
+  );
 });
 
 test("shell fills the viewport and elevates only the desktop workspace", () => {
@@ -73,26 +111,56 @@ test("shell fills the viewport and elevates only the desktop workspace", () => {
   const shell = fs.readFileSync("css/shell.css", "utf8");
   const navigation = fs.readFileSync("css/navigation-bar.css", "utf8");
   const responsive = fs.readFileSync("css/responsiveness.css", "utf8");
-  const userForm = fs.readFileSync("src/components/user-form/user-form.ts", "utf8");
+  const userForm = fs.readFileSync(
+    "src/components/user-form/user-form.ts",
+    "utf8",
+  );
 
   assert.doesNotMatch(html, /class="topbar"/);
   assert.doesNotMatch(html, /id="profile-(?:name|monogram)"/);
-  assert.doesNotMatch(userForm, /getElementById\("profile-(?:name|monogram)"\)/);
-  assert.match(shell, /\.app-shell\s*\{[\s\S]*width: 100vw;[\s\S]*height: 100dvh;/);
-  assert.match(shell, /\.app-shell\s*\{[\s\S]*background: var\(--sidebar-background\);/);
-  assert.match(styles, /\.workspace\s*\{[\s\S]*margin: 12px 12px 12px 0;[\s\S]*box-shadow: var\(--shadow\);/);
+  assert.doesNotMatch(
+    userForm,
+    /getElementById\("profile-(?:name|monogram)"\)/,
+  );
+  assert.match(
+    shell,
+    /\.app-shell\s*\{[\s\S]*width: 100vw;[\s\S]*height: 100dvh;/,
+  );
+  assert.match(
+    shell,
+    /\.app-shell\s*\{[\s\S]*background: var\(--sidebar-background\);/,
+  );
+  assert.match(
+    styles,
+    /\.workspace\s*\{[\s\S]*margin: 12px 12px 12px 0;[\s\S]*box-shadow: var\(--shadow\);/,
+  );
   assert.match(styles, /\.content\s*\{[\s\S]*padding: 30px 36px 34px;/);
-  assert.match(styles, /\.screen\s*\{[\s\S]*width: 100%;[\s\S]*max-width: none;/);
-  assert.match(styles, /\.category-layout\s*\{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(280px, 360px\);/);
-  assert.match(styles, /@media \(max-width: 860px\)[\s\S]*\.workspace\s*\{[\s\S]*margin: 0;[\s\S]*box-shadow: none;/);
-  assert.match(responsive, /@media \(max-width: 860px\)[\s\S]*\.app-shell\s*\{[\s\S]*grid-template-columns: 1fr;[\s\S]*height: 100dvh;/);
+  assert.match(
+    styles,
+    /\.screen\s*\{[\s\S]*width: 100%;[\s\S]*max-width: none;/,
+  );
+  assert.match(
+    styles,
+    /\.category-layout\s*\{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(280px, 360px\);/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 860px\)[\s\S]*\.workspace\s*\{[\s\S]*margin: 0;[\s\S]*box-shadow: none;/,
+  );
+  assert.match(
+    responsive,
+    /@media \(max-width: 860px\)[\s\S]*\.app-shell\s*\{[\s\S]*grid-template-columns: 1fr;[\s\S]*height: 100dvh;/,
+  );
   assert.match(navigation, /\.sidebar-nav\s*\{[\s\S]*padding: 26px 16px 20px;/);
   assert.doesNotMatch(navigation, /\.sidebar\s*\{[\s\S]*?border-right:/);
 });
 
 test("transaction entry exposes an accessible vendor combobox", () => {
   const html = fs.readFileSync("index.html", "utf8");
-  const vendor = fs.readFileSync("src/components/vendor-input/vendor-input.ts", "utf8");
+  const vendor = fs.readFileSync(
+    "src/components/vendor-input/vendor-input.ts",
+    "utf8",
+  );
   const controller = fs.readFileSync(
     "src/components/select-create-controller/select-create-controller.ts",
     "utf8",
@@ -112,11 +180,26 @@ test("entity lists drill down into a shared detail screen and rename drawer", ()
     "src/screens/category-screen/category-screen.ts",
     "utf8",
   );
-  const vendor = fs.readFileSync("src/screens/vendors-screen/vendors-screen.ts", "utf8");
-  const people = fs.readFileSync("src/screens/people-screen/people-screen.ts", "utf8");
-  const detail = fs.readFileSync("src/screens/entity-detail-screen/entity-detail-screen.ts", "utf8");
-  const detailTemplate = fs.readFileSync("src/screens/entity-detail-screen/template.html", "utf8");
-  const editor = fs.readFileSync("src/screens/entity-drawer-screen/entity-drawer-screen.ts", "utf8");
+  const vendor = fs.readFileSync(
+    "src/screens/vendors-screen/vendors-screen.ts",
+    "utf8",
+  );
+  const people = fs.readFileSync(
+    "src/screens/people-screen/people-screen.ts",
+    "utf8",
+  );
+  const detail = fs.readFileSync(
+    "src/screens/entity-detail-screen/entity-detail-screen.ts",
+    "utf8",
+  );
+  const detailTemplate = fs.readFileSync(
+    "src/screens/entity-detail-screen/template.html",
+    "utf8",
+  );
+  const editor = fs.readFileSync(
+    "src/screens/entity-drawer-screen/entity-drawer-screen.ts",
+    "utf8",
+  );
   assert.match(html, /id="route-entity-detail"/);
   assert.match(detail, /this\.dataset\.screen = "entity-detail"/);
   assert.match(html, /id="entity-drawer-backdrop"/);
@@ -171,11 +254,20 @@ test("category routing renders the TypeScript category-screen component", () => 
 });
 
 test("vendor search and normalized select styling are present", () => {
-  const template = fs.readFileSync("src/screens/vendors-screen/template.html", "utf8");
-  const vendor = fs.readFileSync("src/screens/vendors-screen/vendors-screen.ts", "utf8");
+  const template = fs.readFileSync(
+    "src/screens/vendors-screen/template.html",
+    "utf8",
+  );
+  const vendor = fs.readFileSync(
+    "src/screens/vendors-screen/vendors-screen.ts",
+    "utf8",
+  );
   const css = fs.readFileSync("styles.css", "utf8");
   assert.match(template, /id="vendor-search"/);
-  assert.match(vendor, /\$\{vendors\.length\} of \$\{allVendors\.length\} vendors/);
+  assert.match(
+    vendor,
+    /\$\{vendors\.length\} of \$\{allVendors\.length\} vendors/,
+  );
   assert.match(css, /select \{[\s\S]*appearance: none/);
   assert.match(css, /border-radius: var\(--radius-small\)/);
   assert.match(css, /background-image: url\("data:image\/svg\+xml/);
@@ -192,10 +284,7 @@ test("routed drawers share focus-safe entry and exit animations", () => {
     css,
     /\.drawer-overlay:not\(\[hidden\]\) > \.transaction-drawer[\s\S]*translateX\(100%\)[\s\S]*transition: transform 360ms cubic-bezier\(0\.33, 1, 0\.68, 1\)/,
   );
-  assert.match(
-    css,
-    /\.drawer-overlay\.is-open::before\s*\{\s*opacity: 1/,
-  );
+  assert.match(css, /\.drawer-overlay\.is-open::before\s*\{\s*opacity: 1/);
   assert.match(
     css,
     /\.drawer-overlay\.is-open > \.transaction-drawer\s*\{\s*transform: translateX\(0\)/,
@@ -209,21 +298,22 @@ test("routed drawers share focus-safe entry and exit animations", () => {
     /\.drawer-overlay\.is-closing > \.transaction-drawer[\s\S]*translateX\(100%\)[\s\S]*transition-duration: 260ms/,
   );
 
-  ["src/screens/transaction-drawer-screen/transaction-drawer-screen.ts", "src/screens/entity-drawer-screen/entity-drawer-screen.ts"].forEach(
-    (path) => {
-      const drawer = fs.readFileSync(path, "utf8");
-      assert.match(drawer, /void drawer\.offsetWidth/);
-      assert.match(drawer, /backdrop\.classList\.add\("is-open"\)/);
-      assert.match(drawer, /backdrop\.classList\.add\("is-closing"\)/);
-      assert.match(drawer, /event\.propertyName === "transform"/);
-      assert.match(
-        drawer,
-        /closeTimer = window\.setTimeout\(finishClose, reducedMotion \? 0 : 320\)/,
-      );
-      assert.match(
-        drawer,
-        /function finishClose\(\)[\s\S]*backdrop\.hidden = true/,
-      );
-    },
-  );
+  [
+    "src/screens/transaction-drawer-screen/transaction-drawer-screen.ts",
+    "src/screens/entity-drawer-screen/entity-drawer-screen.ts",
+  ].forEach((path) => {
+    const drawer = fs.readFileSync(path, "utf8");
+    assert.match(drawer, /void drawer\.offsetWidth/);
+    assert.match(drawer, /backdrop\.classList\.add\("is-open"\)/);
+    assert.match(drawer, /backdrop\.classList\.add\("is-closing"\)/);
+    assert.match(drawer, /event\.propertyName === "transform"/);
+    assert.match(
+      drawer,
+      /closeTimer = window\.setTimeout\(finishClose, reducedMotion \? 0 : 320\)/,
+    );
+    assert.match(
+      drawer,
+      /function finishClose\(\)[\s\S]*backdrop\.hidden = true/,
+    );
+  });
 });
