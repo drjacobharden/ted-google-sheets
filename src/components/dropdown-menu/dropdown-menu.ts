@@ -67,6 +67,7 @@ export class DropdownMenu extends HTMLElement {
     this.#trigger.addEventListener("click", this);
     this.#trigger.addEventListener("keydown", this);
     this.#menu.addEventListener("click", this);
+    this.#menu.addEventListener("input", this);
     this.#menu.addEventListener("keydown", this);
     this.#menu.addEventListener("popover-dismiss", this);
     if (this.hasAttribute("open-on-hover")) {
@@ -87,6 +88,7 @@ export class DropdownMenu extends HTMLElement {
     this.#trigger.removeEventListener("click", this);
     this.#trigger.removeEventListener("keydown", this);
     this.#menu.removeEventListener("click", this);
+    this.#menu.removeEventListener("input", this);
     this.#menu.removeEventListener("keydown", this);
     this.#menu.removeEventListener("popover-dismiss", this);
     this.removeEventListener("pointerenter", this);
@@ -178,7 +180,33 @@ export class DropdownMenu extends HTMLElement {
       return option;
     });
 
-    this.#menu.replaceChildren(...children);
+    if (this.hasAttribute("searchable")) {
+      const search = document.createElement("input");
+      search.className = "dropdown-menu-search";
+      search.type = "search";
+      search.autocomplete = "off";
+      search.placeholder = this.getAttribute("search-placeholder") ?? "Search";
+      search.setAttribute("aria-label", search.placeholder);
+      const searchRow = document.createElement("div");
+      searchRow.className = "dropdown-menu-search-row";
+      searchRow.append(search);
+
+      if (this.hasAttribute("search-action")) {
+        const action = document.createElement("button");
+        action.className = "dropdown-menu-search-action";
+        action.type = "button";
+        action.textContent = this.getAttribute("search-action-label") ?? "Add";
+        action.setAttribute("aria-label", action.textContent);
+        searchRow.append(action);
+      }
+
+      const options = document.createElement("div");
+      options.className = "dropdown-menu-options";
+      options.replaceChildren(...children);
+      this.#menu.replaceChildren(searchRow, options);
+    } else {
+      this.#menu.replaceChildren(...children);
+    }
   }
 
   /**
@@ -191,6 +219,10 @@ export class DropdownMenu extends HTMLElement {
     switch (event.type) {
       case "click":
         this.#handleClick(event);
+        break;
+
+      case "input":
+        this.#filterItems((event.target as HTMLInputElement).value);
         break;
 
       case "keydown":
@@ -216,6 +248,20 @@ export class DropdownMenu extends HTMLElement {
 
   #handleClick(event: Event) {
     const target = event.target as HTMLElement;
+
+    const searchAction = target.closest(
+      ".dropdown-menu-search-action",
+    ) as HTMLButtonElement | null;
+    if (searchAction) {
+      const input = this.#menu.querySelector<HTMLInputElement>(
+        ".dropdown-menu-search",
+      );
+      this.#searchActionEvents.dispatch(
+        { input: input?.value ?? "" },
+        { bubbles: true },
+      );
+      return;
+    }
 
     // Clicked the trigger
     const trigger = target.closest('[data-action="toggle-dropdown"]');
@@ -257,6 +303,17 @@ export class DropdownMenu extends HTMLElement {
     this.close();
   }
 
+  #filterItems(query: string) {
+    const normalizedQuery = query.trim().toLocaleLowerCase("en-US");
+    for (const item of this.#menu.querySelectorAll<HTMLElement>(
+      ".dropdown-menu-item",
+    )) {
+      const title = item.dataset.title?.toLocaleLowerCase("en-US") ?? "";
+      item.hidden =
+        normalizedQuery.length > 0 && !title.includes(normalizedQuery);
+    }
+  }
+
   /**
    *
    * Setters
@@ -287,20 +344,49 @@ export class DropdownMenu extends HTMLElement {
     }
   }
 
+  get selection(): string | null {
+    return this.#value;
+  }
+
+  set selection(value: string | null) {
+    const item =
+      value === null
+        ? null
+        : (this.#menu?.querySelector<HTMLElement>(
+            `.dropdown-menu-item[data-value="${CSS.escape(value)}"]`,
+          ) ?? null);
+    this.#selection?.classList.remove("is-selected");
+    this.#selection = item;
+    this.#value = item?.dataset.value ?? null;
+    this.#selection?.classList.add("is-selected");
+    if (item && !this.hasAttribute("preserve-label") && this.#trigger) {
+      this.#trigger.label = item.dataset.title ?? "";
+    }
+  }
+
   open(options: { focusFirst?: boolean } = {}) {
     this.#clearHoverTimers();
     appState.set("activeDropdownKey", this.#menuKey);
     this.#menu.show(this.#trigger, {
       side: "bottom",
-      align: this.hasAttribute("align-start") ? "start" : "end",
+      align: this.hasAttribute("align-start")
+        ? "start"
+        : this.hasAttribute("align-center")
+          ? "center"
+          : "end",
       gap: 4,
     });
     this.toggleAttribute("is-open", true);
     this.#trigger.setAttribute("aria-expanded", "true");
-    if (options.focusFirst) {
-      this.#menu
-        .querySelector<HTMLElement>(".dropdown-menu-item")
-        ?.focus();
+    const search = this.#menu.querySelector<HTMLInputElement>(
+      ".dropdown-menu-search",
+    );
+    if (search) {
+      search.value = "";
+      this.#filterItems("");
+      search.focus();
+    } else if (options.focusFirst) {
+      this.#menu.querySelector<HTMLElement>(".dropdown-menu-item")?.focus();
     }
   }
 
@@ -320,7 +406,9 @@ export class DropdownMenu extends HTMLElement {
 
   #handleKeydown(event: KeyboardEvent) {
     const items = [
-      ...this.#menu.querySelectorAll<HTMLElement>(".dropdown-menu-item"),
+      ...this.#menu.querySelectorAll<HTMLElement>(
+        ".dropdown-menu-item:not([hidden])",
+      ),
     ];
     const currentIndex = items.indexOf(document.activeElement as HTMLElement);
     if (event.currentTarget === this.#trigger) {
@@ -376,10 +464,13 @@ export class DropdownMenu extends HTMLElement {
   }
 
   #events = createEventHandler("dropdown-selection", this);
+  #searchActionEvents = createEventHandler("search-action-pressed", this);
 
   addListener = this.#events.addListener;
   removeListener = this.#events.removeListener;
   handleSelection = this.#events.handleEvent;
+  addSearchActionListener = this.#searchActionEvents.addListener;
+  removeSearchActionListener = this.#searchActionEvents.removeListener;
 }
 
 customElements.define("dropdown-menu", DropdownMenu);

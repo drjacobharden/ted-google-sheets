@@ -3,15 +3,12 @@ import "./api/api.ts";
 import "./utilities/date-utilities.ts";
 import "./utilities/event-utilities.ts";
 
-import "./elements/nav-bar/nav-bar.ts";
-
 import "./screens/budget/budget.ts";
 
 import "./components/page-title/page-title.ts";
 import "./components/button/button.ts";
 import "./components/navigation-button/navigation-button.ts";
 import "./components/tooltip/tooltip.ts";
-import "./components/breadcrumbs/breadcrumbs.ts";
 import "./components/refresh-indicator/refresh-indicator.ts";
 import "./components/splash-indicator/splash-indicator.ts";
 import "./components/refresh-button/refresh-button.ts";
@@ -22,13 +19,16 @@ import "./components/segmented-control/segmented-control.ts";
 import "./components/filter-bar/filter-bar.ts";
 import "./components/close-button/close-button.ts";
 import "./components/drawer-header/drawer-header.ts";
+import "./components/drawer-overlay/drawer-overlay.ts";
 import "./components/date-picker/date-picker.ts";
 import "./components/currency-input/currency-input.ts";
-import "./components/month-picker/month-picker.ts";
+import "./components/month-picker/month-picker.js";
 import "./components/select-create-controller/select-create-controller.ts";
 import "./components/category-select/category-select.ts";
 import "./components/vendor-input/vendor-input.ts";
 import "./components/people-select/people-select.ts";
+import "./components/investment-account-select/investment-account-select.ts";
+import "./components/debt-account-select/debt-account-select.ts";
 import "./components/table-title/table-title.ts";
 import "./components/user-form/user-form.ts";
 import "./components/url-form/url-form.ts";
@@ -44,24 +44,27 @@ import "./components/icon/icon.ts";
 
 import "./elements/top-nav/top-nav.ts";
 import "./elements/navigation-bar/navigation-bar.ts";
-import "./elements/new-entity-popover/new-entity-popover.ts";
 import "./elements/overlay-manager/overlay-manager.ts";
 
 import "./screens/budgeting/budgeting-shell";
-import type { BudgetingShell } from "./screens/budgeting/budgeting-shell";
+import "./screens/investments/investments-header";
 import "./screens/budget-overview-screen/budget-overview-screen.ts";
 import "./screens/category-screen/category-screen.ts";
 import "./screens/dashboard-screen/dashboard-screen.ts";
 import "./screens/entity-archive-screen/entity-archive-screen.ts";
 import "./screens/entity-detail-screen/entity-detail-screen.ts";
 import "./screens/investment-account-detail-screen/investment-account-detail-screen.ts";
+import "./screens/investment-debt-detail-screen/investment-debt-detail-screen.ts";
 import "./screens/investment-accounts-screen/investment-accounts-screen.ts";
 import "./screens/investment-overview-screen/investment-overview-screen.ts";
+import "./screens/investment-debts-screen/investment-debts-screen.ts";
+import "./screens/investment-ledger-screen/investment-ledger-screen.ts";
+import "./screens/investment-ledger-drawer-screen/investment-ledger-drawer-screen.ts";
 import "./screens/import-screen/import-screen.ts";
 import "./screens/people-screen/people-screen.ts";
 import "./screens/settings-screen/settings-screen.ts";
 import "./screens/sync-screen/sync-screen.ts";
-import "./screens/transactions/transactions.ts";
+import "./screens/transaction-list-screen/transactions.ts";
 import "./screens/vendors-screen/vendors-screen.ts";
 import "./screens/transaction-drawer-screen/transaction-drawer-screen.ts";
 import "./screens/entity-drawer-screen/entity-drawer-screen.ts";
@@ -79,6 +82,8 @@ const OVERLAY_PARAMS = new Set([
   "investmentAccountId",
   "investmentMonth",
   "investmentReviewId",
+  "investmentLedgerId",
+  "investmentLedgerSource",
 ]);
 let mountedContentKey = "";
 
@@ -92,22 +97,6 @@ function renderRoute({
   const outlet = document.getElementById("route-outlet");
   if (!outlet) throw new Error("Missing route outlet");
 
-  if (router.isBudgetingRoute(name)) {
-    if (mountedContentKey !== "budgeting") {
-      const template = document.getElementById(
-        "route-budgeting",
-      ) as HTMLTemplateElement | null;
-      if (!template) throw new Error("Missing budgeting shell template");
-      outlet.replaceChildren(template.content.cloneNode(true));
-      mountedContentKey = "budgeting";
-    }
-    const shell = outlet.querySelector<BudgetingShell>("budgeting-shell");
-    if (!shell) throw new Error("Budgeting shell failed to mount");
-    shell.route = { name, route: name, params };
-    updateActiveTab("budgeting");
-    return;
-  }
-
   const contentParams = Object.fromEntries(
     Object.entries(params).filter(([key]) => !OVERLAY_PARAMS.has(key)),
   );
@@ -120,9 +109,11 @@ function renderRoute({
   if (!outlet || !template)
     throw new Error(`Missing template for route: ${name}`);
   outlet.replaceChildren(template.content.cloneNode(true));
-  const activeTab = name.startsWith("investment-")
-    ? "investment-overview"
-    : name;
+  const activeTab = router.isBudgetingRoute(name)
+    ? "budgeting"
+    : name.startsWith("investment-")
+      ? "investment-overview"
+      : name;
   updateActiveTab(activeTab);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }

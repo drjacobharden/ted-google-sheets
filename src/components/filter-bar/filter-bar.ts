@@ -22,6 +22,7 @@ export interface AvailableFilter<T> {
   key: keyof T;
   title: string;
   dataType: FilterDataType;
+  searchable?: boolean;
 }
 
 export interface AppliedFilter<T> {
@@ -393,11 +394,19 @@ export class FilterBar<T> extends HTMLElement {
     available: AvailableFilter<T> | null,
   ): HTMLElement {
     if (available && this.#dataTypeKind(available) === "enum") {
-      return this.#createDropdown(
+      const dropdown = this.#createDropdown(
         draft,
         "value",
         draft.value || "Select value",
       );
+      if (available.searchable) {
+        dropdown.toggleAttribute("searchable", true);
+        dropdown.setAttribute(
+          "search-placeholder",
+          `Search ${available.title.toLowerCase()}`,
+        );
+      }
+      return dropdown;
     }
 
     const input = document.createElement("input");

@@ -1,222 +1,229 @@
 // @ts-nocheck
 import { APIs } from "../../api/api";
-import { router } from "../../router/router";
-import { appController } from "../../state/app-controller";
-import { DateUtils } from "../../utilities/date-utilities";
-import { SelectCreateController } from "../select-create-controller/select-create-controller";
 import { showToast } from "../toast-stack/toast-service";
+
 const peopleSelectTemplate = () => `
   <div class="form-field people-form-field">
     <span class="people-select-label">Assignment</span>
-    <div class="select-menu">
-      <input class="id-input" name="assignmentId" type="hidden" />
-       <custom-button 
-        class="people-select-trigger select-trigger" 
-        label="Select an assignment" 
-        leading-icon="people" 
-        trailing-icon="chevronDown"
-        aria-haspopup="listbox"
-        aria-expanded="false"
-        role="combobox"
-        >
-      </custom-button>
-      
-      <div class="select-popup" hidden>
-        <div class="search-row">
-          <input
-            class="search"
-            type="text"
-            maxlength="80"
-            autocomplete="off"
-            placeholder="Search or add person"
-            aria-autocomplete="list"
-          />
-          <button class="add" type="button" hidden>Add</button>
-        </div>
-        <p
-          class="message"
-          role="alert"
-          aria-live="polite"
-          hidden
-        ></p>
-        <div class="people-select-list list" role="listbox"></div>
-      </div>
-    </div>
+    <input class="id-input" name="assignmentId" type="hidden" />
+    <dropdown-menu 
+      class="people-select-menu" 
+      variant="editorial"
+      label="Select an assignment" 
+      icon="people" 
+      searchable search-action
+      search-action-label="Add" 
+      search-placeholder="Search or add person"
+      align-center
+    >
+    </dropdown-menu>
   </div>
 `;
 
-(function () {
-  let nextId = 0;
+let nextId = 0;
 
-  class PeopleSelect extends HTMLElement {
-    static get observedAttributes() {
-      return ["value"];
+export class PeopleSelect extends HTMLElement {
+  static get observedAttributes() {
+    return ["value"];
+  }
+
+  #dropdown = null;
+  #form = null;
+  #options = [];
+  #fallbackSelection = null;
+  #getOptions = () => APIs.budget.listPeople();
+  #createOption = (name) => APIs.budget.addPerson({ name });
+  #onCreate = (person) => {
+    this.dispatchEvent(
+      new CustomEvent("person-created", {
+        bubbles: true,
+        detail: { person },
+      }),
+    );
+    showToast(
+      APIs.budget.getConfig().endpoint
+        ? `${person.name} was added. Syncing…`
+        : `${person.name} was added.`,
+    );
+  };
+
+  get value() {
+    return (
+      this.#dropdown?.selection ||
+      this.querySelector(".id-input")?.value ||
+      this.getAttribute("value") ||
+      ""
+    );
+  }
+
+  set value(personId) {
+    const id = String(personId || "");
+    if (!this.#dropdown) {
+      if (id) this.setAttribute("value", id);
+      else this.removeAttribute("value");
+      return;
     }
+    this.#setValue(id);
+  }
 
-    #controller = null;
-    #form = null;
+  get isOpen() {
+    return this.#dropdown?.hasAttribute("is-open") || false;
+  }
 
-    get value() {
-      return (
-        this.#controller?.value ||
-        this.querySelector(".id-input")?.value ||
-        this.getAttribute("value") ||
-        ""
-      );
-    }
+  setFallbackSelection(selection) {
+    const id = String(selection?.id || "");
+    this.#fallbackSelection = id
+      ? {
+          id,
+          name: String(selection?.name || "Archived assignment"),
+          archived: true,
+        }
+      : null;
+    this.#refresh(this.value);
+  }
 
-    set value(personId) {
-      const id = String(personId || "");
+  clearFallbackSelection() {
+    this.#fallbackSelection = null;
+    this.#refresh(this.value);
+  }
 
-      if (!this.#controller) {
-        if (id) this.setAttribute("value", id);
-        else this.removeAttribute("value");
-        return;
-      }
+  reportSelectionError(message) {
+    const trigger = this.#dropdown?.querySelector(".dropdown-trigger");
+    trigger?.setAttribute("aria-invalid", "true");
+    trigger?.setAttribute("title", message);
+    trigger?.focus();
+  }
 
-      this.#controller.setValue(id);
-    }
+  closePopup({ focusTrigger = false } = {}) {
+    this.#dropdown?.close();
+    if (focusTrigger)
+      this.#dropdown?.querySelector(".dropdown-trigger")?.focus();
+  }
 
-    get isOpen() {
-      return this.#controller?.isOpen || false;
-    }
+  configureOptions({ getOptions, createOption, onCreate } = {}) {
+    if (typeof getOptions === "function") this.#getOptions = getOptions;
+    if (typeof createOption === "function") this.#createOption = createOption;
+    if (typeof onCreate === "function") this.#onCreate = onCreate;
+    this.#refresh(this.value);
+  }
 
-    setFallbackSelection(selection) {
-      this.#controller?.setFallbackSelection(selection);
-    }
+  connectedCallback() {
+    const initialValue = this.hasAttribute("allow-empty")
+      ? String(this.getAttribute("value") || "")
+      : Object.prototype.hasOwnProperty.call(this, "value")
+        ? String(this.value || "")
+        : this.getAttribute("value") || APIs.budget.SHARED_ASSIGNMENT_ID;
+    if (Object.prototype.hasOwnProperty.call(this, "value")) delete this.value;
 
-    clearFallbackSelection() {
-      this.#controller?.clearFallbackSelection();
-    }
+    this.innerHTML = peopleSelectTemplate();
+    this.#form = this.closest("form");
+    this.#dropdown = this.querySelector("dropdown-menu");
+    const id = `people-select-${++nextId}`;
+    this.#dropdown.id = id;
+    this.#dropdown.setAttribute("aria-label", "Select an assignment");
+    this.querySelector(".people-select-label").id = `${id}-label`;
+    this.#dropdown.setAttribute("aria-labelledby", `${id}-label ${id}`);
+    this.#dropdown.addEventListener("dropdown-selection", this);
+    this.#dropdown.addEventListener("search-action-pressed", this);
+    this.#refresh(initialValue);
+    this.#form?.addEventListener("reset", this);
+    window.addEventListener("budget:people-changed", this);
+  }
 
-    reportSelectionError(message) {
-      this.#controller?.reportSelectionError(message);
-    }
+  disconnectedCallback() {
+    this.#dropdown?.removeEventListener("dropdown-selection", this);
+    this.#dropdown?.removeEventListener("search-action-pressed", this);
+    this.#form?.removeEventListener("reset", this);
+    window.removeEventListener("budget:people-changed", this);
+  }
 
-    closePopup(options) {
-      this.#controller?.close(options);
-    }
-
-    configureOptions(options) {
-      this.#controller?.configure(options);
-    }
-
-    connectedCallback() {
-      const initialValue = this.hasAttribute("allow-empty")
-        ? String(this.getAttribute("value") || "")
-        : Object.prototype.hasOwnProperty.call(this, "value")
-          ? String(this.value || "")
-          : this.getAttribute("value") || APIs.budget.SHARED_ASSIGNMENT_ID;
-      if (Object.prototype.hasOwnProperty.call(this, "value")) {
-        delete this.value;
-      }
-
-      this.innerHTML = peopleSelectTemplate();
-      this.#form = this.closest("form");
-
-      const controlId = `people-select-${++nextId}`;
-      const labelId = `${controlId}-label`;
-      const popupId = `${controlId}-popup`;
-      const listId = `${controlId}-list`;
-      const label = this.querySelector(".people-select-label");
-      const trigger = this.querySelector(".people-select-trigger");
-      const search = this.querySelector(".search");
-      const popup = this.querySelector(".select-popup");
-      const list = this.querySelector(".people-select-list");
-
-      label.id = labelId;
-      trigger.id = controlId;
-      trigger.setAttribute("aria-labelledby", `${labelId} ${controlId}`);
-      trigger.setAttribute("aria-controls", popupId);
-      popup.id = popupId;
-      list.id = listId;
-      search.setAttribute("aria-label", "Search or add person");
-      search.setAttribute("aria-controls", listId);
-
-      this.#controller = new SelectCreateController({
-        host: this,
-        idInput: this.querySelector(".id-input"),
-        trigger,
-        triggerText: trigger.querySelector("span"),
-        popup,
-        search,
-        addButton: this.querySelector(".add"),
-        list,
-        message: this.querySelector(".message"),
-        getOptions: () => APIs.budget.listPeople(),
-        createOption: (name) => APIs.budget.addPerson({ name }),
-        onSelect: (person, state) => this.#handleSelection(person, state),
-        onCreate: (person) => {
-          this.dispatchEvent(
-            new CustomEvent("person-created", {
-              bubbles: true,
-              detail: { person },
-            }),
-          );
-          showToast(
-            APIs.budget.getConfig().endpoint
-              ? `${person.name} was added. Syncing…`
-              : `${person.name} was added.`,
-          );
-        },
-        placeholder: "Select an assignment",
-        entityLabel: "person",
-        emptyLabel: "No matching people",
-      });
-
-      this.#controller.refresh(initialValue);
-      this.#controller.connect();
-      this.#form?.addEventListener("reset", this);
-      window.addEventListener("budget:people-changed", this);
-    }
-
-    disconnectedCallback() {
-      this.#controller?.disconnect();
-      this.#form?.removeEventListener("reset", this);
-      window.removeEventListener("budget:people-changed", this);
-    }
-
-    attributeChangedCallback(name, oldValue, newValue) {
-      if (name === "value" && oldValue !== newValue && this.#controller) {
-        this.#controller.setValue(newValue || "");
-      }
-    }
-
-    handleEvent(event) {
-      if (event.type === "reset") {
-        setTimeout(
-          () =>
-            this.#controller.refresh(APIs.budget.SHARED_ASSIGNMENT_ID, {
-              resetSearch: true,
-            }),
-          0,
-        );
-      }
-
-      if (event.type === "budget:people-changed") {
-        this.#controller.refresh(this.value);
-      }
-    }
-
-    #handleSelection(person, { announce }) {
-      const id = String(person?.id || "");
-
-      if (id) {
-        if (this.getAttribute("value") !== id) this.setAttribute("value", id);
-      } else if (this.hasAttribute("value")) {
-        this.removeAttribute("value");
-      }
-
-      if (announce) {
-        this.dispatchEvent(
-          new CustomEvent("person-selected", {
-            bubbles: true,
-            detail: { person },
-          }),
-        );
-      }
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name === "value" && oldValue !== newValue && this.#dropdown) {
+      this.#setValue(newValue || "");
     }
   }
 
-  customElements.define("people-select", PeopleSelect);
-})();
+  handleEvent(event) {
+    if (event.type === "dropdown-selection") {
+      this.#setValue(event.detail.value, true);
+    } else if (event.type === "search-action-pressed") {
+      this.#addPerson(event.detail.input);
+    } else if (event.type === "reset") {
+      setTimeout(() => {
+        const value = this.hasAttribute("allow-empty")
+          ? ""
+          : APIs.budget.SHARED_ASSIGNMENT_ID;
+        this.#refresh(value, true);
+      }, 0);
+    } else if (event.type === "budget:people-changed") {
+      this.#refresh(this.value);
+    }
+  }
+
+  #refresh(preferredValue = this.value, resetSearch = false) {
+    if (!this.#dropdown) return;
+    this.#options = this.#getOptions() || [];
+    const options = [...this.#options];
+    if (
+      this.#fallbackSelection &&
+      !options.some((item) => String(item.id) === this.#fallbackSelection.id)
+    ) {
+      options.push(this.#fallbackSelection);
+    }
+    this.#dropdown.items = options.map((item) => ({
+      key: String(item.id),
+      title: `${item.name}${item.archived ? " (archived)" : ""}`,
+      isDefaultValue: String(item.id) === String(preferredValue || ""),
+    }));
+    this.#setValue(preferredValue);
+    if (resetSearch) this.#dropdown.close();
+  }
+
+  #setValue(id, announce = false) {
+    const value = String(id || "");
+    const item =
+      this.#options.find((option) => String(option.id) === value) ||
+      (this.#fallbackSelection?.id === value ? this.#fallbackSelection : null);
+    this.querySelector(".id-input").value = item ? value : "";
+    this.#dropdown.selection = item ? value : null;
+    if (this.getAttribute("value") !== (item ? value : "")) {
+      if (item) this.setAttribute("value", value);
+      else this.removeAttribute("value");
+    }
+    if (announce && item) {
+      this.dispatchEvent(
+        new CustomEvent("person-selected", {
+          bubbles: true,
+          detail: { person: item },
+        }),
+      );
+    }
+  }
+
+  async #addPerson(input) {
+    const name = String(input || "")
+      .trim()
+      .replace(/\s+/g, " ");
+    if (!name) return;
+    const existing = this.#options.find(
+      (item) =>
+        item.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
+    );
+    if (existing) {
+      this.#setValue(existing.id, true);
+      this.closePopup({ focusTrigger: true });
+      return;
+    }
+    try {
+      const person = await this.#createOption(name);
+      this.#refresh(person?.id || this.value);
+      this.#setValue(person?.id, true);
+      this.closePopup({ focusTrigger: true });
+      this.#onCreate(person);
+    } catch (error) {
+      this.reportSelectionError(error?.message || "Unable to add assignment");
+    }
+  }
+}
+
+customElements.define("people-select", PeopleSelect);

@@ -220,7 +220,10 @@ export class SegmentedControl
     this.#selection = item.key;
     this.#renderSelection();
     if (emit) {
-      this.#selectionHandler.dispatch({ value: item.key, title: item.title });
+      this.#selectionHandler.dispatch(
+        { value: item.key, title: item.title },
+        { bubbles: true },
+      );
     }
   }
 

@@ -84,7 +84,9 @@ export class Table<T extends object> extends HTMLElement {
       const th = document.createElement("th");
 
       if (typeof column === "object") {
-        if (column.cellClass) th.classList.add(column.cellClass);
+        if (column.cellClass) {
+          th.classList.add(...column.cellClass.split(/\s+/).filter(Boolean));
+        }
         const activeDirection =
           data.sort?.key === column.key ? data.sort.direction : null;
         const iconName: IconKeys =
@@ -169,7 +171,9 @@ export class Table<T extends object> extends HTMLElement {
           td.append(menu);
           td.classList.add("shrink");
         } else {
-          if (column.cellClass) td.classList.add(column.cellClass);
+          if (column.cellClass) {
+            td.classList.add(...column.cellClass.split(/\s+/).filter(Boolean));
+          }
           const value = row[column.key];
           const text = column.formatter?.(value, row) ?? String(value);
 
@@ -248,7 +252,9 @@ export class Table<T extends object> extends HTMLElement {
         cell.scope = "row";
       }
       if (typeof column === "object") {
-        if (column.cellClass) cell.classList.add(column.cellClass);
+        if (column.cellClass) {
+          cell.classList.add(...column.cellClass.split(/\s+/).filter(Boolean));
+        }
         cell.style.textAlign = column.textAlign ?? "left";
       }
       return cell;

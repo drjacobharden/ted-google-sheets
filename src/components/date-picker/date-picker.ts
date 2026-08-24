@@ -22,11 +22,10 @@ const datePickerTemplate = () => `
       ></custom-button>
 
      
-      <div
+      <pop-over
         class="calendar-popover"
         role="dialog"
         aria-label="Choose a date"
-        hidden
       >
         <div class="calendar-header">
           <button class="previous-month" type="button" aria-label="Previous month">
@@ -51,7 +50,7 @@ const datePickerTemplate = () => `
           <span>Sa</span>
         </div>
         <div class="calendar-grid" role="grid"></div>
-      </div>
+      </pop-over>
     </div>
   </div>
 `;
@@ -79,7 +78,20 @@ const datePickerTemplate = () => `
     #hiddenInput = null;
 
     static get observedAttributes() {
-      return ["value", "name"];
+      return ["value", "name", "alignment"];
+    }
+
+    get alignment() {
+      const value = this.getAttribute("alignment");
+      return value === "left" || value === "center" ? value : "right";
+    }
+
+    set alignment(value) {
+      if (["left", "center", "right"].includes(value)) {
+        this.setAttribute("alignment", value);
+      } else {
+        this.removeAttribute("alignment");
+      }
     }
 
     get value() {
@@ -91,7 +103,7 @@ const datePickerTemplate = () => `
     }
 
     get isOpen() {
-      return Boolean(this.#popoverElement && !this.#popoverElement.hidden);
+      return Boolean(this.#popoverElement?.classList.contains("is-visible"));
     }
 
     reportSelectionError() {
@@ -138,6 +150,7 @@ const datePickerTemplate = () => `
       this.#prevBtn.addEventListener("click", this);
       this.#nextBtn.addEventListener("click", this);
       this.#popoverElement.addEventListener("keydown", this);
+      this.#popoverElement.addEventListener("popover-dismiss", this);
       document.addEventListener("click", this);
     }
 
@@ -159,8 +172,7 @@ const datePickerTemplate = () => `
             this.#displayElement.textContent = longDateFormatter.format(date); // Call shared formatter
           }
           this.#visibleMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-          if (this.#popoverElement && !this.#popoverElement.hidden)
-            this.#renderCalendar();
+          if (this.isOpen) this.#renderCalendar();
         } else if (this.#displayElement) {
           this.#displayElement.textContent = "Select a date";
         }
@@ -175,9 +187,7 @@ const datePickerTemplate = () => `
       if (event.type === "click") {
         // Clicked on the trigger -> Toggle open or closed
         if (event.currentTarget === this.#triggerElement) {
-          this.#popoverElement.hidden
-            ? this.#openCalendar()
-            : this.#closeCalendar();
+          this.isOpen ? this.#closeCalendar() : this.#openCalendar();
         }
         // Clicked on the previous month button -> Go back one month
         else if (event.currentTarget === this.#prevBtn) {
@@ -206,11 +216,13 @@ const datePickerTemplate = () => `
       else if (event.type === "keydown" && event.key === "Escape") {
         this.#closeCalendar();
         this.#triggerElement.focus();
+      } else if (event.type === "popover-dismiss") {
+        this.#closeCalendar();
       }
     }
 
     #closeCalendar() {
-      this.#popoverElement.hidden = true;
+      this.#popoverElement?.hide();
       this.#triggerElement.setAttribute("aria-expanded", "false");
     }
 
@@ -228,8 +240,16 @@ const datePickerTemplate = () => `
       // Renders the grid for the calendar popover
       this.#renderCalendar();
 
-      // Unhides the popover
-      this.#popoverElement.hidden = false;
+      this.#popoverElement.show(this.#triggerElement, {
+        side: "bottom",
+        align:
+          this.alignment === "left"
+            ? "start"
+            : this.alignment === "center"
+              ? "center"
+              : "end",
+        gap: 8,
+      });
       this.#triggerElement.setAttribute("aria-expanded", "true");
 
       requestAnimationFrame(() => {
@@ -237,7 +257,7 @@ const datePickerTemplate = () => `
           this.#gridElement.querySelector(".selected") ||
           this.#gridElement.querySelector(".today") ||
           this.#gridElement.querySelector("button")
-        )?.focus();
+        )?.focus({ preventScroll: true });
       });
     }
 
@@ -296,6 +316,7 @@ const datePickerTemplate = () => `
       this.#prevBtn.removeEventListener("click", this);
       this.#nextBtn.removeEventListener("click", this);
       this.#popoverElement.removeEventListener("keydown", this);
+      this.#popoverElement.removeEventListener("popover-dismiss", this);
       document.removeEventListener("click", this);
     }
   }
