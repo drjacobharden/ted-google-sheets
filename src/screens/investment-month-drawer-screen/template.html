@@ -6,8 +6,7 @@
 >
   <form id="investment-month-form" class="investment-month-form" novalidate>
     <div class="investment-month-targets drawer-form-grid">
-      <investment-account-select id="investment-month-investment-account"></investment-account-select>
-      <debt-account-select id="investment-month-debt-account" hidden></debt-account-select>
+      <account-select id="investment-month-account" account-type="investment" label="Investment account"></account-select>
       <month-picker label="Month and year" alignment="center"></month-picker>
     </div>
     <currency-input

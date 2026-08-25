@@ -4,6 +4,7 @@ import { InvestmentView } from "../../utilities/investment-view";
 import { createTransactionRow } from "../../utilities/transaction-row";
 import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
+import { calculateInvestmentSavings } from "../../utilities/investment-calculations";
 import { money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -75,7 +76,7 @@ export class DashboardScreen extends HTMLElement implements EventListenerObject 
   #render(): void {
     const view = InvestmentView;
     const transactions = appController.getTransactions() ?? APIs.budget.getCachedTransactions() ?? [];
-    const totals = APIs.investment.calculate(transactions, this.#range);
+    const totals = calculateInvestmentSavings(transactions, APIs.accounts.accounts(), APIs.accounts.activity(), this.#range);
     const monthRange = view.monthRangeFromDates(this.#range);
     const metrics = view.metrics(monthRange);
     this.#summary.innerHTML =

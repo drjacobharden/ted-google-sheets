@@ -149,12 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (routeKey === openedRouteKey && !backdrop.hidden) return;
     kind = nextKind;
     accountId = id;
-    const account = id
-      ? (kind === "debt"
-          ? APIs.debt.accounts()
-          : APIs.investment.accounts()
-        ).find((item) => item.id === id)
-      : null;
+    const account = id ? APIs.accounts.accounts().find((item) => item.id === id) : null;
     if (id && !account) return;
     setKind(kind);
     kindControl.hidden = Boolean(account);
@@ -185,21 +180,9 @@ document.addEventListener("DOMContentLoaded", () => {
         name: form.elements.name.value,
         assignmentId: assignmentSelect.value,
       };
-      if (kind === "debt") {
-        const input = {
-          ...common,
-          lender: form.elements.lender.value,
-          interestRate: Number(form.elements.interestRate.value || 0),
-        };
-        if (accountId)
-          await APIs.debt.updateAccount({ id: accountId, ...input });
-        else APIs.debt.addAccount(input);
-      } else {
-        const input = { ...common, source: sourceSelect.selection };
-        if (accountId)
-          await APIs.investment.updateAccount({ id: accountId, ...input });
-        else APIs.investment.addAccount(input);
-      }
+      await APIs.accounts.saveAccount(kind === "debt"
+        ? { ...common, type: "debt", lender: form.elements.lender.value, interestRate: Number(form.elements.interestRate.value || 0), ...(accountId ? { id: accountId } : {}) }
+        : { ...common, type: "investment", source: sourceSelect.selection, ...(accountId ? { id: accountId } : {}) });
       initialState = formState();
       showToast(
         `${kind === "debt" ? "Debt" : "Investment"} account ${accountId ? "updated" : "added"}.`,
@@ -221,8 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     )
       return;
-    if (kind === "debt") await APIs.debt.archiveAccount(accountId);
-    else await APIs.investment.archiveAccount(accountId);
+    await APIs.accounts.archiveAccount(accountId);
     initialState = formState();
     close(true);
     showToast("Account archived.");

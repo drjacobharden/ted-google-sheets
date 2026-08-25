@@ -71,11 +71,11 @@ export class InvestmentDebtsScreen extends EditorialEntityLedgerScreen<DebtLedge
     const end = `${year}-${month}-31`;
     const previousEnd = `${year - 1}-${month}-31`;
     const assignments = new Map(APIs.budget.listAllPeople().map((item) => [item.id, item.name]));
-    const latest = (id: string, through: string) => APIs.debt.balances().filter((item) => item.debtAccountId === id && item.asOfDate <= through).at(-1);
-    return APIs.debt.accounts().filter((item) => item.active !== false).map((account) => {
+    const latest = (id: string, through: string) => APIs.accounts.balances().filter((item) => item.accountId === id && item.asOfDate <= through).at(-1);
+    return APIs.accounts.accounts().filter((item) => item.type === "debt" && item.active !== false).map((account) => {
       const balance = Number(latest(account.id, end)?.balance || 0);
       const previous = Number(latest(account.id, previousEnd)?.balance || 0);
-      return { id: account.id, name: account.name, lender: account.lender, interestRate: account.interestRate, assignment: assignments.get(account.assignmentId) ?? "Shared", balance, comparison: percentageChange(balance, previous) };
+      return { id: account.id, name: account.name, lender: account.lender || "", interestRate: account.interestRate || 0, assignment: assignments.get(account.assignmentId) ?? "Shared", balance, comparison: percentageChange(balance, previous) };
     }).sort((left, right) => right.balance - left.balance || left.name.localeCompare(right.name));
   }
 

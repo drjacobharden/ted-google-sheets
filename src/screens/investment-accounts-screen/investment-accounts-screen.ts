@@ -138,12 +138,12 @@ export class InvestmentAccountsScreen extends EditorialEntityLedgerScreen<Invest
     const previousEnd = `${year - 1}-${month}`;
     const balances = InvestmentView.latestByAccount(end);
     const previousBalances = InvestmentView.latestByAccount(previousEnd);
-    const contributions = APIs.investment.contributions();
+    const contributions = APIs.accounts.activity().filter((item) => item.activityType === "contribution");
     const assignments = new Map(
       APIs.budget.listAllPeople().map((item) => [item.id, item.name]),
     );
 
-    return APIs.investment.accounts()
+    return APIs.accounts.accounts().filter((item) => item.type === "investment")
       .filter((account) => account.active !== false)
       .map((account) => {
         const balance = Number(balances.get(account.id)?.balance ?? 0);

@@ -197,8 +197,8 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
 
     /** Renders active investment accounts in the target-account selector. */
     function accountOptions(): void {
-      const accounts = APIs.investment.accounts().filter(
-        (item) => item.active !== false,
+      const accounts = APIs.accounts.accounts().filter(
+        (item) => item.type === "investment" && item.active !== false,
       );
       profileForm.elements.investmentAccountId.innerHTML =
         '<option value="">Choose an account</option>' +
@@ -1102,7 +1102,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
         ),
         vendors: APIs.budget.listVendors().concat(provisional("vendor")),
         people: APIs.budget.listPeople().concat(provisional("assignment")),
-        accounts: APIs.investment.accounts(),
+        accounts: APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../../api/investment-api").InvestmentAccount[],
         sharedAssignmentId: APIs.budget.SHARED_ASSIGNMENT_ID,
       };
     }
@@ -1199,12 +1199,12 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
             .filter((value): value is string => Boolean(value)),
         );
       } else {
-        const existing = APIs.investment.balances()
+        const existing = APIs.accounts.balances()
           .filter(
             (item) => item.accountId === state.profile.investmentAccountId,
           )
-          .map((balance) => APIs.investment.monthData(balance.accountId, balance.month))
-          .filter((month): month is NonNullable<typeof month> => month !== null);
+          .map((balance) => APIs.accounts.monthData(balance.accountId, balance.month))
+          .filter((month): month is NonNullable<typeof month> => month !== null) as any;
         state.rows = importUtils.createInvestmentMonths(
           state.parsed,
           state.profile,
@@ -1232,7 +1232,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
         state.rows.forEach((row) => {
           row.errors = row.errors.filter(
             (error) => !error.includes("more than once"),
-          );
+          ) as any;
           if (row.month)
             months.set(row.month, [...(months.get(row.month) || []), row]);
         });
@@ -1487,7 +1487,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
 
     /** Renders editable staged investment months and flows. */
     function renderInvestmentRows(): void {
-      const account = APIs.investment.accounts().find(
+      const account = APIs.accounts.accounts().find(
         (item) => item.id === state.profile.investmentAccountId,
       );
       const cards = filteredRows()
@@ -1914,10 +1914,10 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
         const priorMonth = field === "month" ? row.month : "";
         row[field] = event.target.value;
         if (field === "month" && priorMonth !== row.month) {
-          row.existing = APIs.investment.monthData(
+          row.existing = APIs.accounts.monthData(
             row.accountId ?? "",
             row.month ?? "",
-          );
+          ) as any;
           if (!row.existing?.balance && !row.existing?.contributions?.length)
             row.existing = null;
           if (row.balanceOrigin === "existing") {
@@ -2173,21 +2173,21 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
         );
       } else {
         if (!checkpoint.recordIds) {
-          const queued = APIs.investment.queueImportedMonths(
+          const queued: any[] = APIs.accounts.queueImportedMonths(
             state.commit.included.map((row) => ({
               accountId: row.accountId ?? "",
               month: row.month ?? "",
               balance: row.balance ?? 0,
               asOfDate: /^\d{4}-\d{2}-\d{2}$/.test(String(row.balanceSourceDate || "")) ? String(row.balanceSourceDate) : monthEnd(row.month ?? ""),
               balanceId: row.existing?.balance?.id || "",
-              existingContributions: row.existing?.contributions || [],
-              contributions: row.flows
+              existingActivity: (row.existing?.contributions || []).map((item) => ({ ...item, activityType: "contribution" })),
+              activity: row.flows
                 .filter(
                   (flow) =>
                     Number.isFinite(Number(flow.amount)) &&
                     Number(flow.amount) !== 0,
                 )
-                .map((flow) => ({ amount: Number(flow.amount), date: /^\d{4}-\d{2}-\d{2}$/.test(flow.sourceDate) ? flow.sourceDate : midpoint(row.month ?? ""), flowType: "external" as const })),
+                .map((flow) => ({ amount: Number(flow.amount), date: /^\d{4}-\d{2}-\d{2}$/.test(flow.sourceDate) ? flow.sourceDate : midpoint(row.month ?? ""), flowType: "external" as const, activityType: "contribution" as const })),
               notes: row.existing?.balance?.notes || "",
             })),
           );
@@ -2196,10 +2196,10 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
             .filter((id): id is string => Boolean(id));
         } else {
           checkpoint.recordIds.forEach((id) =>
-            APIs.investment.retry("investmentMonth", id),
+            APIs.accounts.retry("investmentMonth", id),
           );
         }
-        await APIs.investment.awaitImportedMonths(
+        await APIs.accounts.awaitImportedMonths(
           checkpoint.recordIds ?? [],
           ({ completed, total }) =>
             updateCommitStep(

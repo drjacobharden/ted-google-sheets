@@ -16,11 +16,11 @@ export interface AppAPIs {
 const budget = BudgetAPI();
 const investment = InvestmentAPI(budget);
 const debt = DebtAPI(budget);
-const accounts = AccountAPI(investment, debt);
+const accounts = AccountAPI(investment, debt, budget);
 const imports = ImportAPI(budget);
 configureBudgetIntegrations({ investment, debt, imports });
 
 export const APIs: AppAPIs = {
   budget, accounts, investment, debt, imports,
-  getSyncItems: () => [...budget.getSyncItems(), ...investment.getSyncItems()],
+  getSyncItems: () => [...budget.getSyncItems(), ...accounts.getSyncItems()],
 };

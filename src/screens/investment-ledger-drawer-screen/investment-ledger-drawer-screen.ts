@@ -63,10 +63,11 @@ document.addEventListener("DOMContentLoaded", () => {
   let closeAnimationHandler = null;
 
   function accountOptions(type, selectedId = "") {
-    const values =
+    const values = APIs.accounts.accounts().filter((item) =>
       ["debt-payment", "borrowing"].includes(type)
-        ? APIs.debt.accounts()
-        : APIs.investment.accounts();
+        ? item.type === "debt"
+        : item.type === "investment",
+    );
     accountSelect.replaceChildren(
       new Option("Choose an account", ""),
       ...values
@@ -94,9 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function rawRecord(row) {
     if (!row) return null;
-    return row.source === "debt"
-      ? APIs.debt.payments().find((item) => item.id === row.id)
-      : APIs.investment.contributions().find((item) => item.id === row.id);
+    return APIs.accounts.activity().find((item) => item.id === row.id);
   }
 
   function formState() {
@@ -263,7 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function monthDataOrThrow(accountId, date) {
     const month = date.slice(0, 7);
-    const value = APIs.investment.monthData(accountId, month);
+    const value = APIs.accounts.monthData(accountId, month);
     if (!value?.balance) {
       throw new Error(
         "Record this account’s monthly balance before adding an investment flow.",
@@ -274,34 +273,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function saveInvestment(accountId, date, amount, id = "") {
     const value = monthDataOrThrow(accountId, date);
-    const contributions = [
-      ...value.contributions.filter((item) => item.id !== id),
-      { id: id || undefined, amount, date, flowType: "external" },
+    const activity = [
+      ...value.activity.filter((item) => item.id !== id),
+      { id: id || undefined, amount, date, activityType: "contribution", flowType: "external" },
     ];
-    APIs.investment.queueMonth({
+    APIs.accounts.saveMonth({
       accountId,
       month: date.slice(0, 7),
       balance: value.balance.balance,
       asOfDate: value.balance.asOfDate,
       balanceId: value.balance.id,
       notes: value.balance.notes,
-      existingContributions: value.contributions,
-      contributions,
+      existingActivity: value.activity,
+      activity,
     });
   }
 
   function removeInvestment(row) {
-    const value = APIs.investment.monthData(row.accountId, row.month);
+    const value = APIs.accounts.monthData(row.accountId, row.month);
     if (!value?.balance) return;
-    APIs.investment.queueMonth({
+    APIs.accounts.saveMonth({
       accountId: row.accountId,
       month: row.month,
       balance: value.balance.balance,
       asOfDate: value.balance.asOfDate,
       balanceId: value.balance.id,
       notes: value.balance.notes,
-      existingContributions: value.contributions,
-      contributions: value.contributions.filter((item) => item.id !== row.id),
+      existingActivity: value.activity,
+      activity: value.activity.filter((item) => item.id !== row.id),
     });
   }
 
@@ -338,17 +337,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (current && !sameInvestment && !sameDebt) {
         if (current.source === "investment") removeInvestment(current);
-        else await APIs.debt.deletePayment(current.id);
+        else await APIs.accounts.deleteActivity(current.id);
       }
 
       if (["debt-payment", "borrowing"].includes(type)) {
-        await APIs.debt.savePayment({
+        await APIs.accounts.saveMonth({ accountId, month: date.slice(0, 7), balance: APIs.accounts.monthData(accountId, date.slice(0, 7))?.balance?.balance || 0, existingActivity: APIs.accounts.monthData(accountId, date.slice(0, 7))?.activity || [], activity: [{
           id: sameDebt ? current.id : undefined,
-          debtAccountId: accountId,
           date,
           amount,
-          kind: type === "borrowing" ? "borrowing" : "payment",
-        });
+          activityType: type === "borrowing" ? "borrowing" : "payment",
+        }] });
       } else {
         saveInvestment(
           accountId,
@@ -378,7 +376,7 @@ document.addEventListener("DOMContentLoaded", () => {
     deleteButton.setAttribute("disabled", "");
     try {
       if (current.source === "investment") removeInvestment(current);
-      else await APIs.debt.deletePayment(current.id);
+      else await APIs.accounts.deleteActivity(current.id);
       initialFormState = formState();
       showToast("Ledger entry deleted.");
       close(true);

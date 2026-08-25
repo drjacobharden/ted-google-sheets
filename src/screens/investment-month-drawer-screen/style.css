@@ -9,7 +9,7 @@ investment-month-drawer-screen {
     align-items: end;
   }
 
-  :is(investment-account-select, debt-account-select) {
+  account-select {
     display: block;
     min-width: 0;
   }

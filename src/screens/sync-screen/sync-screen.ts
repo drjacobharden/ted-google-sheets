@@ -187,14 +187,14 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   /** Retries a transaction, investment, or entity sync item. */
   #retryItem(item: SyncItem): void {
     if (item.source === "transaction") APIs.budget.retryTransaction(item.id);
-    else if (item.source === "investmentAccount" || item.source === "investmentMonth") APIs.investment.retry(item.source, item.id);
+    else if (item.source === "investmentAccount" || item.source === "investmentMonth") APIs.accounts.retry(item.source, item.id);
     else if (item.kind) APIs.budget.retryEntity(item.kind, item.id);
   }
 
   /** Discards a transaction, investment, or entity sync item. */
   #discardItem(item: SyncItem): void {
     if (item.source === "transaction") APIs.budget.discardTransactionChange(item.id);
-    else if (item.source === "investmentAccount" || item.source === "investmentMonth") APIs.investment.discard(item.source, item.id);
+    else if (item.source === "investmentAccount" || item.source === "investmentMonth") APIs.accounts.discard(item.source, item.id);
     else if (item.kind) APIs.budget.discardEntityChange(item.kind, item.id);
   }
 

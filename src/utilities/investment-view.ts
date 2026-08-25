@@ -3,6 +3,7 @@ import { APIs } from "../api/api";
 import { DateUtils } from "./date-utilities";
 import { escapeHTML, money, netFlows } from "./view-formatters";
 import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interpolateValue } from "./investment-returns";
+import { calculateInvestmentGrowth } from "./investment-calculations";
 
   function targetEnd(year) {
     const today = new Date().toISOString().slice(0, 10);
@@ -10,29 +11,29 @@ import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interp
   }
 
   function valuesForAccount(accountId, dates) {
-    const source = APIs.investment.balances().filter((item) => item.accountId === accountId)
+    const source = APIs.accounts.balances().filter((item) => item.accountId === accountId)
       .map((item) => ({ date: item.asOfDate, value: Number(item.balance || 0) }));
     return dates.map((date) => interpolateValue(source, date)).filter(Boolean);
   }
 
   function accountPerformance(accountId, year, forcedCutoff = "") {
-    const rows = APIs.investment.balances().filter((item) => item.accountId === accountId);
+    const rows = APIs.accounts.balances().filter((item) => item.accountId === accountId);
     const cutoff = forcedCutoff || rows.filter((item) => item.asOfDate <= targetEnd(year)).at(-1)?.asOfDate;
     if (!cutoff) return { rate: null, dollarReturn: null, estimated: false, reason: "No closing balance" };
     const boundaries = annualBoundaries(year, cutoff);
     const values = valuesForAccount(accountId, boundaries);
     if (values.length !== boundaries.length) return { rate: null, dollarReturn: null, estimated: false, start: boundaries[0], end: cutoff, reason: "Add an opening and closing balance" };
-    const flows = APIs.investment.contributions().filter((item) => item.accountId === accountId && item.date > boundaries[0] && item.date <= cutoff);
+    const flows = APIs.accounts.activity().filter((item) => item.activityType === "contribution" && item.accountId === accountId && item.date > boundaries[0] && item.date <= cutoff);
     const linked = chainLinkedReturn(values, flows);
     return { ...linked, dollarReturn: dollarReturn(values[0].value, values.at(-1).value, flows), opening: values[0].value, ending: values.at(-1).value };
   }
 
   function portfolioPerformance(year) {
-    const investmentAccounts = APIs.investment.accounts().filter((item) => item.active !== false);
-    const debtAccounts = APIs.debt.accounts().filter((item) => item.active !== false);
+    const investmentAccounts = APIs.accounts.accounts().filter((item) => item.type === "investment" && item.active !== false);
+    const debtAccounts = APIs.accounts.accounts().filter((item) => item.type === "debt" && item.active !== false);
     const target = targetEnd(year);
-    const latestInvestment = investmentAccounts.map((account) => APIs.investment.balances().filter((item) => item.accountId === account.id && item.asOfDate <= target).at(-1)?.asOfDate || "");
-    const latestDebt = debtAccounts.map((account) => APIs.debt.balances().filter((item) => item.debtAccountId === account.id && item.asOfDate <= target).at(-1)?.asOfDate || "");
+    const latestInvestment = investmentAccounts.map((account) => APIs.accounts.balances().filter((item) => item.accountId === account.id && item.asOfDate <= target).at(-1)?.asOfDate || "");
+    const latestDebt = debtAccounts.map((account) => APIs.accounts.balances().filter((item) => item.accountId === account.id && item.asOfDate <= target).at(-1)?.asOfDate || "");
     const cutoff = commonCutoff([...latestInvestment, ...latestDebt]);
     if (!cutoff) return { available: false, reason: "Add opening and closing balances for every active account.", staleAccounts: [] };
     const boundaries = annualBoundaries(year, cutoff);
@@ -41,11 +42,11 @@ import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interp
       return values.every(Boolean) ? { date, value: values.reduce((sum, item) => sum + item.value, 0), interpolated: values.some((item) => item.interpolated) } : null;
     });
     const debtSeries = boundaries.map((date) => {
-      const values = debtAccounts.map((account) => interpolateValue(APIs.debt.balances().filter((item) => item.debtAccountId === account.id).map((item) => ({ date: item.asOfDate, value: Number(item.balance || 0) })), date));
+      const values = debtAccounts.map((account) => interpolateValue(APIs.accounts.balances().filter((item) => item.accountId === account.id).map((item) => ({ date: item.asOfDate, value: Number(item.balance || 0) })), date));
       return values.every(Boolean) ? { date, value: values.reduce((sum, item) => sum + item.value, 0), interpolated: values.some((item) => item.interpolated) } : debtAccounts.length ? null : { date, value: 0, interpolated: false };
     });
     if (investmentSeries.some((item) => !item) || debtSeries.some((item) => !item)) return { available: false, cutoff, reason: "Add balances around the prior year-end so the opening value can be calculated.", staleAccounts: [] };
-    const externalFlows = APIs.investment.contributions().filter((item) => item.flowType !== "transfer" && item.date > boundaries[0] && item.date <= cutoff);
+    const externalFlows = APIs.accounts.activity().filter((item) => item.activityType === "contribution" && item.flowType !== "transfer" && item.date > boundaries[0] && item.date <= cutoff);
     const linked = chainLinkedReturn(investmentSeries, externalFlows);
     const openingInvestments = investmentSeries[0].value;
     const endingInvestments = investmentSeries.at(-1).value;
@@ -78,7 +79,7 @@ import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interp
 
   function latestByAccount(end = "9999-12") {
     const latest = new Map();
-    APIs.investment.balances()
+    APIs.accounts.balances()
       .filter((item) => item.month <= end)
       .sort((a, b) => a.month.localeCompare(b.month))
       .forEach((item) => latest.set(item.accountId, item));
@@ -86,11 +87,9 @@ import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interp
   }
 
   function metrics(range) {
-    const allBalances = APIs.investment.balances();
-    const allFlows = APIs.investment.contributions();
-    const accounts = APIs.investment.accounts().filter(
-      (item) => item.active !== false,
-    );
+    const allBalances = APIs.accounts.balances();
+    const allFlows = APIs.accounts.activity().filter((item) => item.activityType === "contribution");
+    const accounts = APIs.accounts.accounts().filter((item) => item.type === "investment" && item.active !== false);
     const ending = latestByAccount(range.end || "9999-12");
     let balance = 0;
     let contributions = 0;
@@ -118,7 +117,7 @@ import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interp
         ? rows.filter((item) => item.month < range.start).at(-1)
         : null;
       if (opening && closing) {
-        growth += APIs.investment.calculateGrowth(
+        growth += calculateInvestmentGrowth(
           opening.balance,
           closing.balance,
           flows,
@@ -255,9 +254,9 @@ import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interp
   }
 
   function legacyTrendSeries() {
-    const balances = APIs.investment.balances();
+    const balances = APIs.accounts.balances();
     const months = [...new Set(balances.map((item) => item.month))].sort();
-    const accounts = APIs.investment.accounts();
+    const accounts = APIs.accounts.accounts().filter((item) => item.type === "investment");
     return {
       months,
       balances: months.map((month) =>
@@ -322,9 +321,9 @@ import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interp
   function trendSeries(options) {
     return options
       ? buildTrendSeries({
-          balances: APIs.investment.balances(),
-          contributions: APIs.investment.contributions(),
-          accounts: APIs.investment.accounts(),
+          balances: APIs.accounts.balances(),
+          contributions: APIs.accounts.activity().filter((item) => item.activityType === "contribution"),
+          accounts: APIs.accounts.accounts().filter((item) => item.type === "investment"),
           range: monthRangeFromDates(options.range),
         })
       : legacyTrendSeries();

@@ -52,21 +52,21 @@ export class InvestmentDebtDetailScreen extends HTMLElement implements EventList
   }
 
   #render(): void {
-    const account = APIs.debt.accounts().find((item) => item.id === this.#accountId && item.active !== false);
+    const account = APIs.accounts.accounts().find((item) => item.id === this.#accountId && item.type === "debt" && item.active !== false);
     if (!account) {
       router.navigate("investment-debts", { year: String(this.#year) });
       return;
     }
     this.querySelector<HTMLElement>("#debt-detail-title")!.textContent = account.name;
     this.querySelector<HTMLElement>("#debt-detail-subtitle")!.textContent = `Viewing summary for ${this.#year}`;
-    const rows = APIs.debt.balances().filter((item) => item.debtAccountId === this.#accountId && item.month.startsWith(`${this.#year}-`)).sort((a, b) => b.month.localeCompare(a.month));
-    const payments = APIs.debt.payments();
+    const rows = APIs.accounts.balances().filter((item) => item.accountId === this.#accountId && item.month.startsWith(`${this.#year}-`)).sort((a, b) => b.month.localeCompare(a.month));
+    const payments = APIs.accounts.activity();
     let paid = 0;
     let borrowed = 0;
     this.querySelector<HTMLTableSectionElement>("#debt-history-body")!.innerHTML = rows.map((balance) => {
-      const monthFlows = payments.filter((item) => item.debtAccountId === this.#accountId && item.month === balance.month);
-      const monthPaid = monthFlows.filter((item) => item.kind !== "borrowing").reduce((sum, item) => sum + item.amount, 0);
-      const monthBorrowed = monthFlows.filter((item) => item.kind === "borrowing").reduce((sum, item) => sum + item.amount, 0);
+      const monthFlows = payments.filter((item) => item.accountId === this.#accountId && item.month === balance.month);
+      const monthPaid = monthFlows.filter((item) => item.activityType === "payment").reduce((sum, item) => sum + item.amount, 0);
+      const monthBorrowed = monthFlows.filter((item) => item.activityType === "borrowing").reduce((sum, item) => sum + item.amount, 0);
       paid += monthPaid;
       borrowed += monthBorrowed;
       return `<tr tabindex="0" role="button" data-month="${balance.month}"><th scope="row">${escapeHTML(InvestmentView.formatMonth(balance.month))}</th><td class="is-number">${money(monthPaid)}</td><td class="is-number">${money(monthBorrowed)}</td><td class="is-number is-total">${money(balance.balance)}</td></tr>`;

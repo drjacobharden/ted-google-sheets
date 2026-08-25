@@ -153,46 +153,45 @@ export class InvestmentOverviewScreen
     const previous = InvestmentView.metrics(previousRange(range));
     const values = InvestmentView.metrics(range);
     const activeAccountIds = new Set(
-      APIs.investment
-        .accounts()
-        .filter((account) => account.active !== false)
+      APIs.accounts.accounts()
+        .filter((account) => account.type === "investment" && account.active !== false)
         .map((account) => account.id),
     );
     const lifetimeContributions = netFlows(
-      APIs.investment
-        .contributions()
+      APIs.accounts.activity()
+        .filter((item) => item.activityType === "contribution")
         .filter(
           (item) =>
             activeAccountIds.has(item.accountId) && item.month <= range.end,
         ),
     );
-    const debtRows = APIs.debt
+    const debtRows = APIs.accounts
       .balances()
       .filter((item) => item.asOfDate <= `${range.end}-31`);
-    const debt = APIs.debt
+    const debt = APIs.accounts
       .accounts()
-      .filter((item) => item.active !== false)
+      .filter((item) => item.type === "debt" && item.active !== false)
       .reduce(
         (sum, account) =>
           sum +
           Number(
-            debtRows.filter((item) => item.debtAccountId === account.id).at(-1)
+            debtRows.filter((item) => item.accountId === account.id).at(-1)
               ?.balance || 0,
           ),
         0,
       );
-    const previousDebt = APIs.debt
+    const previousDebt = APIs.accounts
       .accounts()
-      .filter((item) => item.active !== false)
+      .filter((item) => item.type === "debt" && item.active !== false)
       .reduce(
         (sum, account) =>
           sum +
           Number(
-            APIs.debt
+            APIs.accounts
               .balances()
               .filter(
                 (item) =>
-                  item.debtAccountId === account.id && item.month < range.start,
+                  item.accountId === account.id && item.month < range.start,
               )
               .at(-1)?.balance || 0,
           ),
@@ -230,12 +229,12 @@ export class InvestmentOverviewScreen
   }
 
   #renderAccounts(range: YearRange): void {
-    const accounts = APIs.investment
+    const accounts = APIs.accounts
       .accounts()
-      .filter((account) => account.active !== false);
+      .filter((account) => account.type === "investment" && account.active !== false);
     const balances = InvestmentView.latestByAccount(range.end);
     const previousBalances = InvestmentView.latestByAccount(previousRange(range).end);
-    const flows = APIs.investment.contributions();
+    const flows = APIs.accounts.activity().filter((item) => item.activityType === "contribution");
     const rows = accounts.map((account) => {
       const balance = Number(balances.get(account.id)?.balance ?? 0);
       const contributions = netFlows(

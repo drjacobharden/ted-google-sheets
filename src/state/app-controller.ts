@@ -18,8 +18,8 @@ function buildBudgetOverviewState(
   const monthlyTransactionSummaries = buildMonthlyTransactionSummaries(sourceTransactions);
   const annualSummaryCards = buildAnnualSummaryCards(
     sourceTransactions,
-    APIs.investment.accounts(),
-    APIs.investment.contributions(),
+    APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-api").InvestmentAccount[],
+    APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-api").InvestmentContribution[],
   );
   const years = [...new Set([
     ...Object.keys(monthlyTransactionSummaries).map(Number),
@@ -60,8 +60,8 @@ function updateDerivedTransactionState(): void {
   const currentYear = new Date().getFullYear();
   const annualSummaryCards = buildAnnualSummaryCards(
     transactions,
-    APIs.investment.accounts(),
-    APIs.investment.contributions(),
+    APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-api").InvestmentAccount[],
+    APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-api").InvestmentContribution[],
   );
   const years = [...new Set([
     ...Object.keys(monthlyTransactionSummaries).map(Number),
@@ -115,12 +115,7 @@ export async function initializeData(options: { refresh?: boolean; startup?: boo
   emit("budget:data-refresh-started", { source: cached ? "cache" : "network", coldStart: Boolean(options.startup && connected && !loaded), connected });
   appDataPromise = APIs.budget.loadAppData({ refresh: options.refresh }).then(async data => {
     transactions = data.transactions ?? []; loaded = true; referenceDataLoaded = true; updateDerivedTransactionState();
-    await APIs.investment.load();
-    await APIs.debt.load().catch(() => ({
-      accounts: APIs.debt.accounts(),
-      balances: APIs.debt.balances(),
-      payments: APIs.debt.payments(),
-    }));
+    await APIs.accounts.load();
     emit("budget:transactions-loaded", { source: "server" });
     emit("budget:data-refresh-complete", { source: "server" });
     return data;
@@ -170,8 +165,8 @@ export const appController = {
         buildMonthlyTransactionSummaries(sourceTransactions),
       annualSummaryCards: buildAnnualSummaryCards(
         sourceTransactions,
-        APIs.investment.accounts(),
-        APIs.investment.contributions(),
+        APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-api").InvestmentAccount[],
+        APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-api").InvestmentContribution[],
         { assignmentId },
       ).summaries,
     };

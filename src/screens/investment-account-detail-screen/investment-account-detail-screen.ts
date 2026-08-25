@@ -54,15 +54,15 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
   }
 
   #render(): void {
-    const account = APIs.investment.accounts().find((item) => item.id === this.#accountId && item.active !== false);
+    const account = APIs.accounts.accounts().find((item) => item.id === this.#accountId && item.type === "investment" && item.active !== false);
     if (!account) {
-      if (APIs.investment.isLoaded()) router.navigate("investment-accounts", { year: String(this.#year) });
+      router.navigate("investment-accounts", { year: String(this.#year) });
       return;
     }
     this.querySelector<HTMLElement>("#investment-detail-title")!.textContent = account.name;
     this.querySelector<HTMLElement>("#investment-detail-subtitle")!.textContent = `Viewing summary for ${this.#year}`;
-    const rows = APIs.investment.balances().filter((item) => item.accountId === this.#accountId && item.month.startsWith(`${this.#year}-`)).sort((a, b) => b.month.localeCompare(a.month));
-    const flows = APIs.investment.contributions();
+    const rows = APIs.accounts.balances().filter((item) => item.accountId === this.#accountId && item.month.startsWith(`${this.#year}-`)).sort((a, b) => b.month.localeCompare(a.month));
+    const flows = APIs.accounts.activity().filter((item) => item.activityType === "contribution");
     let total = 0;
     this.querySelector<HTMLTableSectionElement>("#investment-account-history-body")!.innerHTML = rows.map((balance) => {
       const contribution = netFlows(flows.filter((item) => item.accountId === this.#accountId && item.month === balance.month));

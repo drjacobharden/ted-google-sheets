@@ -32,8 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const drawer = backdrop.querySelector(".side-drawer");
   const form = root.querySelector("#investment-month-form");
   const header = backdrop.querySelector("drawer-header");
-  const investmentAccountSelect = root.querySelector("investment-account-select");
-  const debtAccountSelect = root.querySelector("debt-account-select");
+  const accountSelect = root.querySelector("account-select");
   const monthPicker = form.querySelector("month-picker");
   const balanceInput = form?.querySelector(".investment-month-balance");
   const investmentFields = root.querySelector(
@@ -59,7 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let returnFocus = null;
 
   function activeAccountSelect() {
-    return kind === "debt" ? debtAccountSelect : investmentAccountSelect;
+    return accountSelect;
   }
 
   const defaultDate = () =>
@@ -97,8 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function populateAccounts(selected = "") {
-    investmentAccountSelect.value = kind === "investment" ? selected : "";
-    debtAccountSelect.value = kind === "debt" ? selected : "";
+    accountSelect.value = selected;
   }
 
   function clearLists() {
@@ -114,44 +112,35 @@ document.addEventListener("DOMContentLoaded", () => {
     clearLists();
     existingBalance = null;
 
-    if (kind === "investment" && accountId) {
-      const value = APIs.investment.monthData(accountId, monthPicker.value);
+    if (accountId) {
+      const value = APIs.accounts.monthData(accountId, monthPicker.value);
       existingBalance = value?.balance || null;
       balanceInput.value = value?.balance?.balance ?? "";
-      contributionList.innerHTML = (value?.contributions || [])
+      const flows = value?.activity || [];
+      contributionList.innerHTML = flows
+        .filter((item) => item.activityType === "contribution")
         .filter((item) => item.amount > 0)
         .map((item) => flowRow(item, "Contribution"))
         .join("");
-      withdrawalList.innerHTML = (value?.contributions || [])
+      withdrawalList.innerHTML = flows
+        .filter((item) => item.activityType === "contribution")
         .filter((item) => item.amount < 0)
         .map((item) => flowRow(item, "Withdrawal"))
         .join("");
-    } else if (kind === "debt" && accountId) {
-      existingBalance =
-        APIs.debt
-          .balances()
-          .find(
-            (item) =>
-              item.debtAccountId === accountId &&
-              item.month === monthPicker.value,
-          ) || null;
-      balanceInput.value = existingBalance?.balance ?? "";
-      const flows = APIs.debt
-        .payments()
-        .filter(
-          (item) =>
-            item.debtAccountId === accountId &&
-            item.month === monthPicker.value,
-        );
       paymentList.innerHTML = flows
-        .filter((item) => item.kind !== "borrowing")
+        .filter((item) => item.activityType === "payment")
         .map((item) => flowRow(item, "Payment"))
         .join("");
       borrowingList.innerHTML = flows
-        .filter((item) => item.kind === "borrowing")
+        .filter((item) => item.activityType === "borrowing")
         .map((item) => flowRow(item, "New borrowing"))
         .join("");
     } else balanceInput.value = "";
+    if (kind === "investment") {
+      paymentList.replaceChildren(); borrowingList.replaceChildren();
+    } else {
+      contributionList.replaceChildren(); withdrawalList.replaceChildren();
+    }
 
     const existing = Boolean(existingBalance);
     header.title = existing ? `Edit ${kind} month` : `New ${kind} entry`;
@@ -169,8 +158,8 @@ document.addEventListener("DOMContentLoaded", () => {
     kind = nextKind === "debt" ? "debt" : "investment";
     investmentFields.hidden = kind !== "investment";
     debtFields.hidden = kind !== "debt";
-    investmentAccountSelect.hidden = kind !== "investment";
-    debtAccountSelect.hidden = kind !== "debt";
+    accountSelect.setAttribute("account-type", kind);
+    accountSelect.setAttribute("label", kind === "debt" ? "Debt account" : "Investment account");
 
     balanceInput.label =
       kind === "debt" ? "Outstanding balance" : "Ending balance";
@@ -291,36 +280,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  async function saveDebtMonth() {
-    const accountId = activeAccountSelect().value;
-    const month = monthPicker.value;
-    await APIs.debt.saveBalance({
-      id: existingBalance?.id,
-      debtAccountId: accountId,
-      asOfDate: monthEnd(month),
-      balance: balanceInput.value,
-    });
-    const existing = APIs.debt
-      .payments()
-      .filter(
-        (item) => item.debtAccountId === accountId && item.month === month,
-      );
-    const drafts = [
-      ...collect(paymentList).map((item) => ({ ...item, kind: "payment" })),
-      ...collect(borrowingList).map((item) => ({ ...item, kind: "borrowing" })),
-    ];
-    const retained = new Set(drafts.map((item) => item.id).filter(Boolean));
-    await Promise.all(
-      existing
-        .filter((item) => !retained.has(item.id))
-        .map((item) => APIs.debt.deletePayment(item.id)),
-    );
-    await Promise.all(
-      drafts.map((item) =>
-        APIs.debt.savePayment({ ...item, debtAccountId: accountId }),
-      ),
-    );
-  }
 
   addListener("segmented-control-selection", drawer, (event) => {
     handleCustomEvent("segmented-control-selection", event, ({ value }) => {
@@ -339,8 +298,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function handleAccountSelection() {
     populateTarget(activeAccountSelect().value, monthPicker.value);
   }
-  investmentAccountSelect.addEventListener("investment-account-selected", handleAccountSelection);
-  debtAccountSelect.addEventListener("debt-account-selected", handleAccountSelection);
+  accountSelect.addEventListener("account-selected", handleAccountSelection);
   monthPicker.addEventListener("change", () =>
     populateTarget(activeAccountSelect().value, monthPicker.value),
   );
@@ -368,24 +326,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     submit.setAttribute("disabled", "");
     try {
-      if (kind === "investment") {
-        const current = APIs.investment.monthData(
-          activeAccountSelect().value,
-          monthPicker.value,
-        );
-        APIs.investment.queueMonth({
-          accountId: activeAccountSelect().value,
-          month: monthPicker.value,
-          balance: balanceInput.value,
-          asOfDate: monthEnd(monthPicker.value),
-          balanceId: current?.balance?.id,
-          existingContributions: current?.contributions || [],
-          contributions: [
-            ...collect(contributionList, 1),
-            ...collect(withdrawalList, -1),
-          ].map((item) => ({ ...item, flowType: "external" })),
-        });
-      } else await saveDebtMonth();
+      const current = APIs.accounts.monthData(activeAccountSelect().value, monthPicker.value);
+      await APIs.accounts.saveMonth({ accountId: activeAccountSelect().value, month: monthPicker.value, balance: balanceInput.value, asOfDate: monthEnd(monthPicker.value), balanceId: current?.balance?.id, existingActivity: current?.activity || [], activity: kind === "investment"
+        ? [...collect(contributionList, 1), ...collect(withdrawalList, -1)].map((item) => ({ ...item, activityType: "contribution", flowType: "external" }))
+        : [...collect(paymentList), ...collect(borrowingList)].map((item, index, all) => ({ ...item, activityType: index < paymentList.querySelectorAll(".investment-flow-row").length ? "payment" : "borrowing" })) });
       initialState = state();
       showToast(`${kind === "debt" ? "Debt" : "Investment"} month saved.`);
       if (!existingBalance && batchInput.checked) {

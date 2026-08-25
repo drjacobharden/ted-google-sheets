@@ -35,7 +35,7 @@ function contentRoute(name: RouteName): string {
 function availableYears(): number[] {
   const currentYear = new Date().getFullYear();
   const years = new Set<number>([currentYear]);
-  [...APIs.investment.balances(), ...APIs.investment.contributions(), ...APIs.debt.balances(), ...APIs.debt.payments()].forEach(
+  [...APIs.accounts.balances(), ...APIs.accounts.activity()].forEach(
     (item) => {
       const year = Number(String(item.month).slice(0, 4));
       if (Number.isInteger(year) && year >= 1900 && year <= currentYear) {
