@@ -186,7 +186,7 @@ export class InvestmentLedgerScreen
       .filter((row) => row.month.startsWith(String(this.#year())))
       .filter(
         (row) =>
-          !this.#selectedMonth || row.date.slice(5, 7) === this.#selectedMonth,
+          !this.#selectedMonth || row.month.slice(5, 7) === this.#selectedMonth,
       )
       .filter(
         (row) =>

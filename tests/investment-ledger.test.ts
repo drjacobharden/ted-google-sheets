@@ -17,4 +17,13 @@ describe("investment ledger", () => {
     expect(rows.map((row) => row.amount)).toEqual([-250, -100, 500]);
     expect(rows.some((row) => row.id === "t")).toBe(false);
   });
+
+  test("uses the reporting month and a midpoint display date for legacy activity without a date", () => {
+    const [row] = buildInvestmentLedgerRows(
+      [{ id: "a", name: "Brokerage" }],
+      [{ id: "i", accountId: "a", date: "", month: "2026-03", amount: 500, activityType: "contribution", flowType: "external" }],
+    );
+    expect(row.month).toBe("2026-03");
+    expect(row.date).toBe("2026-03-15");
+  });
 });

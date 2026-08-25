@@ -2,7 +2,7 @@
 import { APIs } from "../api/api";
 import { DateUtils } from "./date-utilities";
 import { escapeHTML, money, netFlows } from "./view-formatters";
-import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interpolateValue } from "./investment-returns";
+import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interpolateValue, midpoint } from "./investment-returns";
 import { calculateInvestmentGrowth } from "./investment-calculations";
 
   function targetEnd(year) {
@@ -16,6 +16,15 @@ import { calculateInvestmentGrowth } from "./investment-calculations";
     return dates.map((date) => interpolateValue(source, date)).filter(Boolean);
   }
 
+  function contributionFlows(accountId, startMonth, endMonth, externalOnly = false) {
+    return APIs.accounts.activity()
+      .filter((item) => item.activityType === "contribution")
+      .filter((item) => item.accountId === accountId)
+      .filter((item) => !externalOnly || item.flowType !== "transfer")
+      .filter((item) => item.month > startMonth && item.month <= endMonth)
+      .map((item) => ({ ...item, date: /^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")) ? item.date : midpoint(item.month) }));
+  }
+
   function accountPerformance(accountId, year, forcedCutoff = "") {
     const rows = APIs.accounts.balances().filter((item) => item.accountId === accountId);
     const cutoff = forcedCutoff || rows.filter((item) => item.asOfDate <= targetEnd(year)).at(-1)?.asOfDate;
@@ -23,7 +32,7 @@ import { calculateInvestmentGrowth } from "./investment-calculations";
     const boundaries = annualBoundaries(year, cutoff);
     const values = valuesForAccount(accountId, boundaries);
     if (values.length !== boundaries.length) return { rate: null, dollarReturn: null, estimated: false, start: boundaries[0], end: cutoff, reason: "Add an opening and closing balance" };
-    const flows = APIs.accounts.activity().filter((item) => item.activityType === "contribution" && item.accountId === accountId && item.date > boundaries[0] && item.date <= cutoff);
+    const flows = contributionFlows(accountId, boundaries[0].slice(0, 7), cutoff.slice(0, 7));
     const linked = chainLinkedReturn(values, flows);
     return { ...linked, dollarReturn: dollarReturn(values[0].value, values.at(-1).value, flows), opening: values[0].value, ending: values.at(-1).value };
   }
@@ -46,7 +55,7 @@ import { calculateInvestmentGrowth } from "./investment-calculations";
       return values.every(Boolean) ? { date, value: values.reduce((sum, item) => sum + item.value, 0), interpolated: values.some((item) => item.interpolated) } : debtAccounts.length ? null : { date, value: 0, interpolated: false };
     });
     if (investmentSeries.some((item) => !item) || debtSeries.some((item) => !item)) return { available: false, cutoff, reason: "Add balances around the prior year-end so the opening value can be calculated.", staleAccounts: [] };
-    const externalFlows = APIs.accounts.activity().filter((item) => item.activityType === "contribution" && item.flowType !== "transfer" && item.date > boundaries[0] && item.date <= cutoff);
+    const externalFlows = investmentAccounts.flatMap((account) => contributionFlows(account.id, boundaries[0].slice(0, 7), cutoff.slice(0, 7), true));
     const linked = chainLinkedReturn(investmentSeries, externalFlows);
     const openingInvestments = investmentSeries[0].value;
     const endingInvestments = investmentSeries.at(-1).value;

@@ -537,6 +537,7 @@ function ensureDataModel_() {
   getTableSheet_(TABLES.accounts);
   getTableSheet_(TABLES.accountBalances);
   getTableSheet_(TABLES.accountActivity);
+  backfillAccountActivityDates_();
   migrateLegacyAccountsV11_();
   getTableSheet_(TABLES.importProfiles);
   getTableSheet_(TABLES.importVendorMappings);
@@ -544,6 +545,24 @@ function ensureDataModel_() {
   seedDefaults_();
   getTransactionSheet_();
   getLedgerSheet_();
+}
+
+/** Repairs pre-unification activity whose reporting month was present but date was blank. */
+function backfillAccountActivityDates_() {
+  const sheet = getTableSheet_(TABLES.accountActivity);
+  readRecords_(TABLES.accountActivity, true).forEach(function (record) {
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(String(record.date || "")) ||
+      !validMonth_(record.month)
+    )
+      return;
+    record.date = record.month + "-15";
+    const row = findRowById_(sheet, record.id);
+    if (row)
+      sheet
+        .getRange(row, 1, 1, TABLES.accountActivity.headers.length)
+        .setValues([recordToRow_(TABLES.accountActivity, record)]);
+  });
 }
 
 function seedDefaults_() {
@@ -3029,7 +3048,7 @@ function migrateLegacyAccountsV11_() {
   legacy.debtAccounts.forEach(function (item) { addAccount(item, "debt"); });
   const balances = legacy.investmentBalances.map(function (item) { return { ...item, accountId: item.accountId }; })
     .concat(legacy.debtBalances.map(function (item) { return { id: item.id, accountId: item.debtAccountId, month: item.month, balance: item.balance, notes: item.notes, createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy, asOfDate: item.asOfDate }; }));
-  const activity = legacy.investmentContributions.map(function (item) { return { id: item.id, accountId: item.accountId, date: item.date, month: item.month, amount: item.amount, activityType: "contribution", flowType: item.flowType, transferId: item.transferId, counterpartyAccountId: item.counterpartyAccountId, createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy }; })
+  const activity = legacy.investmentContributions.map(function (item) { return { id: item.id, accountId: item.accountId, date: item.date || item.month + "-15", month: item.month, amount: item.amount, activityType: "contribution", flowType: item.flowType, transferId: item.transferId, counterpartyAccountId: item.counterpartyAccountId, createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy }; })
     .concat(legacy.debtPayments.map(function (item) { return { id: item.id, accountId: item.debtAccountId, date: item.date, month: item.month, amount: item.amount, activityType: item.kind === "borrowing" ? "borrowing" : "payment", flowType: "", transferId: "", counterpartyAccountId: "", createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy }; }));
   function appendMissing(spec, records) {
     const existing = readRecords_(spec, true);
