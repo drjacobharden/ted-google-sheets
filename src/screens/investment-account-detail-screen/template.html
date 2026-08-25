@@ -1,16 +1,41 @@
 <section class="investment-detail editorial-theme">
-  <header class="investment-detail__intro">
-    <div><h1 id="investment-detail-title">Investment account</h1><p id="investment-detail-subtitle">Viewing summary</p></div>
-    <button class="editorial-button" id="edit-investment-account" type="button">Edit account</button>
+  <header class="tab-header">
+    <div class="tab-header-title">
+      <h1 id="investment-detail-title">Investment account</h1>
+      <p id="investment-detail-subtitle">Viewing summary</p>
+    </div>
+    <button class="editorial-button" id="edit-investment-account" type="button">
+      Edit account
+    </button>
   </header>
   <section class="editorial-section" aria-labelledby="investment-history-title">
-    <header class="editorial-section-header"><h2 id="investment-history-title" class="type-section-title">Month by month</h2></header>
-    <div class="investment-detail__table-wrap" id="investment-account-history-wrap">
+    <header class="editorial-section-header">
+      <h2 id="investment-history-title" class="type-section-title">
+        Month by month
+      </h2>
+    </header>
+    <div
+      class="investment-detail__table-wrap"
+      id="investment-account-history-wrap"
+    >
       <table class="investment-detail__table">
-        <thead><tr><th>Month</th><th class="is-number">Contributions</th><th class="is-number">Balance</th></tr></thead>
-        <tbody id="investment-account-history-body"></tbody><tfoot id="investment-account-history-footer"></tfoot>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="is-number">Contributions</th>
+            <th class="is-number">Balance</th>
+          </tr>
+        </thead>
+        <tbody id="investment-account-history-body"></tbody>
+        <tfoot id="investment-account-history-footer"></tfoot>
       </table>
     </div>
-    <p id="investment-account-history-empty" class="investment-detail__empty" hidden>No monthly balances have been recorded for this year.</p>
+    <p
+      id="investment-account-history-empty"
+      class="investment-detail__empty"
+      hidden
+    >
+      No monthly balances have been recorded for this year.
+    </p>
   </section>
 </section>
