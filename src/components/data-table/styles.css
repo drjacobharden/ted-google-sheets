@@ -85,7 +85,7 @@ data-table {
       border-bottom: var(--rule-thin) solid var(--color-rule);
 
       &:hover {
-        background: var(--color-surface-subtle);
+        background-color: var(--color-surface-subtle);
       }
     }
 
