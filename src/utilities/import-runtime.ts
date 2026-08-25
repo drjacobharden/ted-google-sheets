@@ -1,6 +1,6 @@
 import type { BudgetEntity, TransactionType } from "../api/budget-api";
 import type { ImportProfile, ImportProfileBundle } from "../api/import-api";
-import type { InvestmentAccount, InvestmentMonth } from "../api/investment-api";
+import type { InvestmentAccount, InvestmentMonth } from "../api/investment-types";
 
 export type ImportColumnReference = number | string | { index: number } | null | undefined;
 export type ImportColumnKey =

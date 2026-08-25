@@ -145,10 +145,17 @@ export class BudgetingHeader
     if (event.type === "app:route-changed") {
       const detail = (event as CustomEvent<RouteChangedEventDetail>).detail;
       if (router.isBudgetingRoute(detail.name)) this.#applyRoute(detail);
-      else this.hidden = true;
+      else {
+        this.#route = null;
+        this.hidden = true;
+      }
       return;
     }
-    if (this.#route) this.#applyRoute(this.#route);
+    this.#applyRoute({
+      name: router.currentRoute(),
+      route: router.currentRoute(),
+      params: router.currentParams(),
+    });
   }
 
   #captureElements(): void {
@@ -181,6 +188,9 @@ export class BudgetingHeader
       detail.params.year !== canonicalParams.year ||
       detail.params.assignment !== undefined
     ) {
+      // The header can connect before #route-outlet has been parsed. Let the
+      // router's DOM-ready announcement perform this normalization instead.
+      if (!document.getElementById("route-outlet")) return;
       router.replace(detail.name, canonicalParams);
       return;
     }

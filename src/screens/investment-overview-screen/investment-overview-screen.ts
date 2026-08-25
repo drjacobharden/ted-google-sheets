@@ -79,9 +79,8 @@ export class InvestmentOverviewScreen
     if (this.#listening) return;
     this.#listening = true;
     window.addEventListener("app:route-changed", this);
-    window.addEventListener("budget:investments-changed", this);
-    window.addEventListener("budget:investments-loaded", this);
-    window.addEventListener("budget:debts-changed", this);
+    window.addEventListener("budget:accounts-changed", this);
+    window.addEventListener("budget:accounts-loaded", this);
     this.addEventListener("click", this);
     this.addEventListener("keydown", this);
     this.#readYear();
@@ -94,9 +93,8 @@ export class InvestmentOverviewScreen
     this.#cleanupTrend?.();
     this.#cleanupTrend = null;
     window.removeEventListener("app:route-changed", this);
-    window.removeEventListener("budget:investments-changed", this);
-    window.removeEventListener("budget:investments-loaded", this);
-    window.removeEventListener("budget:debts-changed", this);
+    window.removeEventListener("budget:accounts-changed", this);
+    window.removeEventListener("budget:accounts-loaded", this);
     this.removeEventListener("click", this);
     this.removeEventListener("keydown", this);
   }

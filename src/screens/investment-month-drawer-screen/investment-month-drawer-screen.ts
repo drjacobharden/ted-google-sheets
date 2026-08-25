@@ -361,7 +361,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (event.key === "Escape" && !backdrop.hidden) close();
   });
   window.addEventListener("app:route-changed", openFromRoute);
-  window.addEventListener("budget:investments-loaded", openFromRoute);
+  window.addEventListener("budget:accounts-loaded", openFromRoute);
   window.addEventListener("drawer:close-requested", () => close());
   openFromRoute();
 });

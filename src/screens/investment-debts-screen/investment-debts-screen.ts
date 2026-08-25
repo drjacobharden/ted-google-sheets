@@ -43,7 +43,7 @@ export class InvestmentDebtsScreen extends EditorialEntityLedgerScreen<DebtLedge
   }
 
   protected dataEventNames(): string[] {
-    return ["budget:debts-changed", "budget:people-changed", "budget:reference-data-changed"];
+    return ["budget:accounts-changed", "budget:accounts-loaded", "budget:people-changed", "budget:reference-data-changed"];
   }
 
   protected availableFilters(year: number): AvailableFilter<DebtLedgerRow>[] {

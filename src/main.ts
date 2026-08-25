@@ -85,6 +85,10 @@ const OVERLAY_PARAMS = new Set([
   "investmentLedgerSource",
 ]);
 let mountedContentKey = "";
+let pendingRoute: {
+  name: RouteChangedEventDetail["name"];
+  params: RouteChangedEventDetail["params"];
+} | null = null;
 
 function renderRoute({
   name,
@@ -94,7 +98,13 @@ function renderRoute({
   params: RouteChangedEventDetail["params"];
 }): void {
   const outlet = document.getElementById("route-outlet");
-  if (!outlet) throw new Error("Missing route outlet");
+  // Custom-element headers can normalize a route while the parser is still in
+  // the document head/body transition. Defer that render until the outlet is
+  // mounted instead of aborting application startup.
+  if (!outlet) {
+    pendingRoute = { name, params };
+    return;
+  }
 
   const contentParams = Object.fromEntries(
     Object.entries(params).filter(([key]) => !OVERLAY_PARAMS.has(key)),
@@ -134,6 +144,11 @@ window.addEventListener(
   () => void appController.initializeData(),
 );
 document.addEventListener("DOMContentLoaded", () => {
+  if (pendingRoute) {
+    const route = pendingRoute;
+    pendingRoute = null;
+    renderRoute(route);
+  }
   if (!OnboardingUI?.isBlocking())
     void appController.initializeData({ startup: true }).catch(() => {});
   router.start();

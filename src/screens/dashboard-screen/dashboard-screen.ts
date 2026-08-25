@@ -34,8 +34,8 @@ export class DashboardScreen extends HTMLElement implements EventListenerObject 
     this.#listening = true;
     this.#range = this.#rangePicker.value;
     this.addEventListener("date-range-changed", this);
-    window.addEventListener("budget:investments-changed", this);
-    window.addEventListener("budget:investments-loaded", this);
+    window.addEventListener("budget:accounts-changed", this);
+    window.addEventListener("budget:accounts-loaded", this);
     window.addEventListener("budget:transaction-saved", this);
     window.addEventListener("budget:transaction-queued", this);
     this.#render();
@@ -48,8 +48,8 @@ export class DashboardScreen extends HTMLElement implements EventListenerObject 
     this.#cleanupTrend?.();
     this.#cleanupTrend = null;
     this.removeEventListener("date-range-changed", this);
-    window.removeEventListener("budget:investments-changed", this);
-    window.removeEventListener("budget:investments-loaded", this);
+    window.removeEventListener("budget:accounts-changed", this);
+    window.removeEventListener("budget:accounts-loaded", this);
     window.removeEventListener("budget:transaction-saved", this);
     window.removeEventListener("budget:transaction-queued", this);
   }

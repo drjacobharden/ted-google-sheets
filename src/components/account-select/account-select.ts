@@ -17,8 +17,6 @@ class AccountSelect extends HTMLElement {
     this.#dropdown.addEventListener("dropdown-selection", (event) => this.#setValue(event.detail.value, true));
     this.#dropdown.addEventListener("search-action-pressed", (event) => this.#create(event.detail.input));
     window.addEventListener("budget:accounts-changed", () => this.#refresh());
-    window.addEventListener("budget:investments-changed", () => this.#refresh());
-    window.addEventListener("budget:debts-changed", () => this.#refresh());
     this.#refresh();
   }
   attributeChangedCallback(name, oldValue, newValue) { if (oldValue !== newValue && this.#dropdown) { if (name === "account-type") this.removeAttribute("value"); this.#refresh(); } }

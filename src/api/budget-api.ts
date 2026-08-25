@@ -214,8 +214,7 @@ export interface BudgetAPIContract {
 }
 
 interface BudgetIntegrations {
-  investment?: { hasUnsynced(): boolean; load(options?: { refresh?: boolean }): Promise<unknown>; applyBootstrapData(data: unknown): unknown };
-  debt?: { load(options?: { refresh?: boolean }): Promise<unknown>; applyBootstrapData(data: unknown): unknown };
+  accounts?: { load(options?: { refresh?: boolean }): Promise<unknown>; applyBootstrapData(data: unknown): unknown };
   imports?: { listProfiles(options?: { refresh?: boolean }): Promise<unknown[]>; applyBootstrapData(data: unknown): unknown };
 }
 let integrations: BudgetIntegrations = {};
@@ -1737,13 +1736,12 @@ export function BudgetAPI(): BudgetAPIContract {
     if (!getConfig().endpoint) {
       const referenceData = await loadReferenceData();
       const transactions = await listTransactions();
-      const investments = await integrations.investment?.load();
+      await integrations.accounts?.load();
       const importProfiles = await integrations.imports?.listProfiles();
       return {
         ...referenceData,
         transactions,
         importProfiles: importProfiles || [],
-        ...(investments || {}),
       };
     }
 
@@ -1757,26 +1755,24 @@ export function BudgetAPI(): BudgetAPIContract {
       applyReferenceData(data, queuedAtStart);
       writeConfirmedTransactionCache(data.transactions);
       const transactions = mergeServerTransactions(data.transactions);
-      integrations.investment?.applyBootstrapData(data);
-      integrations.debt?.applyBootstrapData(data);
+      integrations.accounts?.applyBootstrapData(data);
       integrations.imports?.applyBootstrapData(data);
       window.dispatchEvent(new CustomEvent("budget:reference-data-changed"));
       return { ...data, transactions };
     } catch (error) {
       if (!(error.isApiError && /unknown action/i.test(error.message)))
         throw error;
-      const [referenceData, transactions, investments, importProfiles] =
+      const [referenceData, transactions, _accounts, importProfiles] =
         await Promise.all([
           loadReferenceData(),
           listTransactions(),
-          integrations.investment?.load({ refresh: true }),
+          integrations.accounts?.load({ refresh: true }),
           integrations.imports?.listProfiles({ refresh: true }),
         ]);
       return {
         ...referenceData,
         transactions,
         importProfiles: importProfiles || [],
-        ...(investments || {}),
       };
     }
   }

@@ -1102,7 +1102,7 @@ function partialEntityResults(error: unknown): ImportedEntityResolution[] {
         ),
         vendors: APIs.budget.listVendors().concat(provisional("vendor")),
         people: APIs.budget.listPeople().concat(provisional("assignment")),
-        accounts: APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../../api/investment-api").InvestmentAccount[],
+        accounts: APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../../api/investment-types").InvestmentAccount[],
         sharedAssignmentId: APIs.budget.SHARED_ASSIGNMENT_ID,
       };
     }

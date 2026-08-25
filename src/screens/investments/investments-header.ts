@@ -75,8 +75,8 @@ export class InvestmentsHeader
       this.#yearSelector.addListener(this);
       this.addEventListener("click", this);
       window.addEventListener("app:route-changed", this);
-      window.addEventListener("budget:investments-changed", this);
-      window.addEventListener("budget:investments-loaded", this);
+      window.addEventListener("budget:accounts-changed", this);
+      window.addEventListener("budget:accounts-loaded", this);
     }
     this.#applyRoute({
       name: router.currentRoute(),
@@ -92,8 +92,8 @@ export class InvestmentsHeader
     this.#yearSelector.removeListener(this);
     this.removeEventListener("click", this);
     window.removeEventListener("app:route-changed", this);
-    window.removeEventListener("budget:investments-changed", this);
-    window.removeEventListener("budget:investments-loaded", this);
+    window.removeEventListener("budget:accounts-changed", this);
+    window.removeEventListener("budget:accounts-loaded", this);
   }
 
   handleEvent(event: Event): void {
@@ -167,7 +167,7 @@ export class InvestmentsHeader
       );
       return;
     }
-    if (this.#route) this.#applyRoute(this.#route);
+    this.#applyRoute({ name: router.currentRoute(), route: router.currentRoute(), params: router.currentParams() });
   }
 
   #selectedYear(): string {
@@ -176,6 +176,7 @@ export class InvestmentsHeader
 
   #applyRoute(detail: RouteChangedEventDetail): void {
     if (!isInvestmentRoute(detail.name)) {
+      this.#route = null;
       this.hidden = true;
       return;
     }

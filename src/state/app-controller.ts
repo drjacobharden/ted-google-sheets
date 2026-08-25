@@ -18,8 +18,8 @@ function buildBudgetOverviewState(
   const monthlyTransactionSummaries = buildMonthlyTransactionSummaries(sourceTransactions);
   const annualSummaryCards = buildAnnualSummaryCards(
     sourceTransactions,
-    APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-api").InvestmentAccount[],
-    APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-api").InvestmentContribution[],
+    APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-types").InvestmentAccount[],
+    APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-types").InvestmentContribution[],
   );
   const years = [...new Set([
     ...Object.keys(monthlyTransactionSummaries).map(Number),
@@ -60,8 +60,8 @@ function updateDerivedTransactionState(): void {
   const currentYear = new Date().getFullYear();
   const annualSummaryCards = buildAnnualSummaryCards(
     transactions,
-    APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-api").InvestmentAccount[],
-    APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-api").InvestmentContribution[],
+    APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-types").InvestmentAccount[],
+    APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-types").InvestmentContribution[],
   );
   const years = [...new Set([
     ...Object.keys(monthlyTransactionSummaries).map(Number),
@@ -140,7 +140,7 @@ window.addEventListener("budget:transaction-sync-changed", (event: Event) => {
   const ids = new Set<string>(queued.map((item: BudgetTransaction) => item.id));
   transactions = transactions.filter(item => !item.syncStatus || ids.has(item.id)); upsert(queued);
 });
-window.addEventListener("budget:investments-changed", updateDerivedTransactionState);
+window.addEventListener("budget:accounts-changed", updateDerivedTransactionState);
 
 export const appController = {
   initializeData,
@@ -165,8 +165,8 @@ export const appController = {
         buildMonthlyTransactionSummaries(sourceTransactions),
       annualSummaryCards: buildAnnualSummaryCards(
         sourceTransactions,
-        APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-api").InvestmentAccount[],
-        APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-api").InvestmentContribution[],
+        APIs.accounts.accounts().filter((item) => item.type === "investment") as import("../api/investment-types").InvestmentAccount[],
+        APIs.accounts.activity().filter((item) => item.activityType === "contribution") as import("../api/investment-types").InvestmentContribution[],
         { assignmentId },
       ).summaries,
     };

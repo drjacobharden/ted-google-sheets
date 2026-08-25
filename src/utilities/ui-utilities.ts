@@ -1,4 +1,4 @@
-import type { InvestmentSource } from "../api/investment-api";
+import type { InvestmentSource } from "../api/investment-types";
 
 export interface DateRangeValue { preset?: string; start: string; end: string; label?: string; }
 export interface DateRangePickerElement extends HTMLElement { value: DateRangeValue; }

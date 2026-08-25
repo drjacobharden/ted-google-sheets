@@ -92,7 +92,7 @@ describe("TypeScript runtime migration", () => {
     expect(shell).not.toContain("setBudgetOverviewAssignment(");
     expect(controller).toContain("getMonthlyLedger:");
     expect(controller).toContain(
-      'window.addEventListener("budget:investments-changed"',
+      'window.addEventListener("budget:accounts-changed"',
     );
     expect(controller).toContain('appState.set("spendTrends"');
     expect(controller).toContain('appState.set("annualSpendTrendsByYear"');

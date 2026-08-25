@@ -2,7 +2,7 @@ import type { BudgetTransaction } from "../api/budget-api";
 import type {
   InvestmentAccount,
   InvestmentContribution,
-} from "../api/investment-api";
+} from "../api/investment-types";
 
 export type AnnualSummaryMetricKey =
   | "spend"

@@ -54,8 +54,7 @@ export class InvestmentLedgerScreen extends HTMLElement implements EventListener
     this.#search.addEventListener("search-changed", this);
     this.#table.addEventListener("click", this);
     this.#table.addEventListener("keydown", this);
-    window.addEventListener("budget:investments-changed", this);
-    window.addEventListener("budget:debts-changed", this);
+    window.addEventListener("budget:accounts-changed", this);
     window.addEventListener("app:route-changed", this);
     this.#configureFilters();
     this.#render();
@@ -68,8 +67,7 @@ export class InvestmentLedgerScreen extends HTMLElement implements EventListener
     this.#search.removeEventListener("search-changed", this);
     this.#table.removeEventListener("click", this);
     this.#table.removeEventListener("keydown", this);
-    window.removeEventListener("budget:investments-changed", this);
-    window.removeEventListener("budget:debts-changed", this);
+    window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("app:route-changed", this);
   }
 

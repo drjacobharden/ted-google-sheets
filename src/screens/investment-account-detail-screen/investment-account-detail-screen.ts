@@ -25,8 +25,8 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
       this.#listening = true;
       this.addEventListener("click", this);
       this.addEventListener("keydown", this);
-      window.addEventListener("budget:investments-changed", this);
-      window.addEventListener("budget:investments-loaded", this);
+      window.addEventListener("budget:accounts-changed", this);
+      window.addEventListener("budget:accounts-loaded", this);
     }
     this.#render();
   }
@@ -36,8 +36,8 @@ export class InvestmentAccountDetailScreen extends HTMLElement implements EventL
     this.#listening = false;
     this.removeEventListener("click", this);
     this.removeEventListener("keydown", this);
-    window.removeEventListener("budget:investments-changed", this);
-    window.removeEventListener("budget:investments-loaded", this);
+    window.removeEventListener("budget:accounts-changed", this);
+    window.removeEventListener("budget:accounts-loaded", this);
   }
 
   handleEvent(event: Event): void {

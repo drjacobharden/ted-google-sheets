@@ -25,7 +25,7 @@ export class InvestmentDebtDetailScreen extends HTMLElement implements EventList
       this.#listening = true;
       this.addEventListener("click", this);
       this.addEventListener("keydown", this);
-      window.addEventListener("budget:debts-changed", this);
+      window.addEventListener("budget:accounts-changed", this);
     }
     this.#render();
   }
@@ -35,11 +35,11 @@ export class InvestmentDebtDetailScreen extends HTMLElement implements EventList
     this.#listening = false;
     this.removeEventListener("click", this);
     this.removeEventListener("keydown", this);
-    window.removeEventListener("budget:debts-changed", this);
+    window.removeEventListener("budget:accounts-changed", this);
   }
 
   handleEvent(event: Event): void {
-    if (event.type === "budget:debts-changed") return this.#render();
+    if (event.type === "budget:accounts-changed") return this.#render();
     if ((event.target as Element | null)?.closest("#edit-debt-account")) {
       router.updateParams({ drawer: "investment-account", investmentAccountId: this.#accountId, investmentLedgerSource: "debt-account" });
       return;

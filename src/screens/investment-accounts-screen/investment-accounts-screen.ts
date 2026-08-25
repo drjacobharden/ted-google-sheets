@@ -52,8 +52,8 @@ export class InvestmentAccountsScreen extends EditorialEntityLedgerScreen<Invest
 
   protected dataEventNames(): string[] {
     return [
-      "budget:investments-changed",
-      "budget:investments-loaded",
+      "budget:accounts-changed",
+      "budget:accounts-loaded",
       "budget:people-changed",
       "budget:reference-data-changed",
     ];
