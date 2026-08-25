@@ -317,6 +317,14 @@
       font-size: var(--text-sm);
     }
   }
+
+  .tab-header-tools {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-xs);
+  }
 }
 
 @media (max-width: 48rem) {
