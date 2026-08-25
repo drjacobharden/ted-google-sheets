@@ -26,6 +26,7 @@ function buildBudgetOverviewState(
 ): BudgetOverviewDerivedState {
   const monthlyTransactionSummaries =
     buildMonthlyTransactionSummaries(sourceTransactions);
+
   const annualSummaryCards = buildAnnualSummaryCards(
     sourceTransactions,
     APIs.accounts
