@@ -3476,11 +3476,30 @@ function parsePostBody_(e) {
 }
 function serializeCell_(value, field) {
   if (field === "amount") return value === "" ? 0 : Number(value);
+  if (field === "month") return normalizeMonthId_(value);
+  if (field === "date" || field === "asOfDate") return normalizeDateId_(value);
   if (value instanceof Date) {
-    const format = field === "date" ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm:ssXXX";
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), format);
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ssXXX");
   }
   return value === null || value === undefined ? "" : String(value);
+}
+function normalizeDateId_(value) {
+  const text = String(value === null || value === undefined ? "" : value);
+  const match = text.match(/^\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
+  const date = value instanceof Date ? value : new Date(text);
+  return isNaN(date.getTime())
+    ? ""
+    : Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+}
+function normalizeMonthId_(value) {
+  const text = String(value === null || value === undefined ? "" : value);
+  const match = text.match(/^\d{4}-\d{2}/);
+  if (match) return match[0];
+  const date = value instanceof Date ? value : new Date(text);
+  return isNaN(date.getTime())
+    ? ""
+    : Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM");
 }
 function normalizeDateTime_(value) {
   const text = cleanText_(value, 50),
