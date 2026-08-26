@@ -258,7 +258,7 @@ entity-detail-screen {
     font-size: var(--text-sm);
   }
 
-  table-list {
+  data-table {
     --outer-padding: 0px;
     --vertical-padding: 12px;
     --table-row-height: 70px;
@@ -319,30 +319,30 @@ entity-detail-screen {
         color: var(--color-text);
         font-size: var(--text-sm);
       }
-      .transaction-date,
-      .transaction-amount {
+      .date,
+      .numeric {
         font-family: var(--font-mono);
         font-variant-numeric: tabular-nums;
       }
-      td.transaction-date {
+      td.date {
         color: var(--color-text-muted) !important;
       }
-      td.transaction-description {
+      td.primary {
         font-family: var(--font-display);
         font-size: var(--text-base);
         font-weight: var(--weight-semibold) !important;
       }
-      td.transaction-description .table-cell-stack {
+      td.primary .cell-stack {
         overflow: visible;
       }
-      td.transaction-description .table-cell-primary {
+      td.primary .cell-primary {
         padding-block: 0.1em;
         line-height: var(--leading-snug);
       }
-      td.transaction-description .table-cell-subline {
+      td.primary .cell-subline {
         display: none;
       }
-      .transaction-category .table-cell-tag {
+      .tag {
         display: inline-block;
         padding: 5px 10px;
         border: 1px solid var(--color-rule-strong);
@@ -351,7 +351,7 @@ entity-detail-screen {
         font-size: var(--text-xs);
         line-height: 1;
       }
-      .transaction-amount {
+      .numeric {
         color: var(--color-text) !important;
         font-size: var(--text-sm);
         font-weight: var(--weight-regular) !important;
@@ -369,7 +369,7 @@ entity-detail-screen {
         font-weight: var(--weight-medium);
         text-transform: none;
       }
-      tfoot .transaction-amount {
+      tfoot .numeric {
         font-family: var(--font-mono);
         font-size: var(--text-sm);
         font-weight: var(--weight-medium) !important;
@@ -436,7 +436,7 @@ entity-detail-screen {
 }
 
 @media (max-width: 1100px) {
-  entity-detail-screen table-list {
+  entity-detail-screen data-table {
     width: 100%;
     max-width: 100%;
     overflow: visible;
@@ -478,24 +478,24 @@ entity-detail-screen {
       td:last-child {
         padding-right: 0;
       }
-      .transaction-category,
-      .transaction-vendor,
+      .tag,
+      .detail,
       .transaction-assignment {
         display: none;
       }
-      td.transaction-description {
+      td.primary {
         font-size: var(--text-sm);
       }
-      td.transaction-description .table-cell-stack,
-      td.transaction-description .table-cell-primary,
-      td.transaction-description .table-cell-subline {
+      td.primary .cell-stack,
+      td.primary .cell-primary,
+      td.primary .cell-subline {
         display: block;
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      td.transaction-description .table-cell-subline {
+      td.primary .cell-subline {
         margin-top: 3px;
         color: var(--color-text-muted);
         font-family: var(--font-body);
@@ -503,16 +503,16 @@ entity-detail-screen {
         font-weight: var(--weight-regular);
         line-height: var(--leading-snug);
       }
-      .transaction-date {
+      .date {
         font-size: var(--text-xs);
       }
       tfoot tr {
         align-items: baseline;
       }
-      tfoot .transaction-description {
+      tfoot .primary {
         grid-column: 2;
       }
-      tfoot .transaction-amount {
+      tfoot .numeric {
         grid-column: 3;
       }
     }

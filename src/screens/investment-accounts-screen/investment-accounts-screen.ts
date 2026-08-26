@@ -1,10 +1,10 @@
 import { APIs } from "../../api/api";
 import type { AvailableFilter } from "../../components/filter-bar/filter-bar";
-import type { TableColumn } from "../../components/table/table";
+import type { DataTableColumn } from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { InvestmentView } from "../../utilities/investment-view";
 import { signedPercent } from "../../utilities/entity-ledger";
-import { money, netFlows } from "../../utilities/view-formatters";
+import { escapeHTML, money, netFlows } from "../../utilities/view-formatters";
 import { EditorialEntityLedgerScreen } from "../editorial-entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
@@ -78,55 +78,48 @@ export class InvestmentAccountsScreen extends EditorialEntityLedgerScreen<Invest
     ];
   }
 
-  protected columns(year: number): TableColumn<InvestmentAccountLedgerRow>[] {
+  protected columns(year: number): DataTableColumn<InvestmentAccountLedgerRow>[] {
     return [
       {
         key: "name",
         title: "Name",
-        dataType: "string",
         sizing: 32,
-        prominence: "bold",
-        cellClass: "entity-name investment-account-name",
-        subline: (row) => `${row.source} · ${row.assignment}`,
+        cellClass: ["primary"],
+        formatter: (value) => escapeHTML(value),
+        subline: (row) => escapeHTML(`${row.source} · ${row.assignment}`),
       },
       {
         key: "contributions",
         title: "Contributions",
-        dataType: "number",
         sizing: 17,
         textAlign: "right",
         formatter: (value) => money(value),
-        cellClass: "investment-account-contributions",
+        cellClass: ["numeric", "align-right"],
       },
       {
         key: "balance",
         title: "Balance",
-        dataType: "number",
         sizing: 17,
         textAlign: "right",
         formatter: (value) => money(value),
-        cellClass: "investment-account-balance",
+        cellClass: ["strong", "align-right"],
       },
       {
         key: "growth",
         title: "Account growth",
-        dataType: "number",
         sizing: 17,
         textAlign: "right",
-        formatter: signedPercent,
-        cellClass: "entity-comparison investment-account-comparison",
-        color: (row) => metricColor(row.growth),
+        formatter: (value) => signedPercent(value as number | null),
+        cellClass: ["comparison", "align-right", (row) => row.growth === null ? "is-muted" : row.growth >= 0 ? "is-positive" : "is-negative"],
         sorter: (row) => row.growth ?? Number.NEGATIVE_INFINITY,
       },
       {
         key: "roi",
         title: "ROI",
-        dataType: "number",
         sizing: 17,
         textAlign: "right",
-        formatter: signedPercent,
-        cellClass: "entity-comparison investment-account-roi",
-        color: (row) => metricColor(row.roi),
+        formatter: (value) => signedPercent(value as number | null),
+        cellClass: ["comparison", "align-right", (row) => row.roi === null ? "is-muted" : row.roi >= 0 ? "is-positive" : "is-negative"],
         sorter: (row) => row.roi ?? Number.NEGATIVE_INFINITY,
       },
     ];
@@ -184,13 +177,6 @@ export class InvestmentAccountsScreen extends EditorialEntityLedgerScreen<Invest
       year: String(year),
     });
   }
-}
-
-function metricColor(value: number | null): string {
-  if (value === null) return "var(--color-text-subtle)";
-  return value >= 0
-    ? "var(--color-positive)"
-    : "var(--color-negative)";
 }
 
 if (!customElements.get("investment-accounts-screen")) {

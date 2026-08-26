@@ -7,12 +7,11 @@ import type {
 import type { AppliedFilter } from "../../components/filter-bar/filter-bar";
 import type { FilterBar } from "../../components/filter-bar/filter-bar";
 import type { SearchBar } from "../../components/search-bar/search-bar";
-import {
-  Table,
-  type SortDirection,
-  type TableColumn,
-  type TableData,
-} from "../../components/table/table";
+import type {
+  DataTable,
+  DataTableColumn,
+  DataTableData,
+} from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
 import {
@@ -20,7 +19,7 @@ import {
   handleCustomEvent,
   removeListener,
 } from "../../utilities/event-utilities";
-import { money } from "../../utilities/view-formatters";
+import { escapeHTML, money } from "../../utilities/view-formatters";
 import { appState } from "../../state/app-state";
 import { filterForBudgetingContext } from "../budgeting/budgeting-context";
 import {
@@ -51,7 +50,7 @@ export class TransactionScreen
   extends HTMLElement
   implements EventListenerObject
 {
-  #table!: Table<BudgetTransaction>;
+  #table!: DataTable<BudgetTransaction>;
   #filterBar!: FilterBar<BudgetTransaction>;
   #monthSelector!: DropdownMenu;
   #search!: SearchBar;
@@ -60,8 +59,6 @@ export class TransactionScreen
   #selectedMonth: string | null = null;
   #query = "";
   #filters: AppliedFilter<BudgetTransaction>[] = [];
-  #sortKey: keyof BudgetTransaction | null = null;
-  #sortDirection: SortDirection | null = null;
   #listening = false;
   #unsubscribeBudgetingContext: (() => void) | null = null;
 
@@ -71,7 +68,7 @@ export class TransactionScreen
       this.classList.add("screen");
       this.dataset.screen = "transactions";
       this.append(template.content.cloneNode(true));
-      this.#table = this.querySelector("table-list")!;
+      this.#table = this.querySelector("data-table")!;
       this.#filterBar = this.querySelector("filter-bar")!;
       this.#monthSelector = this.querySelector("#transaction-month-selector")!;
       this.#search = this.querySelector("#transaction-search")!;
@@ -83,11 +80,10 @@ export class TransactionScreen
     this.#listening = true;
 
     addListener("filters-changed", this, this);
-    addListener("table-sort-request", this, this);
+    this.#table.rowSelection.addListener(this);
+
     this.#monthSelector.addListener(this);
     this.#search.addEventListener("search-changed", this);
-    this.#table.addEventListener("click", this);
-    this.#table.addEventListener("keydown", this);
 
     for (const eventName of [
       "budget:transaction-sync-changed",
@@ -111,11 +107,9 @@ export class TransactionScreen
     if (!this.#listening) return;
     this.#listening = false;
     removeListener("filters-changed", this, this);
-    removeListener("table-sort-request", this, this);
     this.#monthSelector.removeListener(this);
     this.#search.removeEventListener("search-changed", this);
-    this.#table.removeEventListener("click", this);
-    this.#table.removeEventListener("keydown", this);
+    this.#table.rowSelection.removeListener(this);
 
     for (const eventName of [
       "budget:transaction-sync-changed",
@@ -145,19 +139,11 @@ export class TransactionScreen
         );
         break;
 
-      case "table-sort-request":
-        handleCustomEvent("table-sort-request", event, ({ key }) => {
-          this.#cycleSort(key as keyof BudgetTransaction);
-          this.#repaint();
-        });
-        break;
-
       case "dropdown-selection": {
         const selection = event as DropdownSelectionEvent;
         if (selection.currentTarget !== this.#monthSelector) break;
-        this.#selectedMonth = selection.detail.value === "all"
-          ? null
-          : selection.detail.value;
+        this.#selectedMonth =
+          selection.detail.value === "all" ? null : selection.detail.value;
         this.#repaint();
         break;
       }
@@ -169,8 +155,7 @@ export class TransactionScreen
         this.#repaint();
         break;
 
-      case "click":
-      case "keydown":
+      case "table-row-selected":
         this.#openSelectedRow(event);
         break;
 
@@ -181,56 +166,56 @@ export class TransactionScreen
     }
   }
 
-  #columns(): TableColumn<BudgetTransaction>[] {
+  #columns(): DataTableColumn<BudgetTransaction>[] {
     return [
       {
         key: "date",
         title: "Date",
-        dataType: "string",
-        formatter: ledgerDate,
+        formatter: (value) => ledgerDate(String(value ?? "")),
         sizing: "narrow",
-        cellClass: "transaction-date",
+        cellClass: ["date"],
       },
       {
         key: "notes",
         title: "Description",
-        dataType: "string",
         formatter: (value, row) =>
-          String(value ?? "").trim() || row.category || "Uncategorized",
-        subline: (row) => row.vendor || "No vendor",
-        prominence: "bold",
+          escapeHTML(
+            String(value ?? "").trim() || row.category || "Uncategorized",
+          ),
+        subline: (row) => escapeHTML(row.vendor || "No vendor"),
         sizing: 35,
-        cellClass: "transaction-description",
+        cellClass: ["primary"],
       },
       {
         key: "category",
         title: "Category",
-        dataType: "string",
-        prominence: "tag",
         sizing: 20,
-        cellClass: "transaction-category",
+        cellClass: ["tag"],
+        formatter: (value) => escapeHTML(value),
       },
       {
         key: "vendor",
         title: "Vendor",
-        dataType: "string",
         sizing: 25,
-        cellClass: "transaction-vendor",
+        cellClass: ["detail"],
+        formatter: (value) => escapeHTML(value),
       },
       {
         key: "amount",
         title: "Amount",
-        dataType: "number",
-        formatter: (_value: number, row) => money(signedTransactionAmount(row)),
-        textAlign: "right",
+        formatter: (_value: unknown, row) =>
+          money(signedTransactionAmount(row)),
         sizing: "narrow",
-        cellClass: "transaction-amount",
+        cellClass: ["numeric", "align-right"],
+        headerClass: "align-right",
         sorter: signedTransactionAmount,
       },
     ];
   }
 
-  #tableData(rows: readonly BudgetTransaction[]): TableData<BudgetTransaction> {
+  #tableData(
+    rows: readonly BudgetTransaction[],
+  ): DataTableData<BudgetTransaction> {
     const visibleTotal = rows.reduce(
       (total, row) => total + signedTransactionAmount(row),
       0,
@@ -244,29 +229,32 @@ export class TransactionScreen
         ariaLabel: `Transaction total ${money(visibleTotal)}`,
       },
       interactiveRows: true,
-      sort:
-        this.#sortKey && this.#sortDirection
-          ? { key: this.#sortKey, direction: this.#sortDirection }
-          : null,
+      rowKey: (row) => row.id,
     };
   }
 
   #repaint(): void {
     const year = appState.get("budgetingContext").year;
     this.#subtitle.textContent = `Showing all transactions recorded for ${editorialPeriod(year, this.#selectedMonth)}`;
-    const rows = this.#sortedRows(this.#filteredRows());
+    const rows = this.#filteredRows();
     this.#table.data = this.#tableData(rows);
   }
 
   #filteredRows(): BudgetTransaction[] {
     return filterForBudgetingContext(appController.getTransactions())
       .filter(
-        (row) => this.#selectedMonth === null || row.date.slice(5, 7) === this.#selectedMonth,
+        (row) =>
+          this.#selectedMonth === null ||
+          row.date.slice(5, 7) === this.#selectedMonth,
       )
       .filter((row) => {
         if (!this.#query) return true;
-        return [row.notes, row.category, row.vendor, row.assignment]
-          .some((value) => String(value ?? "").toLowerCase().includes(this.#query));
+        return [row.notes, row.category, row.vendor, row.assignment].some(
+          (value) =>
+            String(value ?? "")
+              .toLowerCase()
+              .includes(this.#query),
+        );
       })
       .filter((row) =>
         matchesLedgerFilterGroups(row, this.#filters, (item, key) =>
@@ -281,7 +269,9 @@ export class TransactionScreen
       const value = String(transaction[key] ?? "").trim();
       if (value) values.set(value.toLocaleLowerCase("en-US"), value);
     }
-    return [...values.values()].sort((left, right) => left.localeCompare(right));
+    return [...values.values()].sort((left, right) =>
+      left.localeCompare(right),
+    );
   }
 
   #configureFilters(): void {
@@ -314,53 +304,16 @@ export class TransactionScreen
     ];
   }
 
-  #sortedRows(rows: BudgetTransaction[]): BudgetTransaction[] {
-    if (!this.#sortKey || !this.#sortDirection) return rows;
-    const key = this.#sortKey;
-    const column = this.#columns().find((item) => item.key === key);
-    const multiplier = this.#sortDirection === "ascending" ? 1 : -1;
-
-    return [...rows].sort((previousRow, nextRow) => {
-      const previous = previousRow[key];
-      const next = nextRow[key];
-      if (typeof previous === "number" && typeof next === "number") {
-        return (
-          ((column?.sorter?.(previousRow) ?? previous) -
-            (column?.sorter?.(nextRow) ?? next)) *
-          multiplier
-        );
-      }
-      return String(previous ?? "").localeCompare(String(next ?? "")) * multiplier;
+  #openSelectedRow(event: Event): void {
+    this.#table.rowSelection.handleEvent(event, ({ id }) => {
+      const transaction = appController
+        .getTransactions()
+        .find((item) => item.id === id);
+      if (!transaction) return;
+      if (event instanceof KeyboardEvent) event.preventDefault();
+      router.updateParams({ drawer: "edit", transactionId: transaction.id });
     });
   }
-
-  #cycleSort(key: keyof BudgetTransaction): void {
-    if (this.#sortKey !== key || this.#sortDirection === null) {
-      this.#sortKey = key;
-      this.#sortDirection = "descending";
-    } else if (this.#sortDirection === "descending") {
-      this.#sortDirection = "ascending";
-    } else {
-      this.#sortKey = null;
-      this.#sortDirection = null;
-    }
-  }
-
-  #openSelectedRow(event: Event): void {
-    if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-    const row = (event.target as Element | null)?.closest<HTMLTableRowElement>(
-      "tbody tr",
-    );
-    if (!row) return;
-    const rows = this.#sortedRows(this.#filteredRows());
-    const transaction = rows[row.rowIndex - 1];
-    if (!transaction) return;
-    if (event instanceof KeyboardEvent) event.preventDefault();
-    router.updateParams({ drawer: "edit", transactionId: transaction.id });
-  }
-
 }
 
 if (!customElements.get("transaction-list-screen")) {

@@ -1,9 +1,9 @@
 import { APIs } from "../../api/api";
 import type { AvailableFilter } from "../../components/filter-bar/filter-bar";
-import type { TableColumn } from "../../components/table/table";
+import type { DataTableColumn } from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { signedPercent } from "../../utilities/entity-ledger";
-import { money } from "../../utilities/view-formatters";
+import { escapeHTML, money } from "../../utilities/view-formatters";
 import { EditorialEntityLedgerScreen } from "../editorial-entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
@@ -57,12 +57,12 @@ export class InvestmentDebtsScreen extends EditorialEntityLedgerScreen<DebtLedge
     ];
   }
 
-  protected columns(year: number): TableColumn<DebtLedgerRow>[] {
+  protected columns(year: number): DataTableColumn<DebtLedgerRow>[] {
     return [
-      { key: "name", title: "Name", dataType: "string", sizing: 34, prominence: "bold", cellClass: "entity-name", subline: (row) => [row.lender, row.assignment].filter(Boolean).join(" · ") },
-      { key: "interestRate", title: "Interest rate", dataType: "number", sizing: 18, textAlign: "right", formatter: (value) => `${Number(value).toFixed(2)}%` },
-      { key: "balance", title: "Balance", dataType: "number", sizing: 24, textAlign: "right", formatter: (value) => money(value), cellClass: "investment-account-balance" },
-      { key: "comparison", title: `vs ${year - 1}`, dataType: "number", sizing: 24, textAlign: "right", formatter: signedPercent, cellClass: "entity-comparison", color: (row) => row.comparison === null ? "var(--color-text-subtle)" : row.comparison <= 0 ? "var(--color-positive)" : "var(--color-negative)" },
+      { key: "name", title: "Name", sizing: 34, cellClass: ["primary"], formatter: (value) => escapeHTML(value), subline: (row) => escapeHTML([row.lender, row.assignment].filter(Boolean).join(" · ")) },
+      { key: "interestRate", title: "Interest rate", sizing: 18, textAlign: "right", formatter: (value) => `${Number(value).toFixed(2)}%`, cellClass: ["numeric", "align-right"] },
+      { key: "balance", title: "Balance", sizing: 24, textAlign: "right", formatter: (value) => money(value), cellClass: ["strong", "align-right"] },
+      { key: "comparison", title: `vs ${year - 1}`, sizing: 24, textAlign: "right", formatter: (value) => signedPercent(value as number | null), cellClass: ["comparison", "align-right", (row) => row.comparison === null ? "is-muted" : row.comparison <= 0 ? "is-positive" : "is-negative"], sorter: (row) => row.comparison ?? Number.NEGATIVE_INFINITY },
     ];
   }
 

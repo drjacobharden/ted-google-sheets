@@ -27,9 +27,8 @@ investment-ledger-screen {
     }
   }
 
-  table-list {
-    --outer-padding: 0px;
-    --vertical-padding: 12px;
+  data-table {
+    --data-table-row-padding: 12px;
     --table-row-height: 70px;
     flex: 0 0 auto;
     overflow-x: auto;
@@ -103,24 +102,24 @@ investment-ledger-screen {
         color: var(--color-text);
         font-size: var(--text-sm);
       }
-      .transaction-date,
-      .transaction-amount {
+      .date,
+      .numeric {
         font-family: var(--font-mono);
         font-variant-numeric: tabular-nums;
       }
-      td.transaction-date {
+      td.date {
         color: var(--color-text-muted) !important;
       }
-      td.transaction-description {
+      td.primary {
         font-family: var(--font-display);
         font-size: var(--text-base);
         font-weight: var(--weight-semibold) !important;
-        .table-cell-primary {
+        .cell-primary {
           padding-block: 0.1em;
           line-height: var(--leading-snug);
         }
       }
-      .transaction-category .table-cell-tag {
+      .tag {
         display: inline-block;
         padding: 5px 10px;
         border: 1px solid var(--color-rule-strong);
@@ -129,12 +128,12 @@ investment-ledger-screen {
         font-size: var(--text-xs);
         line-height: 1;
       }
-      .transaction-amount {
+      .numeric {
         color: var(--color-text) !important;
         font-size: var(--text-sm);
         font-weight: var(--weight-regular) !important;
       }
-      tfoot .transaction-amount {
+      tfoot .numeric {
         font-weight: var(--weight-medium) !important;
       }
     }
@@ -179,7 +178,7 @@ investment-ledger-screen {
 
 @media (max-width: 1100px) {
   investment-ledger-screen {
-    table-list {
+    data-table {
       width: 100%;
       max-width: 100%;
       overflow: visible;
@@ -207,16 +206,16 @@ investment-ledger-screen {
         min-width: 0;
         padding-inline: 8px;
       }
-      .transaction-category {
+      .tag {
         display: none;
       }
-      .transaction-description {
+      .primary {
         grid-column: 2;
       }
-      .transaction-amount {
+      .numeric {
         grid-column: 3;
       }
-      .transaction-date {
+      .date {
         font-size: var(--text-xs);
       }
     }

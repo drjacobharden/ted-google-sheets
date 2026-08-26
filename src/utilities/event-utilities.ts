@@ -17,6 +17,7 @@ type EventDetails<T = any> = Readonly<{
   "table-data-changed": { data: readonly T[] };
   "drawer:close-requested": {};
   "scroll-changed": { position: number };
+  "table-row-selected": { id: string };
 }>;
 
 export const addListener = (

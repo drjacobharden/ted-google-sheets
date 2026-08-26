@@ -1,7 +1,11 @@
 import type { DropdownMenu, DropdownSelectionEvent } from "../components/dropdown-menu/dropdown-menu";
 import type { AppliedFilter, AvailableFilter, FilterBar } from "../components/filter-bar/filter-bar";
 import type { SearchBar } from "../components/search-bar/search-bar";
-import { Table, type SortDirection, type TableColumn, type TableData } from "../components/table/table";
+import type {
+  DataTable,
+  DataTableColumn,
+  DataTableData,
+} from "../components/data-table/data-table";
 import { appState } from "../state/app-state";
 import {
   editorialMonthItems,
@@ -13,14 +17,12 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
   protected selectedMonth: string | null = null;
   protected filters: AppliedFilter<Row>[] = [];
 
-  #table!: Table<Row>;
+  #table!: DataTable<Row>;
   #filterBar!: FilterBar<Row>;
   #monthSelector: DropdownMenu | null = null;
   #search!: SearchBar;
   #subtitle!: HTMLElement;
   #query = "";
-  #sortKey: keyof Row | null = null;
-  #sortDirection: SortDirection | null = null;
   #visibleRows: Row[] = [];
   #listening = false;
   #unsubscribe: (() => void) | null = null;
@@ -32,7 +34,7 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
   protected abstract get filterId(): string;
   protected abstract get subtitleId(): string;
   protected abstract availableFilters(year: number): AvailableFilter<Row>[];
-  protected abstract columns(year: number): TableColumn<Row>[];
+  protected abstract columns(year: number): DataTableColumn<Row>[];
   protected abstract sourceRows(year: number): Row[];
   protected abstract subtitle(year: number): string;
   protected abstract openRow(row: Row, year: number): void;
@@ -61,7 +63,7 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
       this.classList.add("screen");
       this.dataset.screen = this.screenName;
       this.append(this.screenTemplate.content.cloneNode(true));
-      this.#table = this.querySelector("table-list")!;
+      this.#table = this.querySelector("data-table")!;
       this.#filterBar = this.querySelector(this.filterId)!;
       this.#monthSelector = this.monthSelectorId
         ? this.querySelector<DropdownMenu>(this.monthSelectorId)
@@ -73,11 +75,9 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
     if (this.#listening) return;
     this.#listening = true;
     this.addEventListener("filters-changed", this);
-    this.addEventListener("table-sort-request", this);
     this.addEventListener("search-changed", this);
     this.#monthSelector?.addListener(this);
-    this.#table.addEventListener("click", this);
-    this.#table.addEventListener("keydown", this);
+    this.#table.rowSelection.addListener(this);
     for (const eventName of this.dataEventNames()) {
       window.addEventListener(eventName, this);
     }
@@ -89,11 +89,9 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
     if (!this.#listening) return;
     this.#listening = false;
     this.removeEventListener("filters-changed", this);
-    this.removeEventListener("table-sort-request", this);
     this.removeEventListener("search-changed", this);
     this.#monthSelector?.removeListener(this);
-    this.#table.removeEventListener("click", this);
-    this.#table.removeEventListener("keydown", this);
+    this.#table.rowSelection.removeListener(this);
     for (const eventName of this.dataEventNames()) {
       window.removeEventListener(eventName, this);
     }
@@ -118,13 +116,10 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
       this.repaint();
       return;
     }
-    if (event.type === "table-sort-request") {
-      this.#cycleSort((event as CustomEvent<{ key: keyof Row }>).detail.key);
-      this.repaint();
-      return;
-    }
-    if (event.type === "click" || event.type === "keydown") {
-      this.#activateRow(event);
+    if (event.type === "table-row-selected") {
+      const id = (event as CustomEvent<{ id: string }>).detail.id;
+      const row = this.#visibleRows.find((item) => item.id === id);
+      if (row) this.openRow(row, this.currentYear());
       return;
     }
     this.repaint();
@@ -137,53 +132,13 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
     let rows = this.sourceRows(year)
       .filter((row) => !this.#query || row.name.toLowerCase().includes(this.#query))
       .filter((row) => matchesLedgerFilterGroups(row, this.filters));
-    rows = this.#sortedRows(rows, year);
     this.#visibleRows = rows;
-    const data: TableData<Row> = {
+    const data: DataTableData<Row> = {
       columns: this.columns(year),
       rows,
       interactiveRows: true,
-      sort: this.#sortKey && this.#sortDirection
-        ? { key: this.#sortKey, direction: this.#sortDirection }
-        : null,
+      rowKey: (row) => row.id,
     };
     this.#table.data = data;
-  }
-
-  #sortedRows(rows: Row[], year: number): Row[] {
-    if (!this.#sortKey || !this.#sortDirection) return rows;
-    const key = this.#sortKey;
-    const column = this.columns(year).find((item) => item.key === key);
-    const multiplier = this.#sortDirection === "ascending" ? 1 : -1;
-    return [...rows].sort((left, right) => {
-      const leftValue = column?.sorter?.(left) ?? left[key];
-      const rightValue = column?.sorter?.(right) ?? right[key];
-      if (typeof leftValue === "number" && typeof rightValue === "number") {
-        return (leftValue - rightValue) * multiplier;
-      }
-      return String(leftValue ?? "").localeCompare(String(rightValue ?? "")) * multiplier;
-    });
-  }
-
-  #cycleSort(key: keyof Row): void {
-    if (this.#sortKey !== key || this.#sortDirection === null) {
-      this.#sortKey = key;
-      this.#sortDirection = "descending";
-    } else if (this.#sortDirection === "descending") {
-      this.#sortDirection = "ascending";
-    } else {
-      this.#sortKey = null;
-      this.#sortDirection = null;
-    }
-  }
-
-  #activateRow(event: Event): void {
-    if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") return;
-    const tableRow = (event.target as Element | null)?.closest<HTMLTableRowElement>("tbody tr");
-    if (!tableRow) return;
-    const row = this.#visibleRows[tableRow.rowIndex - 1];
-    if (!row) return;
-    if (event instanceof KeyboardEvent) event.preventDefault();
-    this.openRow(row, this.currentYear());
   }
 }

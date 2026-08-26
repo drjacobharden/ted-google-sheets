@@ -1866,6 +1866,7 @@ export class BudgetOverviewScreen
           key: "comparison",
           title: comparisonLabel,
           headerClass: "align-right",
+          textAlign: "right",
           sizing: "narrow",
           cellClass: [
             "comparison",

@@ -1,1 +1,7 @@
-investment-debts-screen { display: block; }
+investment-debts-screen {
+  display: block;
+
+  data-table table {
+    min-width: 900px;
+  }
+}

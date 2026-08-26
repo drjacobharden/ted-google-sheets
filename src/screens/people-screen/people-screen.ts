@@ -1,10 +1,10 @@
 import { APIs } from "../../api/api";
 import type { AvailableFilter } from "../../components/filter-bar/filter-bar";
-import type { TableColumn } from "../../components/table/table";
+import type { DataTableColumn } from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
 import { buildPersonLedgerRows, editorialPeriod, signedPercent, type PersonLedgerRow } from "../../utilities/entity-ledger";
-import { money } from "../../utilities/view-formatters";
+import { escapeHTML, money } from "../../utilities/view-formatters";
 import { EditorialEntityLedgerScreen } from "../editorial-entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
@@ -31,21 +31,20 @@ export class PeopleScreen extends EditorialEntityLedgerScreen<PersonLedgerRow> {
     ];
   }
 
-  protected columns(year: number): TableColumn<PersonLedgerRow>[] {
+  protected columns(year: number): DataTableColumn<PersonLedgerRow>[] {
     return [
       {
-        key: "name", title: "Name", dataType: "string", sizing: 28,
-        prominence: "bold", cellClass: "entity-name",
-        color: (row) => row.active ? "var(--color-text)" : "var(--color-text-subtle)",
+        key: "name", title: "Name", sizing: 28,
+        cellClass: ["primary", (row) => row.active ? "" : "is-muted"],
+        formatter: (value) => escapeHTML(value),
         trailingIcon: (row) => row.active ? null : "box",
       },
-      { key: "income", title: "Income", dataType: "number", sizing: 18, textAlign: "right", formatter: (value) => money(value), cellClass: "entity-income" },
-      { key: "expense", title: "Expense", dataType: "number", sizing: 18, textAlign: "right", formatter: (value) => money(value), cellClass: "entity-expense" },
-      { key: "balance", title: "Balance", dataType: "number", sizing: 18, textAlign: "right", formatter: (value) => money(value), cellClass: "entity-balance" },
+      { key: "income", title: "Income", sizing: 18, textAlign: "right", formatter: (value) => money(value), cellClass: ["numeric", "align-right"] },
+      { key: "expense", title: "Expense", sizing: 18, textAlign: "right", formatter: (value) => money(value), cellClass: ["numeric", "align-right"] },
+      { key: "balance", title: "Balance", sizing: 18, textAlign: "right", formatter: (value) => money(value), cellClass: ["strong", "align-right"] },
       {
-        key: "comparison", title: `vs ${year - 1}`, dataType: "number", sizing: 18,
-        textAlign: "right", formatter: signedPercent, cellClass: "entity-comparison",
-        color: (row) => row.comparison === null ? "var(--color-text-subtle)" : row.comparison >= 0 ? "var(--color-positive)" : "var(--color-negative)",
+        key: "comparison", title: `vs ${year - 1}`, sizing: 18,
+        textAlign: "right", formatter: (value) => signedPercent(value as number | null), cellClass: ["comparison", "align-right", (row) => row.comparison === null ? "is-muted" : row.comparison >= 0 ? "is-positive" : "is-negative"],
         sorter: (row) => row.comparison ?? Number.NEGATIVE_INFINITY,
       },
     ];

@@ -1,58 +1,27 @@
 investment-accounts-screen {
   display: block;
 
-  table-list table {
+  data-table table {
     min-width: 900px;
   }
 
-  table-list table td:is(
-    .investment-account-contributions,
-    .investment-account-balance
-  ) {
-    color: var(--color-text) !important;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-variant-numeric: tabular-nums;
-    font-weight: var(--weight-regular) !important;
-  }
-
-  table-list table td.investment-account-balance {
-    font-weight: var(--weight-medium) !important;
-  }
-
-  table-list table td:is(.investment-account-comparison, .investment-account-roi) {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    font-variant-numeric: tabular-nums;
-    font-weight: var(--weight-regular) !important;
-  }
-
-  table-list .investment-account-name .table-cell-primary {
-    font-family: var(--font-display);
-    font-size: var(--text-base);
-    font-weight: var(--weight-semibold);
-    line-height: var(--leading-snug);
-  }
-
-  table-list .investment-account-name .table-cell-subline {
+  data-table .cell-subline {
     margin-top: 3px;
     color: var(--color-text-subtle);
-    font-family: var(--font-body);
     font-size: var(--text-2xs);
-    font-weight: var(--weight-regular);
   }
 }
 
 @media (max-width: 680px) {
   investment-accounts-screen {
-    table-list {
+    data-table {
       width: 100%;
       max-width: 100%;
       overflow-x: auto;
       overflow-y: visible;
     }
 
-    table-list table {
+    data-table table {
       min-width: 900px;
     }
   }

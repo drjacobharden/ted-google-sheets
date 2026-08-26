@@ -13,12 +13,11 @@ import type {
   FilterBar,
 } from "../../components/filter-bar/filter-bar";
 import type { SearchBar } from "../../components/search-bar/search-bar";
-import {
-  Table,
-  type SortDirection,
-  type TableColumn,
-  type TableData,
-} from "../../components/table/table";
+import type {
+  DataTable,
+  DataTableColumn,
+  DataTableData,
+} from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import type { RouteName } from "../../router/types";
 import { appController } from "../../state/app-controller";
@@ -30,7 +29,7 @@ import {
   signedTransactionAmount,
 } from "../../utilities/entity-ledger";
 import { buildCurrencyAxisScale } from "../../utilities/currency-axis-scale";
-import { money } from "../../utilities/view-formatters";
+import { escapeHTML, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -138,7 +137,7 @@ export class EntityDetailScreen
   #comparison!: HTMLElement;
   #comparisonSubline!: HTMLElement;
   #chart!: HTMLElement;
-  #table!: Table<BudgetTransaction>;
+  #table!: DataTable<BudgetTransaction>;
   #empty!: HTMLElement;
   #filterBar!: FilterBar<BudgetTransaction>;
   #monthSelector!: DropdownMenu;
@@ -146,8 +145,6 @@ export class EntityDetailScreen
   #selectedMonth: string | null = null;
   #query = "";
   #filters: AppliedFilter<BudgetTransaction>[] = [];
-  #sortKey: keyof BudgetTransaction | null = null;
-  #sortDirection: SortDirection | null = null;
   #visibleRows: BudgetTransaction[] = [];
   #listening = false;
   #unsubscribeBudgetingContext: (() => void) | null = null;
@@ -172,12 +169,10 @@ export class EntityDetailScreen
     this.#listening = true;
 
     this.addEventListener("filters-changed", this);
-    this.addEventListener("table-sort-request", this);
     this.addEventListener("search-changed", this);
     this.addEventListener("budgeting:header-action", this);
     this.#monthSelector.addListener(this);
-    this.#table.addEventListener("click", this);
-    this.#table.addEventListener("keydown", this);
+    this.#table.rowSelection.addListener(this);
     RENDER_EVENTS.forEach((name) => window.addEventListener(name, this));
     this.#unsubscribeBudgetingContext = appState.subscribe(
       "budgetingContext",
@@ -190,12 +185,10 @@ export class EntityDetailScreen
     if (!this.#listening) return;
     this.#listening = false;
     this.removeEventListener("filters-changed", this);
-    this.removeEventListener("table-sort-request", this);
     this.removeEventListener("search-changed", this);
     this.removeEventListener("budgeting:header-action", this);
     this.#monthSelector.removeListener(this);
-    this.#table.removeEventListener("click", this);
-    this.#table.removeEventListener("keydown", this);
+    this.#table.rowSelection.removeListener(this);
     RENDER_EVENTS.forEach((name) => window.removeEventListener(name, this));
     this.#unsubscribeBudgetingContext?.();
     this.#unsubscribeBudgetingContext = null;
@@ -235,16 +228,12 @@ export class EntityDetailScreen
       return;
     }
 
-    if (event.type === "table-sort-request") {
-      this.#cycleSort(
-        (event as CustomEvent<{ key: keyof BudgetTransaction }>).detail.key,
-      );
-      this.#renderLedger();
-      return;
-    }
-
-    if (event.type === "click" || event.type === "keydown") {
-      this.#openSelectedRow(event);
+    if (event.type === "table-row-selected") {
+      const id = (event as CustomEvent<{ id: string }>).detail.id;
+      const transaction = this.#visibleRows.find((row) => row.id === id);
+      if (transaction) {
+        router.updateParams({ drawer: "edit", transactionId: transaction.id });
+      }
       return;
     }
 
@@ -497,8 +486,8 @@ export class EntityDetailScreen
     this.#chart.replaceChildren(plot);
   }
 
-  #columns(): TableColumn<BudgetTransaction>[] {
-    const entityColumns: TableColumn<BudgetTransaction>[] =
+  #columns(): DataTableColumn<BudgetTransaction>[] {
+    const entityColumns: DataTableColumn<BudgetTransaction>[] =
       this.#selected?.kind === "category"
         ? [this.#assignmentColumn(), this.#vendorColumn()]
         : this.#selected?.kind === "vendor"
@@ -509,67 +498,63 @@ export class EntityDetailScreen
       {
         key: "date",
         title: "Date",
-        dataType: "string",
-        formatter: ledgerDate,
+        formatter: (value) => ledgerDate(String(value ?? "")),
         sizing: "narrow",
-        cellClass: "transaction-date",
+        cellClass: ["date"],
       },
       {
         key: "notes",
         title: "Description",
-        dataType: "string",
-        formatter: (value, row) =>
+        formatter: (value, row) => escapeHTML(
           String(value ?? "").trim() || row.category || "Uncategorized",
+        ),
         subline: (row) =>
-          this.#selected?.kind === "vendor"
+          escapeHTML(this.#selected?.kind === "vendor"
             ? row.assignment || "Shared"
-            : row.vendor || "No vendor",
-        prominence: "bold",
+            : row.vendor || "No vendor"),
         sizing: 35,
-        cellClass: "transaction-description",
+        cellClass: ["primary"],
       },
       ...entityColumns,
       {
         key: "amount",
         title: "Amount",
-        dataType: "number",
         formatter: (_value, row) => money(signedTransactionAmount(row)),
-        textAlign: "right",
         sizing: "narrow",
-        cellClass: "transaction-amount",
+        cellClass: ["numeric", "align-right"],
+        headerClass: "align-right",
         sorter: signedTransactionAmount,
       },
     ];
   }
 
-  #categoryColumn(): TableColumn<BudgetTransaction> {
+  #categoryColumn(): DataTableColumn<BudgetTransaction> {
     return {
       key: "category",
       title: "Category",
-      dataType: "string",
-      prominence: "tag",
       sizing: 20,
-      cellClass: "transaction-category",
+      cellClass: ["tag"],
+      formatter: (value) => escapeHTML(value),
     };
   }
 
-  #vendorColumn(): TableColumn<BudgetTransaction> {
+  #vendorColumn(): DataTableColumn<BudgetTransaction> {
     return {
       key: "vendor",
       title: "Vendor",
-      dataType: "string",
       sizing: 25,
-      cellClass: "transaction-vendor",
+      cellClass: ["detail"],
+      formatter: (value) => escapeHTML(value),
     };
   }
 
-  #assignmentColumn(): TableColumn<BudgetTransaction> {
+  #assignmentColumn(): DataTableColumn<BudgetTransaction> {
     return {
       key: "assignment",
       title: "Assignment",
-      dataType: "string",
       sizing: 20,
-      cellClass: "transaction-assignment",
+      cellClass: ["detail"],
+      formatter: (value) => escapeHTML(value),
     };
   }
 
@@ -645,43 +630,23 @@ export class EntityDetailScreen
     this.#filters = this.#filterBar.filters;
   }
 
-  #sortedRows(rows: BudgetTransaction[]): BudgetTransaction[] {
-    if (!this.#sortKey || !this.#sortDirection) {
-      return [...rows].sort(
-        (left, right) =>
-          right.date.localeCompare(left.date) ||
-          right.createdAt.localeCompare(left.createdAt),
-      );
-    }
-    const key = this.#sortKey;
-    const column = this.#columns().find((item) => item.key === key);
-    const multiplier = this.#sortDirection === "ascending" ? 1 : -1;
-    return [...rows].sort((left, right) => {
-      const leftValue = column?.sorter?.(left) ?? left[key];
-      const rightValue = column?.sorter?.(right) ?? right[key];
-      if (typeof leftValue === "number" && typeof rightValue === "number") {
-        return (leftValue - rightValue) * multiplier;
-      }
-      return String(leftValue ?? "").localeCompare(String(rightValue ?? "")) * multiplier;
-    });
-  }
-
   #renderLedger(): void {
     if (!this.#selected) return;
-    const rows = this.#sortedRows(this.#filteredRows());
+    const rows = [...this.#filteredRows()].sort(
+      (left, right) =>
+        right.date.localeCompare(left.date) ||
+        right.createdAt.localeCompare(left.createdAt),
+    );
     this.#visibleRows = rows;
     const visibleTotal = rows.reduce(
       (sum, row) => sum + signedTransactionAmount(row),
       0,
     );
-    const data: TableData<BudgetTransaction> = {
+    const data: DataTableData<BudgetTransaction> = {
       columns: this.#columns(),
       rows,
       interactiveRows: true,
-      sort:
-        this.#sortKey && this.#sortDirection
-          ? { key: this.#sortKey, direction: this.#sortDirection }
-          : null,
+      rowKey: (row) => row.id,
       footer: {
         cells: [null, "Visible total", null, null, money(visibleTotal)],
         ariaLabel: `Visible transaction total ${money(visibleTotal)}`,
@@ -689,36 +654,6 @@ export class EntityDetailScreen
     };
     this.#table.data = data;
     this.#empty.hidden = rows.length > 0;
-  }
-
-  #cycleSort(key: keyof BudgetTransaction): void {
-    if (this.#sortKey !== key || this.#sortDirection === null) {
-      this.#sortKey = key;
-      this.#sortDirection = "descending";
-    } else if (this.#sortDirection === "descending") {
-      this.#sortDirection = "ascending";
-    } else {
-      this.#sortKey = null;
-      this.#sortDirection = null;
-    }
-  }
-
-  #openSelectedRow(event: Event): void {
-    if (
-      event instanceof KeyboardEvent &&
-      event.key !== "Enter" &&
-      event.key !== " "
-    ) {
-      return;
-    }
-    const row = (event.target as Element | null)?.closest<HTMLTableRowElement>(
-      "tbody tr",
-    );
-    if (!row) return;
-    const transaction = this.#visibleRows[row.rowIndex - 1];
-    if (!transaction) return;
-    if (event instanceof KeyboardEvent) event.preventDefault();
-    router.updateParams({ drawer: "edit", transactionId: transaction.id });
   }
 
   #handleEdit(): void {

@@ -8,11 +8,11 @@ import type {
   DropdownSelectionEvent,
 } from "../../components/dropdown-menu/dropdown-menu";
 import type { SearchBar } from "../../components/search-bar/search-bar";
-import {
-  Table,
-  type SortDirection,
-  type TableColumn,
-} from "../../components/table/table";
+import type {
+  DataTable,
+  DataTableColumn,
+  DataTableData,
+} from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import {
   addListener,
@@ -24,7 +24,7 @@ import {
   investmentLedgerRows,
   type InvestmentLedgerRow,
 } from "../../utilities/investment-ledger";
-import { money } from "../../utilities/view-formatters";
+import { escapeHTML, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 import { DateUtils } from "../../utilities/date-utilities";
 
@@ -48,7 +48,7 @@ export class InvestmentLedgerScreen
   extends HTMLElement
   implements EventListenerObject
 {
-  #table!: Table<InvestmentLedgerRow>;
+  #table!: DataTable<InvestmentLedgerRow>;
   #filter!: FilterBar<InvestmentLedgerRow>;
   #month!: DropdownMenu;
   #search!: SearchBar;
@@ -56,15 +56,14 @@ export class InvestmentLedgerScreen
   #selectedMonth: string | null = null;
   #query = "";
   #filters: AppliedFilter<InvestmentLedgerRow>[] = [];
-  #sortKey: keyof InvestmentLedgerRow | null = null;
-  #sortDirection: SortDirection | null = null;
+  #visibleRows: InvestmentLedgerRow[] = [];
 
   connectedCallback(): void {
     if (!this.dataset.initialized) {
       this.dataset.initialized = "true";
       this.classList.add("screen");
       this.append(template.content.cloneNode(true));
-      this.#table = this.querySelector("table-list")!;
+      this.#table = this.querySelector("data-table")!;
       this.#filter = this.querySelector("filter-bar")!;
       this.#month = this.querySelector("#investment-ledger-month")!;
       this.#search = this.querySelector("#investment-ledger-search")!;
@@ -72,11 +71,9 @@ export class InvestmentLedgerScreen
       this.#month.items = monthItems;
     }
     addListener("filters-changed", this, this);
-    addListener("table-sort-request", this, this);
     this.#month.addListener(this);
     this.#search.addEventListener("search-changed", this);
-    this.#table.addEventListener("click", this);
-    this.#table.addEventListener("keydown", this);
+    this.#table.rowSelection.addListener(this);
     window.addEventListener("budget:accounts-changed", this);
     window.addEventListener("app:route-changed", this);
     this.#configureFilters();
@@ -85,11 +82,9 @@ export class InvestmentLedgerScreen
 
   disconnectedCallback(): void {
     removeListener("filters-changed", this, this);
-    removeListener("table-sort-request", this, this);
     this.#month.removeListener(this);
     this.#search.removeEventListener("search-changed", this);
-    this.#table.removeEventListener("click", this);
-    this.#table.removeEventListener("keydown", this);
+    this.#table.rowSelection.removeListener(this);
     window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("app:route-changed", this);
   }
@@ -107,13 +102,6 @@ export class InvestmentLedgerScreen
         );
         break;
 
-      case "table-sort-request":
-        handleCustomEvent("table-sort-request", event, ({ key }) => {
-          this.#cycleSort(key as keyof InvestmentLedgerRow);
-          this.#render();
-        });
-        break;
-
       case "dropdown-selection":
         if (event.currentTarget !== this.#month) return;
         const value = (event as DropdownSelectionEvent).detail.value;
@@ -128,9 +116,16 @@ export class InvestmentLedgerScreen
         this.#render();
         break;
 
-      case "click":
-      case "keydown":
-        this.#openSelectedRow(event);
+      case "table-row-selected":
+        handleCustomEvent("table-row-selected", event, ({ id }) => {
+          const row = this.#visibleRows.find((item) => item.id === id);
+          if (!row) return;
+          router.updateParams({
+            drawer: "investment-ledger-entry",
+            investmentLedgerId: row.id,
+            investmentLedgerSource: row.source,
+          });
+        });
         break;
 
       default:
@@ -143,40 +138,36 @@ export class InvestmentLedgerScreen
     return Number(router.currentParams().year) || new Date().getFullYear();
   }
 
-  #columns(): TableColumn<InvestmentLedgerRow>[] {
+  #columns(): DataTableColumn<InvestmentLedgerRow>[] {
     return [
       {
         key: "date",
         title: "Date",
-        dataType: "string",
-        formatter: ledgerDate,
+        formatter: (value) => ledgerDate(String(value ?? "")),
         sizing: "narrow",
-        cellClass: "transaction-date",
+        cellClass: ["date"],
       },
       {
         key: "account",
         title: "Account",
-        dataType: "string",
-        prominence: "bold",
         sizing: 45,
-        cellClass: "transaction-description",
+        cellClass: ["primary"],
+        formatter: (value) => escapeHTML(value),
       },
       {
         key: "type",
         title: "Type",
-        dataType: "string",
-        prominence: "tag",
         sizing: 25,
-        cellClass: "transaction-category investment-ledger-type",
+        cellClass: ["tag"],
+        formatter: (value) => escapeHTML(value),
       },
       {
         key: "amount",
         title: "Amount",
-        dataType: "number",
         formatter: (value) => money(Number(value)),
-        textAlign: "right",
         sizing: "narrow",
-        cellClass: "transaction-amount investment-ledger-amount",
+        cellClass: ["numeric", "align-right"],
+        headerClass: "align-right",
       },
     ];
   }
@@ -198,21 +189,9 @@ export class InvestmentLedgerScreen
       );
   }
 
-  #sortedRows(): InvestmentLedgerRow[] {
-    const rows = this.#filteredRows();
-    if (!this.#sortKey || !this.#sortDirection) return rows;
-    const key = this.#sortKey;
-    const multiplier = this.#sortDirection === "ascending" ? 1 : -1;
-    return [...rows].sort(
-      (a, b) =>
-        (typeof a[key] === "number"
-          ? Number(a[key]) - Number(b[key])
-          : String(a[key]).localeCompare(String(b[key]))) * multiplier,
-    );
-  }
-
   #render(): void {
-    const rows = this.#sortedRows();
+    const rows = this.#filteredRows();
+    this.#visibleRows = rows;
     const period = this.#selectedMonth
       ? DateUtils.monthFormatter
           .format(new Date(2024, Number(this.#selectedMonth) - 1, 1))
@@ -220,19 +199,17 @@ export class InvestmentLedgerScreen
       : "all";
     this.#subtitle.textContent = `Showing ${period} investment activity recorded for ${this.#year()}.`;
     const total = rows.reduce((sum, row) => sum + row.amount, 0);
-    this.#table.data = {
+    const data: DataTableData<InvestmentLedgerRow> = {
       columns: this.#columns(),
       rows,
       interactiveRows: true,
+      rowKey: (row) => row.id,
       footer: {
         cells: [null, "Total", null, money(total)],
         ariaLabel: `Investment ledger total ${money(total)}`,
       },
-      sort:
-        this.#sortKey && this.#sortDirection
-          ? { key: this.#sortKey, direction: this.#sortDirection }
-          : null,
     };
+    this.#table.data = data;
   }
 
   #configureFilters(): void {
@@ -254,34 +231,6 @@ export class InvestmentLedgerScreen
     ];
   }
 
-  #cycleSort(key: keyof InvestmentLedgerRow): void {
-    if (this.#sortKey !== key || !this.#sortDirection) {
-      this.#sortKey = key;
-      this.#sortDirection = "descending";
-    } else if (this.#sortDirection === "descending")
-      this.#sortDirection = "ascending";
-    else {
-      this.#sortKey = null;
-      this.#sortDirection = null;
-    }
-  }
-
-  #openSelectedRow(event: Event): void {
-    if (event instanceof KeyboardEvent && !["Enter", " "].includes(event.key))
-      return;
-    const rowElement = (
-      event.target as Element | null
-    )?.closest<HTMLTableRowElement>("tbody tr");
-    if (!rowElement) return;
-    const row = this.#sortedRows()[rowElement.rowIndex - 1];
-    if (!row) return;
-    if (event instanceof KeyboardEvent) event.preventDefault();
-    router.updateParams({
-      drawer: "investment-ledger-entry",
-      investmentLedgerId: row.id,
-      investmentLedgerSource: row.source,
-    });
-  }
 }
 
 if (!customElements.get("investment-ledger-screen")) {

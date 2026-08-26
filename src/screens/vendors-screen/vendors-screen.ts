@@ -1,10 +1,10 @@
 import { APIs } from "../../api/api";
 import type { AvailableFilter } from "../../components/filter-bar/filter-bar";
-import type { TableColumn } from "../../components/table/table";
+import type { DataTableColumn } from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
 import { buildEntityLedgerRows, editorialPeriod, signedPercent, type EntityLedgerRow } from "../../utilities/entity-ledger";
-import { money } from "../../utilities/view-formatters";
+import { escapeHTML, money } from "../../utilities/view-formatters";
 import { EditorialEntityLedgerScreen } from "../editorial-entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
@@ -30,21 +30,20 @@ export class VendorsScreen extends EditorialEntityLedgerScreen<EntityLedgerRow> 
     ];
   }
 
-  protected columns(year: number): TableColumn<EntityLedgerRow>[] {
+  protected columns(year: number): DataTableColumn<EntityLedgerRow>[] {
     return [
-      { key: "rank", title: "Rank", dataType: "number", sizing: "narrow", cellClass: "entity-rank" },
+      { key: "rank", title: "Rank", sizing: "narrow", cellClass: ["detail"] },
       {
-        key: "name", title: "Name", dataType: "string", sizing: 31,
-        prominence: "bold", cellClass: "entity-name",
-        color: (row) => row.active ? "var(--color-text)" : "var(--color-text-subtle)",
+        key: "name", title: "Name", sizing: 31,
+        cellClass: ["primary", (row) => row.active ? "" : "is-muted"],
+        formatter: (value) => escapeHTML(value),
         trailingIcon: (row) => row.active ? null : "box",
       },
-      { key: "average", title: "Average transaction", dataType: "number", sizing: 20, textAlign: "right", formatter: (value) => money(value), cellClass: "entity-average" },
-      { key: "total", title: "Total", dataType: "number", sizing: 20, textAlign: "right", formatter: (value) => money(value), cellClass: "entity-total" },
+      { key: "average", title: "Average transaction", sizing: 20, textAlign: "right", formatter: (value) => money(value), cellClass: ["numeric", "align-right"] },
+      { key: "total", title: "Total", sizing: 20, textAlign: "right", formatter: (value) => money(value), cellClass: ["strong", "align-right"] },
       {
-        key: "comparison", title: `vs ${year - 1}`, dataType: "number", sizing: 20,
-        textAlign: "right", formatter: signedPercent, cellClass: "entity-comparison",
-        color: (row) => row.comparison === null ? "var(--color-text-subtle)" : row.comparison >= 0 ? "var(--color-positive)" : "var(--color-negative)",
+        key: "comparison", title: `vs ${year - 1}`, sizing: 20,
+        textAlign: "right", formatter: (value) => signedPercent(value as number | null), cellClass: ["comparison", "align-right", (row) => row.comparison === null ? "is-muted" : row.comparison >= 0 ? "is-positive" : "is-negative"],
         sorter: (row) => row.comparison ?? Number.NEGATIVE_INFINITY,
       },
     ];

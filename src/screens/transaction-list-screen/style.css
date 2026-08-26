@@ -23,9 +23,8 @@ transaction-list-screen {
     }
   }
 
-  table-list {
-    --outer-padding: 0px;
-    --vertical-padding: 12px;
+  data-table {
+    --data-table-row-padding: 12px;
     --table-row-height: 70px;
 
     flex: 0 0 auto;
@@ -109,52 +108,42 @@ transaction-list-screen {
         font-size: var(--text-sm);
       }
 
-      .transaction-date,
-      .transaction-amount {
+      .date,
+      .numeric {
         font-family: var(--font-mono);
         font-variant-numeric: tabular-nums;
       }
 
-      td.transaction-date {
+      td.date {
         color: var(--color-text-muted) !important;
       }
 
-      td.transaction-description {
+      td.primary {
         font-family: var(--font-display);
         font-size: var(--text-base);
         font-weight: var(--weight-semibold) !important;
 
-        .table-cell-stack {
+        .cell-stack {
           overflow: visible;
         }
 
-        .table-cell-primary {
+        .cell-primary {
           padding-block: 0.1em;
           line-height: var(--leading-snug);
         }
 
-        .table-cell-subline {
+        .cell-subline {
           display: none;
         }
       }
 
-      .transaction-category .table-cell-tag {
-        display: inline-block;
-        padding: 5px 10px;
-        border: 1px solid var(--color-rule-strong);
-        border-radius: 0;
-        color: var(--color-text-muted);
-        font-size: var(--text-xs);
-        line-height: 1;
-      }
-
-      .transaction-amount {
+      .numeric {
         color: var(--color-text) !important;
         font-size: var(--text-sm);
         font-weight: var(--weight-regular) !important;
       }
 
-      tfoot .transaction-amount {
+      tfoot .numeric {
         font-family: var(--font-mono);
         font-size: var(--text-sm);
         font-weight: var(--weight-medium) !important;
@@ -211,7 +200,7 @@ transaction-list-screen {
       min-width: 0;
     }
 
-    table-list {
+    data-table {
       width: 100%;
       max-width: 100%;
       overflow: visible;
@@ -264,25 +253,25 @@ transaction-list-screen {
           padding-right: 0;
         }
 
-        .transaction-category,
-        .transaction-vendor {
+        .tag,
+        .detail {
           display: none;
         }
 
-        tfoot .transaction-description {
+        tfoot .primary {
           grid-column: 2;
         }
 
-        tfoot .transaction-amount {
+        tfoot .numeric {
           grid-column: 3;
         }
 
-        td.transaction-description {
+        td.primary {
           font-size: var(--text-sm);
 
-          .table-cell-stack,
-          .table-cell-primary,
-          .table-cell-subline {
+          .cell-stack,
+          .cell-primary,
+          .cell-subline {
             display: block;
             max-width: 100%;
             overflow: hidden;
@@ -290,7 +279,7 @@ transaction-list-screen {
             white-space: nowrap;
           }
 
-          .table-cell-subline {
+          .cell-subline {
             margin-top: 3px;
             color: var(--color-text-muted);
             font-family: var(--font-body);
@@ -300,7 +289,7 @@ transaction-list-screen {
           }
         }
 
-        .transaction-date {
+        .date {
           font-size: var(--text-xs);
         }
       }

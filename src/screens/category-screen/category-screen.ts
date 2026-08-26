@@ -4,7 +4,7 @@ import type {
   DropdownSelectionEvent,
 } from "../../components/dropdown-menu/dropdown-menu";
 import type { AvailableFilter } from "../../components/filter-bar/filter-bar";
-import type { TableColumn } from "../../components/table/table";
+import type { DataTableColumn } from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
 import {
@@ -13,7 +13,7 @@ import {
   signedPercent,
   type EntityLedgerRow,
 } from "../../utilities/entity-ledger";
-import { money } from "../../utilities/view-formatters";
+import { escapeHTML, money } from "../../utilities/view-formatters";
 import { EditorialEntityLedgerScreen } from "../editorial-entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
@@ -84,21 +84,20 @@ export class CategoryScreen extends EditorialEntityLedgerScreen<CategoryLedgerRo
     ];
   }
 
-  protected columns(year: number): TableColumn<CategoryLedgerRow>[] {
+  protected columns(year: number): DataTableColumn<CategoryLedgerRow>[] {
     return [
-      { key: "rank", title: "Rank", dataType: "number", sizing: "narrow", cellClass: "entity-rank" },
+      { key: "rank", title: "Rank", sizing: "narrow", cellClass: ["detail"] },
       {
-        key: "name", title: "Name", dataType: "string", sizing: 31,
-        prominence: "bold", cellClass: "entity-name",
-        color: (row) => row.active ? "var(--color-text)" : "var(--color-text-subtle)",
+        key: "name", title: "Name", sizing: 31,
+        cellClass: ["primary", (row) => row.active ? "" : "is-muted"],
+        formatter: (value) => escapeHTML(value),
         trailingIcon: (row) => row.active ? null : "box",
       },
-      { key: "average", title: "Average transaction", dataType: "number", sizing: 20, textAlign: "right", formatter: (value) => money(value), cellClass: "entity-average" },
-      { key: "total", title: "Total", dataType: "number", sizing: 20, textAlign: "right", formatter: (value) => money(value), cellClass: "entity-total" },
+      { key: "average", title: "Average transaction", sizing: 20, textAlign: "right", formatter: (value) => money(value), cellClass: ["numeric", "align-right"] },
+      { key: "total", title: "Total", sizing: 20, textAlign: "right", formatter: (value) => money(value), cellClass: ["strong", "align-right"] },
       {
-        key: "comparison", title: `vs ${year - 1}`, dataType: "number", sizing: 20,
-        textAlign: "right", formatter: signedPercent, cellClass: "entity-comparison",
-        color: comparisonColor,
+        key: "comparison", title: `vs ${year - 1}`, sizing: 20,
+        textAlign: "right", formatter: (value) => signedPercent(value as number | null), cellClass: ["comparison", "align-right", (row) => row.comparison === null ? "is-muted" : row.comparison >= 0 ? "is-positive" : "is-negative"],
         sorter: (row) => row.comparison ?? Number.NEGATIVE_INFINITY,
       },
     ];
@@ -122,11 +121,6 @@ export class CategoryScreen extends EditorialEntityLedgerScreen<CategoryLedgerRo
   protected openRow(row: CategoryLedgerRow, year: number): void {
     router.navigate("entity-detail", { kind: "category", id: row.id, year: String(year) });
   }
-}
-
-function comparisonColor(row: CategoryLedgerRow): string {
-  if (row.comparison === null) return "var(--color-text-subtle)";
-  return row.comparison >= 0 ? "var(--color-positive)" : "var(--color-negative)";
 }
 
 if (!customElements.get("category-screen")) customElements.define("category-screen", CategoryScreen);
