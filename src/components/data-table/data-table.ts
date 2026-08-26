@@ -2,6 +2,18 @@ import { getIcon, type IconKeys } from "../../icons";
 import { dispatchCustomEvent } from "../../utilities/event-utilities";
 
 export type DataTableSortDirection = "ascending" | "descending";
+export type DataTableCellClasses =
+  | "col-header"
+  | "primary"
+  | "numeric"
+  | "align-right"
+  | "comparison"
+  | "strong"
+  | "tag"
+  | "detail"
+  | "is-negative"
+  | "is-positive"
+  | "";
 
 export interface DataTableColumn<T extends object = Record<string, unknown>> {
   key: keyof T & string;
@@ -9,15 +21,18 @@ export interface DataTableColumn<T extends object = Record<string, unknown>> {
   formatter?: (value: unknown, row: T) => string;
   subline?: (row: T) => string;
   sorter?: (row: T) => number | string;
-  cellClass?: string;
+  cellClass?: (DataTableCellClasses | ((row: T) => DataTableCellClasses))[];
   textAlign?: "left" | "center" | "right";
   sizing?: "narrow" | number;
   trailingIcon?: (row: T) => IconKeys | null;
+  headerClass?: string;
 }
 
 export interface DataTableData<T extends object = Record<string, unknown>> {
   columns: readonly DataTableColumn<T>[];
   rows: readonly T[];
+  interactiveRows?: boolean;
+  rowKey?: (row: T) => string;
   footer?: {
     cells: readonly (string | null)[];
     ariaLabel?: string;
@@ -114,8 +129,13 @@ export class DataTable<
       const cell = document.createElement("th");
       cell.scope = "col";
       cell.classList.add("col-header");
-      if (column.cellClass) {
-        cell.classList.add(...column.cellClass.split(/\s+/).filter(Boolean));
+
+      cell.classList.add(
+        ...(column.cellClass?.filter((item) => typeof item === "string") ?? []),
+      );
+
+      if (column.headerClass) {
+        cell.classList.add(...column.headerClass.split(/\s+/).filter(Boolean));
       }
       if (column.sizing === "narrow") col.classList.add("shrink");
       else if (typeof column.sizing === "number")
@@ -168,78 +188,85 @@ export class DataTable<
   #renderRows(): void {
     this.#body ??= document.createElement("tbody");
     const rows = this.#sortedRows();
-    const bodyFragment = document.createDocumentFragment();
-    for (const rowData of rows) {
-      const row = document.createElement("tr");
-      this.#data.columns.forEach((column) =>
-        row.append(this.#renderCell(column, rowData)),
-      );
-      bodyFragment.append(row);
-    }
-    this.#body.replaceChildren(bodyFragment);
-    this.#table.append(this.#body);
-  }
 
-  #renderCell(column: DataTableColumn<T>, rowData: T): HTMLTableCellElement {
-    const cell = document.createElement("td");
-    if (column.cellClass) {
-      cell.classList.add(
-        ...column.cellClass
-          .split(/\s+/)
-          .filter((className) => className && className !== "tag"),
-      );
-    }
-    const value = rowData[column.key];
-    const text = column.formatter?.(value, rowData) ?? String(value ?? "");
-    const classes = new Set((column.cellClass ?? "").split(/\s+/));
-    if (classes.has("tag")) {
-      const tag = document.createElement("span");
-      tag.className = "tag";
-      tag.textContent = text;
-      cell.append(tag);
-    } else if (column.subline) {
-      const stack = document.createElement("div");
-      stack.className = "cell-stack";
-      const primary = document.createElement("div");
-      primary.className = "cell-primary";
-      primary.textContent = text;
-      const subline = document.createElement("small");
-      subline.className = "cell-subline";
-      subline.textContent = column.subline(rowData);
-      stack.append(primary, subline);
-      cell.append(stack);
-    } else if (column.trailingIcon) {
-      const inline = document.createElement("span");
-      inline.className = "cell-inline";
-      const inlineText = document.createElement("span");
-      inlineText.textContent = text;
-      inline.append(inlineText);
-      const iconName = column.trailingIcon(rowData);
-      const icon = iconName ? getIcon(iconName) : null;
-      if (icon) inline.append(icon);
-      cell.append(inline);
-    } else cell.textContent = text;
-    if (column.textAlign) cell.style.textAlign = column.textAlign;
-    return cell;
+    const rowChildren = rows
+      .map((row) => {
+        const cols = this.#data.columns
+          .map((col) => {
+            const value = row[col.key];
+            const text = col.formatter?.(value, row) ?? String(value ?? "");
+            const classes = (
+              col.cellClass?.map((v) => (typeof v === "string" ? v : v(row))) ??
+              []
+            ).join(" ");
+
+            if (classes.includes("tag")) {
+              return `
+                <td class="${classes}">
+                  <span class="tag">${text}</span>
+                </td>`;
+            }
+
+            if (col.subline) {
+              return `
+                <td class="${classes}">
+                  <div class="cell-stack">
+                    <div class="cell-primary">${text}</div>
+                    <small class="cell-subline">${col.subline(row)}</small>
+                  </div>
+                </td>`;
+            }
+
+            if (col.trailingIcon) {
+              const icon = col.trailingIcon(row);
+              return `
+                <td class="${classes}">
+                  <span class="cell-inline">
+                    <span>${text}</span>
+                    ${icon && `<custom-icon icon="${getIcon(icon)}"></custom-icon>`}
+                  </span>
+                </td>`;
+            }
+
+            return `<td class="${classes}">${text}</td>`;
+          })
+          .join("");
+
+        const rowAttributes = [
+          this.#data.interactiveRows ? 'class="is-interactive" tabindex="0"' : "",
+          this.#data.rowKey ? `data-row-key="${this.#data.rowKey(row)}"` : "",
+        ].filter(Boolean).join(" ");
+        return `<tr ${rowAttributes}>${cols}</tr>`;
+      })
+      .join("");
+
+    this.#body.innerHTML = rowChildren;
+    this.#table.append(this.#body);
   }
 
   #renderFooter(): void {
     this.#table.querySelector("tfoot")?.remove();
     if (!this.#data.footer) return;
+
     const footer = document.createElement("tfoot");
     const row = document.createElement("tr");
-    if (this.#data.footer.ariaLabel)
+
+    if (this.#data.footer.ariaLabel) {
       row.setAttribute("aria-label", this.#data.footer.ariaLabel);
-    this.#data.columns.forEach((column, index) => {
-      const cell = document.createElement(index === 0 ? "th" : "td");
-      cell.textContent = this.#data.footer?.cells[index] ?? "";
-      if (cell instanceof HTMLTableCellElement && index === 0)
-        cell.scope = "row";
-      if (column.cellClass)
-        cell.classList.add(...column.cellClass.split(/\s+/).filter(Boolean));
-      if (column.textAlign) cell.style.textAlign = column.textAlign;
-      row.append(cell);
-    });
+    }
+
+    const cols = this.#data.columns
+      .map((col, i) => {
+        const text = this.#data.footer?.cells[i] ?? "";
+        const classes = (
+          col.cellClass?.map((v) => (typeof v === "string" ? v : "")) ?? []
+        ).join(" ");
+
+        return `<td class="${classes} ${i === 0 ? "strong" : ""}">${text}</td>`;
+      })
+      .join("");
+
+    row.innerHTML = cols;
     footer.append(row);
     this.#table.append(footer);
   }

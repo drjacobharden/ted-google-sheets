@@ -6,6 +6,11 @@ import type {
   DropdownMenu,
   DropdownSelectionEvent,
 } from "../../components/dropdown-menu/dropdown-menu";
+import type {
+  DataTable,
+  DataTableCellClasses,
+  DataTableData,
+} from "../../components/data-table/data-table";
 import { type SpendTrendPeriod } from "../../utilities/spend-trend";
 import { appState } from "../../state/app-state";
 import { appController } from "../../state/app-controller";
@@ -36,6 +41,18 @@ import { DateUtils } from "../../utilities/date-utilities";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
+
+interface MonthlySummaryTableRow {
+  month: string;
+  income: string;
+  spend: string;
+  deductions: string;
+  amount: string;
+  comparison: string;
+  amountValue: number;
+  comparisonValue: number | null;
+  hasData: boolean;
+}
 
 const shortDate = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -175,7 +192,11 @@ function signedMoney(value: number): string {
 }
 
 function percentChange(current: number, previous: number): number | null {
-  if (!Number.isFinite(current) || !Number.isFinite(previous) || previous === 0) {
+  if (
+    !Number.isFinite(current) ||
+    !Number.isFinite(previous) ||
+    previous === 0
+  ) {
     return null;
   }
   return ((current - previous) / Math.abs(previous)) * 100;
@@ -716,15 +737,8 @@ export class BudgetOverviewScreen
   #legend!: HTMLElement;
   #legendTotal!: HTMLElement;
   #previousLegend!: HTMLElement;
-  #monthlySummaryCaption!: HTMLElement;
-  #monthlySummaryBody!: HTMLTableSectionElement;
+  #monthlySummaryTable!: DataTable<MonthlySummaryTableRow>;
   #monthlySummaryAssignmentSelector!: DropdownMenu;
-  #monthlySummaryIncomeTotal!: HTMLElement;
-  #monthlySummarySpendTotal!: HTMLElement;
-  #monthlySummaryDeductionsTotal!: HTMLElement;
-  #monthlySummaryNetTotal!: HTMLElement;
-  #monthlySummaryComparisonHeading!: HTMLElement;
-  #monthlySummaryComparisonTotal!: HTMLElement;
   #monthlySummaryAssignmentId: string | null = null;
   #topVendorsList!: HTMLOListElement;
   #topVendorsEmpty!: HTMLElement;
@@ -1029,32 +1043,11 @@ export class BudgetOverviewScreen
       "#spend-trend-previous-legend",
     )!;
 
-    this.#monthlySummaryCaption = this.querySelector<HTMLElement>(
-      "#monthly-summary-caption",
-    )!;
-    this.#monthlySummaryBody = this.querySelector<HTMLTableSectionElement>(
-      "#monthly-summary-body",
-    )!;
+    this.#monthlySummaryTable = this.querySelector<
+      DataTable<MonthlySummaryTableRow>
+    >("#monthly-summary-table")!;
     this.#monthlySummaryAssignmentSelector = this.querySelector<DropdownMenu>(
       "#monthly-summary-assignment-selector",
-    )!;
-    this.#monthlySummaryIncomeTotal = this.querySelector<HTMLElement>(
-      "#monthly-summary-income-total",
-    )!;
-    this.#monthlySummarySpendTotal = this.querySelector<HTMLElement>(
-      "#monthly-summary-spend-total",
-    )!;
-    this.#monthlySummaryDeductionsTotal = this.querySelector<HTMLElement>(
-      "#monthly-summary-deductions-total",
-    )!;
-    this.#monthlySummaryNetTotal = this.querySelector<HTMLElement>(
-      "#monthly-summary-net-total",
-    )!;
-    this.#monthlySummaryComparisonHeading = this.querySelector<HTMLElement>(
-      "#monthly-summary-comparison-heading",
-    )!;
-    this.#monthlySummaryComparisonTotal = this.querySelector<HTMLElement>(
-      "#monthly-summary-comparison-total",
     )!;
 
     this.#topVendorsList =
@@ -1519,8 +1512,7 @@ export class BudgetOverviewScreen
       .getTransactions()
       .filter(
         (transaction) =>
-          transaction.date >= start &&
-          transaction.date <= dataEnd,
+          transaction.date >= start && transaction.date <= dataEnd,
       );
     const spend = transactions.reduce(
       (total, transaction) =>
@@ -1553,8 +1545,7 @@ export class BudgetOverviewScreen
       .getTransactions()
       .filter(
         (transaction) =>
-          transaction.date >= previousStart &&
-          transaction.date <= previousEnd,
+          transaction.date >= previousStart && transaction.date <= previousEnd,
       );
     const previousSpend = previousTransactions.reduce(
       (total, transaction) =>
@@ -1731,14 +1722,11 @@ export class BudgetOverviewScreen
     const comparisonLabel = `vs ${this.#selectedYear - 1}`;
     this.#topCategoriesComparisonLabel.textContent = comparisonLabel;
     this.#topVendorsComparisonLabel.textContent = comparisonLabel;
-    this.#monthlySummaryComparisonHeading.textContent = comparisonLabel;
 
     const assignments = appController.getBudgetOverviewAssignments();
     if (
       this.#monthlySummaryAssignmentId !== null &&
-      !assignments.some(
-        ({ id }) => id === this.#monthlySummaryAssignmentId,
-      )
+      !assignments.some(({ id }) => id === this.#monthlySummaryAssignmentId)
     ) {
       this.#monthlySummaryAssignmentId = null;
     }
@@ -1758,7 +1746,10 @@ export class BudgetOverviewScreen
     const selectedAssignment = assignments.find(
       ({ id }) => id === this.#monthlySummaryAssignmentId,
     );
-    this.#monthlySummaryCaption.textContent = `Monthly transaction summary for ${this.#selectedYear}, ${selectedAssignment?.name ?? "all assignments"}`;
+    this.#monthlySummaryTable.setAttribute(
+      "aria-label",
+      `Monthly transaction summary for ${this.#selectedYear}, ${selectedAssignment?.name ?? "all assignments"}`,
+    );
     const ledger = appController.getMonthlyLedger(
       this.#monthlySummaryAssignmentId,
     );
@@ -1777,13 +1768,12 @@ export class BudgetOverviewScreen
           }) satisfies MonthlyTransactionSummaryRow,
       );
     const deductionMonths =
-      ledger.annualSummaryCards[this.#selectedYear]?.metrics
-        .paycheckDeductions.months ?? [];
+      ledger.annualSummaryCards[this.#selectedYear]?.metrics.paycheckDeductions
+        .months ?? [];
     const previousRows = summaries[this.#selectedYear - 1] ?? [];
     const previousDeductionMonths =
       ledger.annualSummaryCards[this.#selectedYear - 1]?.metrics
         .paycheckDeductions.months ?? [];
-    const fragment = document.createDocumentFragment();
     const totals = {
       income: 0,
       spend: 0,
@@ -1792,25 +1782,12 @@ export class BudgetOverviewScreen
       previousNet: 0,
       hasPreviousData: false,
     };
-    rows.forEach((row, index) => {
-      const tableRow = document.createElement("tr");
+    const tableRows: MonthlySummaryTableRow[] = rows.map((row, index) => {
       const isCurrentMonth =
         this.#selectedYear === currentYear && index === currentDate.getMonth();
-      if (isCurrentMonth) tableRow.classList.add("is-current");
-
-      const monthHeader = document.createElement("th");
-      monthHeader.scope = "row";
-      const monthLabel = document.createElement("span");
-      monthLabel.textContent = monthName.format(
+      const monthLabel = `${monthName.format(
         new Date(`${row.monthId}-01T00:00:00Z`),
-      );
-      monthHeader.append(monthLabel);
-      if (isCurrentMonth) {
-        const progress = document.createElement("small");
-        progress.textContent = "In progress";
-        monthHeader.append(progress);
-      }
-      tableRow.append(monthHeader);
+      )}${isCurrentMonth ? " · In progress" : ""}`;
 
       const deductionMonth = deductionMonths[index];
       const deductions = deductionMonth?.value ?? 0;
@@ -1818,16 +1795,6 @@ export class BudgetOverviewScreen
       const income = row.income ?? 0;
       const spend = row.spend ?? 0;
       const net = income - spend + deductions;
-      const values = [income, spend, deductions, net];
-      values.forEach((value, valueIndex) => {
-        const cell = document.createElement("td");
-        cell.textContent = hasData ? money(value) : "—";
-        if (valueIndex === 3 && hasData) {
-          if (value > 0) cell.classList.add("is-positive");
-          else if (value < 0) cell.classList.add("is-negative");
-        }
-        tableRow.append(cell);
-      });
       const previousRow = previousRows[index];
       const previousDeductionMonth = previousDeductionMonths[index];
       const previousHasData =
@@ -1837,16 +1804,7 @@ export class BudgetOverviewScreen
         (previousRow?.income ?? 0) -
         (previousRow?.spend ?? 0) +
         (previousDeductionMonth?.value ?? 0);
-      const comparisonCell = document.createElement("td");
       const difference = hasData && previousHasData ? net - previousNet : null;
-      comparisonCell.textContent =
-        difference === null ? "—" : signedMoney(difference);
-      if (difference !== null && difference > 0) {
-        comparisonCell.classList.add("is-positive");
-      } else if (difference !== null && difference < 0) {
-        comparisonCell.classList.add("is-negative");
-      }
-      tableRow.append(comparisonCell);
       if (hasData) {
         totals.income += income;
         totals.spend += spend;
@@ -1857,36 +1815,79 @@ export class BudgetOverviewScreen
         totals.previousNet += previousNet;
         totals.hasPreviousData = true;
       }
-      fragment.append(tableRow);
+      return {
+        month: monthLabel,
+        income: hasData ? money(income) : "—",
+        spend: hasData ? money(spend) : "—",
+        deductions: hasData ? money(deductions) : "—",
+        amount: hasData ? money(net) : "—",
+        comparison: difference === null ? "—" : signedMoney(difference),
+        amountValue: net,
+        comparisonValue: difference,
+        hasData,
+      };
     });
-    this.#monthlySummaryBody.replaceChildren(fragment);
-    this.#monthlySummaryIncomeTotal.textContent = money(totals.income);
-    this.#monthlySummarySpendTotal.textContent = money(totals.spend);
-    this.#monthlySummaryDeductionsTotal.textContent = money(
-      totals.deductions,
-    );
-    this.#monthlySummaryNetTotal.textContent = money(totals.net);
-    this.#monthlySummaryNetTotal.classList.toggle(
-      "is-positive",
-      totals.net > 0,
-    );
-    this.#monthlySummaryNetTotal.classList.toggle(
-      "is-negative",
-      totals.net < 0,
-    );
     const yearDifference = totals.hasPreviousData
       ? totals.net - totals.previousNet
       : null;
-    this.#monthlySummaryComparisonTotal.textContent =
-      yearDifference === null ? "—" : signedMoney(yearDifference);
-    this.#monthlySummaryComparisonTotal.classList.toggle(
-      "is-positive",
-      yearDifference !== null && yearDifference > 0,
-    );
-    this.#monthlySummaryComparisonTotal.classList.toggle(
-      "is-negative",
-      yearDifference !== null && yearDifference < 0,
-    );
+    const cellClass = (value: number | null): DataTableCellClasses =>
+      value !== null && value > 0
+        ? "is-positive"
+        : value !== null && value < 0
+          ? "is-negative"
+          : "";
+
+    const tableData: DataTableData<MonthlySummaryTableRow> = {
+      columns: [
+        { key: "month", title: "Month", cellClass: ["detail"] },
+        {
+          key: "income",
+          title: "Income",
+          cellClass: ["numeric", "align-right"],
+        },
+        { key: "spend", title: "Spend", cellClass: ["numeric", "align-right"] },
+        {
+          key: "deductions",
+          title: "Deductions",
+          cellClass: ["numeric", "align-right"],
+        },
+        {
+          key: "amount",
+          title: "Net",
+          headerClass: "align-right",
+          cellClass: [
+            "numeric",
+            "align-right",
+            "strong",
+            (row) => cellClass(row.hasData ? row.amountValue : null),
+          ],
+        },
+        {
+          key: "comparison",
+          title: comparisonLabel,
+          headerClass: "align-right",
+          sizing: "narrow",
+          cellClass: [
+            "comparison",
+            "align-right",
+            (row) => cellClass(row.comparisonValue),
+          ],
+        },
+      ],
+      rows: tableRows,
+      footer: {
+        cells: [
+          "Year total",
+          money(totals.income),
+          money(totals.spend),
+          money(totals.deductions),
+          money(totals.net),
+          yearDifference === null ? "—" : signedMoney(yearDifference),
+        ],
+      },
+    };
+
+    this.#monthlySummaryTable.data = tableData;
   }
 
   #renderRanking(

@@ -151,8 +151,7 @@ p {
 }
 
 input,
-span,
-td {
+span {
   font-size: var(--text-size-100);
   font-weight: 400;
   letter-spacing: 0.03em;

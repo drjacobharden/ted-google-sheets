@@ -278,30 +278,10 @@
       ></dropdown-menu>
     </header>
     <div class="table-wrapper">
-      <table>
-        <caption id="monthly-summary-caption" class="visually-hidden"></caption>
-        <thead>
-          <tr>
-            <th scope="col">Month</th>
-            <th scope="col">Income</th>
-            <th scope="col">Spend</th>
-            <th scope="col">Deductions</th>
-            <th scope="col">Net</th>
-            <th id="monthly-summary-comparison-heading" scope="col">vs previous year</th>
-          </tr>
-        </thead>
-        <tbody id="monthly-summary-body"></tbody>
-        <tfoot>
-          <tr>
-            <th scope="row">Year total</th>
-            <td id="monthly-summary-income-total">—</td>
-            <td id="monthly-summary-spend-total">—</td>
-            <td id="monthly-summary-deductions-total">—</td>
-            <td id="monthly-summary-net-total">—</td>
-            <td id="monthly-summary-comparison-total">—</td>
-          </tr>
-        </tfoot>
-      </table>
+      <data-table
+        id="monthly-summary-table"
+        aria-label="Monthly transaction summary"
+      ></data-table>
     </div>
   </section>
 

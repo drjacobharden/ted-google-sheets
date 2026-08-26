@@ -108,6 +108,13 @@ data-table {
       font-variant-numeric: tabular-nums;
     }
 
+    .strong {
+      color: var(--color-text);
+      font-family: var(--font-mono);
+      font-weight: var(--weight-medium);
+      font-variant-numeric: tabular-nums;
+    }
+
     .comparison {
       color: var(--color-text);
       font-family: var(--font-mono);
