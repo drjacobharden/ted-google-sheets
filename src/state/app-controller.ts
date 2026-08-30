@@ -13,6 +13,7 @@ import {
   InvestmentAccount,
   InvestmentContribution,
 } from "../api/investment-types";
+import { reportingTransactions } from "../utilities/activity-effects";
 
 let transactions: BudgetTransaction[] = [];
 let loaded = false;
@@ -24,11 +25,12 @@ function emit<T>(name: string, detail?: T): void {
 function buildBudgetOverviewState(
   sourceTransactions: BudgetTransaction[],
 ): BudgetOverviewDerivedState {
+  const reportTransactions = reportingTransactions(sourceTransactions, APIs.accounts.accounts());
   const monthlyTransactionSummaries =
-    buildMonthlyTransactionSummaries(sourceTransactions);
+    buildMonthlyTransactionSummaries(reportTransactions);
 
   const annualSummaryCards = buildAnnualSummaryCards(
-    sourceTransactions,
+    reportTransactions,
     APIs.accounts
       .accounts()
       .filter((item) => item.type === "investment") as InvestmentAccount[],
@@ -52,12 +54,12 @@ function buildBudgetOverviewState(
         year,
         {
           weekly: buildAnnualSpendTrendSeries(
-            sourceTransactions,
+            reportTransactions,
             year,
             "weekly",
           ),
           monthly: buildAnnualSpendTrendSeries(
-            sourceTransactions,
+            reportTransactions,
             year,
             "monthly",
           ),
@@ -65,7 +67,7 @@ function buildBudgetOverviewState(
       ]),
     ),
     annualBudgetOverviews: buildAnnualBudgetOverviews(
-      sourceTransactions,
+      reportTransactions,
       years,
     ),
   };
@@ -76,17 +78,19 @@ function updateBudgetOverviewState(): void {
 }
 
 function updateDerivedTransactionState(): void {
+  APIs.accounts.applyTransactions(transactions);
+  const reportTransactions = reportingTransactions(transactions, APIs.accounts.accounts());
   const currentTrends = {
-    weekly: buildSpendTrendSeries(transactions, "weekly"),
-    monthly: buildSpendTrendSeries(transactions, "monthly"),
+    weekly: buildSpendTrendSeries(reportTransactions, "weekly"),
+    monthly: buildSpendTrendSeries(reportTransactions, "monthly"),
   };
   appState.set("spendTrends", currentTrends);
   const monthlyTransactionSummaries =
-    buildMonthlyTransactionSummaries(transactions);
+    buildMonthlyTransactionSummaries(reportTransactions);
   appState.set("monthlyTransactionSummaries", monthlyTransactionSummaries);
   const currentYear = new Date().getFullYear();
   const annualSummaryCards = buildAnnualSummaryCards(
-    transactions,
+    reportTransactions,
     APIs.accounts
       .accounts()
       .filter(
@@ -112,10 +116,10 @@ function updateDerivedTransactionState(): void {
         year === currentYear
           ? currentTrends
           : {
-              weekly: buildSpendTrendSeries(transactions, "weekly", {
+              weekly: buildSpendTrendSeries(reportTransactions, "weekly", {
                 today: new Date(year + 1, 0, 1),
               }),
-              monthly: buildSpendTrendSeries(transactions, "monthly", {
+              monthly: buildSpendTrendSeries(reportTransactions, "monthly", {
                 today: new Date(year + 1, 0, 1),
               }),
             },
@@ -128,15 +132,15 @@ function updateDerivedTransactionState(): void {
       years.map((year) => [
         year,
         {
-          weekly: buildAnnualSpendTrendSeries(transactions, year, "weekly"),
-          monthly: buildAnnualSpendTrendSeries(transactions, year, "monthly"),
+          weekly: buildAnnualSpendTrendSeries(reportTransactions, year, "weekly"),
+          monthly: buildAnnualSpendTrendSeries(reportTransactions, year, "monthly"),
         },
       ]),
     ),
   );
   appState.set(
     "annualBudgetOverviews",
-    buildAnnualBudgetOverviews(transactions, years),
+    buildAnnualBudgetOverviews(reportTransactions, years),
   );
   appState.set("annualSummaryCards", annualSummaryCards.summaries);
   appState.set(
