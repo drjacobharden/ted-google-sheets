@@ -1043,19 +1043,6 @@ tbody tr:hover {
 .form-field-label {
   padding: 0px, 4px;
 }
-/* .input-shell {
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-} */
-/* .input-shell .input-prefix {
-  padding-left: 14px;
-  color: var(--muted);
-} */
-/* .input-shell input {
-  border: 0;
-  box-shadow: none !important;
-} */
 
 .form-actions {
   display: flex;
