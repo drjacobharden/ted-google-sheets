@@ -3,10 +3,11 @@
 const APP = Object.freeze({
   spreadsheetIdProperty: "SPREADSHEET_ID",
   setupVersionProperty: "SETUP_VERSION",
-  setupVersion: "11",
-  apiVersion: 13,
+  setupVersion: "12",
+  apiVersion: 14,
   ledgerDirtyProperty: "LEDGER_DIRTY",
   incomeCategoryId: "00000000-0000-4000-8000-000000000001",
+  debtPaymentCategoryId: "00000000-0000-4000-8000-000000000002",
   sharedAssignmentId: "00000000-0000-4000-8000-000000000101",
 });
 
@@ -16,7 +17,7 @@ const LEGACY_ACCOUNT_TABLES = Object.freeze({
   investmentAccounts: { name: "InvestmentAccounts", headers: ["ID", "Name", "Source", "Assignment ID", "Active", "Created At", "Updated At"], fields: ["id", "name", "source", "assignmentId", "active", "createdAt", "updatedAt"] },
   investmentBalances: { name: "InvestmentBalances", headers: ["ID", "Account ID", "Month", "Ending Balance", "Notes", "Created At", "Created By", "Updated At", "Updated By", "As Of Date"], fields: ["id", "accountId", "month", "balance", "notes", "createdAt", "createdBy", "updatedAt", "updatedBy", "asOfDate"] },
   investmentContributions: { name: "InvestmentContributions", headers: ["ID", "Account ID", "Month", "Amount", "Created At", "Created By", "Updated At", "Updated By", "Date", "Flow Type", "Transfer ID", "Counterparty Account ID"], fields: ["id", "accountId", "month", "amount", "createdAt", "createdBy", "updatedAt", "updatedBy", "date", "flowType", "transferId", "counterpartyAccountId"] },
-  debtAccounts: { name: "DebtAccounts", headers: ["ID", "Name", "Assignment ID", "Active", "Created At", "Updated At", "Interest Rate", "Lender"], fields: ["id", "name", "assignmentId", "active", "createdAt", "updatedAt", "interestRate", "lender"] },
+  debtAccounts: { name: "DebtAccounts", headers: ["ID", "Name", "Assignment ID", "Active", "Created At", "Updated At", "Interest Rate"], fields: ["id", "name", "assignmentId", "active", "createdAt", "updatedAt", "interestRate"] },
   debtBalances: { name: "DebtBalances", headers: ["ID", "Debt Account ID", "Month", "Balance", "Notes", "Created At", "Created By", "Updated At", "Updated By", "As Of Date"], fields: ["id", "debtAccountId", "month", "balance", "notes", "createdAt", "createdBy", "updatedAt", "updatedBy", "asOfDate"] },
   debtPayments: { name: "DebtPayments", headers: ["ID", "Debt Account ID", "Date", "Month", "Amount", "Created At", "Created By", "Updated At", "Updated By", "Kind"], fields: ["id", "debtAccountId", "date", "month", "amount", "createdAt", "createdBy", "updatedAt", "updatedBy", "kind"] },
 });
@@ -35,6 +36,9 @@ const TABLES = Object.freeze({
       "Vendor ID",
       "Assignment ID",
       "Notes",
+      "Account ID",
+      "Source",
+      "Legacy Activity ID",
     ],
     fields: [
       "id",
@@ -47,6 +51,9 @@ const TABLES = Object.freeze({
       "vendorId",
       "assignmentId",
       "notes",
+      "accountId",
+      "source",
+      "legacyActivityId",
     ],
   },
   categories: {
@@ -94,8 +101,8 @@ const TABLES = Object.freeze({
   },
   accounts: {
     name: "Accounts",
-    headers: ["ID", "Name", "Type", "Assignment ID", "Active", "Created At", "Updated At", "Source", "Interest Rate", "Lender"],
-    fields: ["id", "name", "type", "assignmentId", "active", "createdAt", "updatedAt", "source", "interestRate", "lender"],
+    headers: ["ID", "Name", "Type", "Assignment ID", "Active", "Created At", "Updated At", "Source", "Interest Rate", "Category ID"],
+    fields: ["id", "name", "type", "assignmentId", "active", "createdAt", "updatedAt", "source", "interestRate", "categoryId"],
   },
   accountBalances: {
     name: "AccountBalances",
@@ -267,9 +274,11 @@ const LEGACY_TRANSACTION_HEADERS = Object.freeze([
   "Assignment",
   "Notes",
 ]);
+const V11_TRANSACTION_HEADERS = Object.freeze(["ID","Created At","Created By","Type","Amount","Date","Category ID","Vendor ID","Assignment ID","Notes"]);
 
 const DEFAULT_CATEGORIES = Object.freeze([
   { id: APP.incomeCategoryId, name: "Income", type: "income" },
+  { id: APP.debtPaymentCategoryId, name: "Debt Payment", type: "expense" },
 ]);
 
 function doGet(e) {
@@ -410,7 +419,7 @@ function handleRequest_(request) {
       case "saveAccountMonths":
         return success_(saveAccountMonths_(request.months));
       case "deleteAccountActivity":
-        return success_(withScriptLock_(function () { return deleteAccountActivity_(request.id); }));
+        return success_(deleteAccountActivity_(request.id));
       // Deprecated adapters for the staged UI migration. They all delegate to
       // the unified sheets and never recreate legacy persistence.
       case "listInvestmentAccounts":
@@ -450,9 +459,9 @@ function handleRequest_(request) {
       case "saveDebtBalance":
         return success_(withScriptLock_(function () { return saveDebtBalance_(request.balance); }));
       case "saveDebtPayment":
-        return success_(withScriptLock_(function () { return saveDebtPayment_(request.payment); }));
+        return success_(saveDebtPayment_(request.payment));
       case "deleteDebtPayment":
-        return success_(withScriptLock_(function () { return deleteDebtPayment_(request.id); }));
+        return success_(deleteDebtPayment_(request.id));
       case "listImportProfiles":
         return success_(listImportProfiles_());
       case "getImportProfileBundle":
@@ -537,13 +546,13 @@ function ensureDataModel_() {
   getTableSheet_(TABLES.accounts);
   getTableSheet_(TABLES.accountBalances);
   getTableSheet_(TABLES.accountActivity);
-  backfillAccountActivityDates_();
   migrateLegacyAccountsV11_();
   getTableSheet_(TABLES.importProfiles);
   getTableSheet_(TABLES.importVendorMappings);
   getTableSheet_(TABLES.importPersonMappings);
   seedDefaults_();
   getTransactionSheet_();
+  migrateUnifiedActivityV12_();
   getLedgerSheet_();
 }
 
@@ -641,7 +650,6 @@ function bootstrapSpecs_() {
     TABLES.users,
     TABLES.accounts,
     TABLES.accountBalances,
-    TABLES.accountActivity,
     TABLES.importProfiles,
   ];
 }
@@ -724,6 +732,7 @@ function buildBootstrapPayload_(recordsBySheet) {
         return [item.id, item];
       }),
     ),
+    accounts: new Map(recordsBySheet[TABLES.accounts.name].map(function(item){return [item.id,item];})),
   };
   function active(records) {
     return records.filter(function (record) {
@@ -745,7 +754,6 @@ function buildBootstrapPayload_(recordsBySheet) {
     ),
     accounts: recordsBySheet[TABLES.accounts.name],
     accountBalances: recordsBySheet[TABLES.accountBalances.name],
-    accountActivity: recordsBySheet[TABLES.accountActivity.name],
   };
 }
 
@@ -841,9 +849,7 @@ function addTransactions_(inputs) {
       try {
         appendRows_(
           ledgerSheet,
-          additions.map(function (transaction) {
-            return ledgerRow_(hydrateTransaction_(transaction, references));
-          }),
+          additions.map(function (transaction) {return hydrateTransaction_(transaction, references);}).filter(ledgerVisible_).map(ledgerRow_),
         );
       } catch (error) {
         markLedgerDirty_();
@@ -954,38 +960,7 @@ function updateTransactions_(inputs) {
     let warning = "";
     if (changed) {
       try {
-        const lastRow = ledgerSheet.getLastRow();
-        const ledgerRows =
-          lastRow < 2
-            ? []
-            : ledgerSheet
-                .getRange(2, 1, lastRow - 1, TABLES.ledger.headers.length)
-                .getValues();
-        const hydratedById = new Map(
-          saved
-            .filter(function (transaction) {
-              return changedIds.has(transaction.id);
-            })
-            .map(function (transaction) {
-              return [transaction.id, transaction];
-            }),
-        );
-        const ledgerMatches = new Set();
-        ledgerRows.forEach(function (row, index) {
-          const hydrated = hydratedById.get(String(row[8] || ""));
-          if (hydrated) {
-            ledgerRows[index] = ledgerRow_(hydrated);
-            ledgerMatches.add(hydrated.id);
-          }
-        });
-        if (ledgerMatches.size !== changedIds.size)
-          throw new Error(
-            "One or more updated transactions are missing from the Ledger.",
-          );
-        if (ledgerRows.length)
-          ledgerSheet
-            .getRange(2, 1, ledgerRows.length, TABLES.ledger.headers.length)
-            .setValues(ledgerRows);
+        rebuildLedger_();
       } catch (error) {
         markLedgerDirty_();
         warning =
@@ -1047,7 +1022,7 @@ function deleteTransaction_(input) {
       const remainingLedgerRows = ledgerRows.filter(function (row) {
         return String(row[8] || "") !== id;
       });
-      if (remainingLedgerRows.length === ledgerRows.length)
+      if (remainingLedgerRows.length === ledgerRows.length && ledgerVisible_(hydrateTransaction_(existing,referenceMapsFromSpreadsheet_(spreadsheet))))
         throw new Error("The deleted transaction is missing from the Ledger.");
       if (remainingLedgerRows.length)
         ledgerSheet
@@ -1058,7 +1033,7 @@ function deleteTransaction_(input) {
             TABLES.ledger.headers.length,
           )
           .setValues(remainingLedgerRows);
-      ledgerSheet
+      if(ledgerRows.length>remainingLedgerRows.length) ledgerSheet
         .getRange(
           remainingLedgerRows.length + 2,
           1,
@@ -1081,8 +1056,11 @@ function deleteTransaction_(input) {
 function validateUpdatedTransaction_(input, existing, references) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("A transaction object is required.");
-  const type = cleanText_(input.type, 20).toLowerCase();
-  if (type !== "income" && type !== "expense")
+  const accountId=cleanText_(input.accountId,36);
+  const account=accountId?getRecordById_(TABLES.accounts,requireUuid_(accountId,"Account ID")):null;
+  if(accountId&&(!account||account.active===false))throw new Error("Choose an active account.");
+  const type = account ? "" : cleanText_(input.type, 20).toLowerCase();
+  if (!account && type !== "income" && type !== "expense")
     throw new Error("Transaction type must be income or expense.");
   const amount = Number(input.amount);
   if (!isFinite(amount) || amount === 0)
@@ -1091,25 +1069,25 @@ function validateUpdatedTransaction_(input, existing, references) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidISODate_(date))
     throw new Error("Date must be a valid YYYY-MM-DD value.");
 
-  const categoryId = requireUuid_(input.categoryId, "Category ID");
-  const assignmentId = requireUuid_(input.assignmentId, "Assignment ID");
+  const categoryId = account?"":requireUuid_(input.categoryId, "Category ID");
+  const assignmentId = account?"":requireUuid_(input.assignmentId, "Assignment ID");
   const category = references.categories.get(categoryId);
   const assignment = references.assignments.get(assignmentId);
   if (
-    !category ||
+    !account && (!category ||
     category.type !== type ||
-    (category.active === false && categoryId !== existing.categoryId)
+    (category.active === false && categoryId !== existing.categoryId))
   ) {
     throw new Error("Choose an active category matching the transaction type.");
   }
   if (
-    !assignment ||
-    (assignment.active === false && assignmentId !== existing.assignmentId)
+    !account && (!assignment ||
+    (assignment.active === false && assignmentId !== existing.assignmentId))
   )
     throw new Error("Choose an active assignment.");
 
   let vendorId = "";
-  if (type === "expense") {
+  if (!account && (type === "expense" || input.vendorId)) {
     vendorId = requireUuid_(input.vendorId, "Vendor ID");
     const vendor = references.vendors.get(vendorId);
     if (!vendor || (vendor.active === false && vendorId !== existing.vendorId))
@@ -1126,6 +1104,9 @@ function validateUpdatedTransaction_(input, existing, references) {
     vendorId: vendorId,
     assignmentId: assignmentId,
     notes: cleanText_(input.notes, 1000),
+    accountId: accountId,
+    source: input.source==="deduction"?"deduction":"manual",
+    legacyActivityId: existing.legacyActivityId||"",
   };
 }
 
@@ -1139,6 +1120,8 @@ function editableTransactionsMatch_(left, right) {
     "vendorId",
     "assignmentId",
     "notes",
+    "accountId",
+    "source",
   ].every(function (field) {
     return field === "amount"
       ? Number(left[field]) === Number(right[field])
@@ -1150,9 +1133,12 @@ function editableTransactionsMatch_(left, right) {
 function validateTransaction_(input, references) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("A transaction object is required.");
-  const type = cleanText_(input.type, 20).toLowerCase();
-  if (type !== "income" && type !== "expense")
+  const accountId=cleanText_(input.accountId,36);
+  const account=accountId?getRecordById_(TABLES.accounts,requireUuid_(accountId,"Account ID")):null;
+  const type = account ? "" : cleanText_(input.type, 20).toLowerCase();
+  if (!account && type !== "income" && type !== "expense")
     throw new Error("Transaction type must be income or expense.");
+  if(accountId&&(!account||account.active===false))throw new Error("Choose an active account.");
   const amount = Number(input.amount);
   if (!isFinite(amount) || amount === 0)
     throw new Error("Amount must be a non-zero value.");
@@ -1160,22 +1146,22 @@ function validateTransaction_(input, references) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidISODate_(date))
     throw new Error("Date must be a valid YYYY-MM-DD value.");
 
-  const categoryId = requireUuid_(input.categoryId, "Category ID");
-  const assignmentId = requireUuid_(input.assignmentId, "Assignment ID");
+  const categoryId = account?"":requireUuid_(input.categoryId, "Category ID");
+  const assignmentId = account?"":requireUuid_(input.assignmentId, "Assignment ID");
   const createdBy = requireUuid_(input.createdBy, "createdBy");
   references = references || referenceMaps_();
   const category = references.categories.get(categoryId);
-  if (!category || category.active === false || category.type !== type)
+  if (!account&&(!category || category.active === false || category.type !== type))
     throw new Error("Choose an active category matching the transaction type.");
   const assignment = references.assignments.get(assignmentId);
-  if (!assignment || assignment.active === false)
+  if (!account&&(!assignment || assignment.active === false))
     throw new Error("Choose an active assignment.");
   const creator = references.users.get(createdBy);
   if (!creator || creator.active === false)
     throw new Error("The transaction creator is not an active user.");
 
   let vendorId = "";
-  if (type === "expense") {
+  if (!account&&(type === "expense" || input.vendorId)) {
     vendorId = requireUuid_(input.vendorId, "Vendor ID");
     const vendor = references.vendors.get(vendorId);
     if (!vendor || vendor.active === false)
@@ -1192,6 +1178,9 @@ function validateTransaction_(input, references) {
     vendorId: vendorId,
     assignmentId: assignmentId,
     notes: cleanText_(input.notes, 1000),
+    accountId: accountId,
+    source: input.source==="deduction"?"deduction":"manual",
+    legacyActivityId: cleanText_(input.legacyActivityId,36),
   };
 }
 
@@ -1217,6 +1206,7 @@ function referenceMaps_() {
     vendors: map(TABLES.vendors),
     assignments: map(TABLES.assignments),
     users: map(TABLES.users),
+    accounts: map(TABLES.accounts),
   };
 }
 
@@ -1235,6 +1225,7 @@ function referenceMapsFromSpreadsheet_(spreadsheet) {
     vendors: map(TABLES.vendors),
     assignments: map(TABLES.assignments),
     users: map(TABLES.users),
+    accounts: map(TABLES.accounts),
   };
 }
 
@@ -1246,15 +1237,21 @@ function requiredSheet_(spreadsheet, spec) {
 }
 
 function hydrateTransaction_(transaction, references) {
-  const category = references.categories.get(transaction.categoryId);
+  const account = references.accounts&&references.accounts.get(transaction.accountId);
+  const categoryId=account&&account.type==="debt"?account.categoryId:transaction.categoryId;
+  const category = references.categories.get(categoryId);
   const vendor = references.vendors.get(transaction.vendorId);
-  const assignment = references.assignments.get(transaction.assignmentId);
+  const assignment = references.assignments.get(account?account.assignmentId:transaction.assignmentId);
   const user = references.users.get(transaction.createdBy);
   return {
     ...transaction,
-    category: category ? category.name : "Unknown",
+    category: category ? category.name : account&&account.type==="investment"?"Investment":"Unknown",
     vendor: vendor ? vendor.name : "",
     assignment: assignment ? assignment.name : "Unknown",
+    account: account?account.name:"",
+    accountType: account?account.type:"",
+    resolvedCategoryId: categoryId||"",
+    resolvedAssignmentId: account?account.assignmentId:transaction.assignmentId,
     createdByName: user ? fullUserName_(user) : "Unknown",
   };
 }
@@ -1318,7 +1315,7 @@ function fullUserName_(user) {
   return (user.firstName + " " + user.lastName).trim();
 }
 
-const INVESTMENT_SOURCES = Object.freeze(["paycheck", "manual"]);
+const INVESTMENT_SOURCES = Object.freeze(["deduction", "manual"]);
 
 function listInvestmentAccounts_() {
   return listAccounts_().filter(function (item) { return item.type === "investment"; });
@@ -1328,10 +1325,10 @@ function normalizeInvestmentAccount_(input, existing) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("An investment account is required.");
   const timestamp = new Date().toISOString();
-  const source = cleanText_(input.source, 20).toLowerCase();
+  const source = cleanText_(input.source, 20).toLowerCase()==="paycheck"?"deduction":cleanText_(input.source,20).toLowerCase();
   if (INVESTMENT_SOURCES.indexOf(source) < 0)
     throw new Error(
-      "Choose paycheck deduction or manual transfer as the account source.",
+      "Choose deduction or manual as the account source.",
     );
   const assignmentId = requireUuid_(
     input.assignmentId || APP.sharedAssignmentId,
@@ -1358,7 +1355,7 @@ function normalizeInvestmentAccount_(input, existing) {
       : normalizeDateTime_(input.createdAt || timestamp),
     updatedAt: normalizeDateTime_(input.updatedAt || timestamp),
     interestRate: "",
-    lender: "",
+    categoryId: "",
   };
 }
 
@@ -1493,6 +1490,8 @@ function saveDebtAccount_(input) {
   const interestRate = Number(input.interestRate || 0);
   if (!isFinite(interestRate) || interestRate < 0)
     throw new Error("Interest rate must be nonnegative.");
+  const categoryId=input.categoryId?requireUuid_(input.categoryId,"Debt category ID"):existing&&existing.categoryId||"";
+  if(categoryId&&!readRecords_(TABLES.categories,true).some(function(item){return item.id===categoryId&&item.type==="expense"&&item.active!==false;}))throw new Error("Choose an active expense category.");
   const record = {
     id: requireUuid_((existing && existing.id) || input.id || Utilities.getUuid(), "Debt account ID"),
     name: requiredName_(input.name),
@@ -1502,8 +1501,8 @@ function saveDebtAccount_(input) {
     createdAt: existing ? existing.createdAt : normalizeDateTime_(input.createdAt || timestamp),
     updatedAt: normalizeDateTime_(input.updatedAt || timestamp),
     interestRate: interestRate,
-    lender: cleanText_(input.lender, 200),
-    source: "",
+    source: input.source==="deduction"?"deduction":"manual",
+    categoryId: categoryId,
   };
   if (row) sheet.getRange(row, 1, 1, TABLES.accounts.headers.length).setValues([recordToRow_(TABLES.accounts, record)]);
   else appendRows_(sheet, [recordToRow_(TABLES.accounts, record)]);
@@ -1542,29 +1541,28 @@ function investmentMonthEnd_(month) {
   );
 }
 
-function saveDebtPayment_(input) {
-  if (!input || typeof input !== "object") throw new Error("A debt payment is required.");
-  const accountId = requireUuid_(input.accountId || input.debtAccountId, "Debt account ID");
-  if (!readRecords_(TABLES.accounts, true).some(function (item) { return item.id === accountId && item.active !== false && item.type === "debt"; })) throw new Error("Choose an active debt account.");
-  const date = cleanText_(input.date, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid payment date.");
-  const amount = Number(input.amount); if (!isFinite(amount) || amount <= 0) throw new Error("Debt payments must be positive.");
-  const sheet = getTableSheet_(TABLES.accountActivity), row = findRowById_(sheet, input.id);
-  const existing = row ? rowToRecord_(TABLES.accountActivity, sheet.getRange(row, 1, 1, TABLES.accountActivity.headers.length).getValues()[0]) : null;
-  const timestamp = new Date().toISOString();
-  const record = { id: requireUuid_((existing && existing.id) || input.id || Utilities.getUuid(), "Debt payment ID"), accountId: accountId, date: date, month: date.slice(0, 7), amount: Math.round(amount * 100) / 100, activityType: input.activityType === "borrowing" || input.kind === "borrowing" ? "borrowing" : "payment", flowType: "", transferId: "", counterpartyAccountId: "", createdAt: existing ? existing.createdAt : normalizeDateTime_(input.createdAt || timestamp), createdBy: requireUuid_((existing && existing.createdBy) || input.createdBy, "createdBy"), updatedAt: normalizeDateTime_(input.updatedAt || timestamp), updatedBy: requireUuid_(input.updatedBy || input.createdBy, "updatedBy") };
-  if (row) sheet.getRange(row, 1, 1, TABLES.accountActivity.headers.length).setValues([recordToRow_(TABLES.accountActivity, record)]); else appendRows_(sheet, [recordToRow_(TABLES.accountActivity, record)]);
-  return record;
+function upsertAccountTransaction_(input) {
+  if(!input||typeof input!=="object")throw new Error("Account activity is required.");
+  const accountId=requireUuid_(input.accountId,"Account ID");
+  const account=getRecordById_(TABLES.accounts,accountId);
+  if(!account||account.active===false)throw new Error("Choose an active account.");
+  const existing=input.id?getRecordById_(TABLES.transactions,input.id):null;
+  const createdBy=(existing&&existing.createdBy)||input.createdBy;
+  const transaction={id:(existing&&existing.id)||input.id||Utilities.getUuid(),createdAt:(existing&&existing.createdAt)||input.createdAt||new Date().toISOString(),createdBy:createdBy,type:"",amount:Number(input.amount),date:cleanText_(input.date||String(input.month||"")+"-15",10),categoryId:"",vendorId:"",assignmentId:"",notes:cleanText_(input.notes,1000),accountId:accountId,source:input.source==="deduction"?"deduction":input.source==="manual"?"manual":account.source,legacyActivityId:(existing&&existing.legacyActivityId)||""};
+  const saved=existing?updateTransaction_({transaction:transaction,base:existing}).data:addTransaction_(transaction).data;
+  return {...saved,month:String(saved.date).slice(0,7),activityType:account.type==="investment"?"contribution":Number(saved.amount)<0?"borrowing":"payment"};
 }
 
-function deleteDebtPayment_(id) {
-  const sheet = getTableSheet_(TABLES.accountActivity), row = findRowById_(sheet, id);
-  if (!row) return { id: id, deleted: true };
-  sheet.deleteRow(row); return { id: id, deleted: true };
+function saveDebtPayment_(input) {
+  const borrowing=input.activityType==="borrowing"||input.kind==="borrowing";
+  return upsertAccountTransaction_({...input,accountId:input.accountId||input.debtAccountId,amount:borrowing?-Math.abs(Number(input.amount)):Math.abs(Number(input.amount))});
 }
+
+function deleteDebtPayment_(id) { const existing=readRecords_(TABLES.transactions,true).find(function(item){return item.id===id;});if(existing)deleteTransaction_({id:id,base:existing});return {id:id,deleted:true}; }
 
 function listAccounts_() { return readRecords_(TABLES.accounts, true); }
 function listAccountBalances_() { return readRecords_(TABLES.accountBalances, true); }
-function listAccountActivity_() { return readRecords_(TABLES.accountActivity, true); }
+function listAccountActivity_() { const accounts=new Map(listAccounts_().map(function(item){return[item.id,item];}));return readRecords_(TABLES.transactions,true).filter(function(item){return item.accountId&&accounts.has(item.accountId);}).map(function(item){const account=accounts.get(item.accountId);return {...item,month:String(item.date).slice(0,7),activityType:account.type==="investment"?"contribution":Number(item.amount)<0?"borrowing":"payment"};}); }
 function accountTypeById_(id) { const account = getRecordById_(TABLES.accounts, id); return account ? account.type : ""; }
 function legacyDebtBalance_(record) { return { ...record, debtAccountId: record.accountId }; }
 function legacyDebtActivity_(record) { return { ...record, debtAccountId: record.accountId, kind: record.activityType }; }
@@ -1576,7 +1574,7 @@ function listInvestmentBalances_() {
   return readRecords_(TABLES.accountBalances, true);
 }
 function listInvestmentContributions_() {
-  return readRecords_(TABLES.accountActivity, true);
+  return listAccountActivity_().filter(function(item){return item.activityType==="contribution";});
 }
 
 function investmentRecordMatches_(left, right, fields, numericFields) {
@@ -1683,6 +1681,7 @@ function normalizeInvestmentContribution_(input, existing, accounts, users) {
     transferId: flowType === "transfer" ? cleanText_(input.transferId, 64) : "",
     counterpartyAccountId:
       flowType === "transfer" ? cleanText_(input.counterpartyAccountId, 64) : "",
+    source: input.source==="deduction"?"deduction":input.source==="manual"?"manual":account.source,
   };
 }
 
@@ -1748,25 +1747,16 @@ function saveInvestmentMonths_(inputs) {
     throw new Error("At least one investment month is required.");
   if (inputs.length > 50)
     throw new Error("A maximum of 50 investment months can be saved at once.");
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  const lock = { releaseLock: function () {} };
   try {
     const spreadsheet = getSpreadsheet_();
     const balanceSheet = requiredSheet_(spreadsheet, TABLES.accountBalances);
-    const contributionSheet = requiredSheet_(
-      spreadsheet,
-      TABLES.accountActivity,
-    );
     const balanceRecords = readRecordsFromSheet_(
       balanceSheet,
       TABLES.accountBalances,
       true,
     );
-    const contributionRecords = readRecordsFromSheet_(
-      contributionSheet,
-      TABLES.accountActivity,
-      true,
-    );
+    const contributionRecords = listAccountActivity_().filter(function(item){return item.activityType==="contribution";});
     const accounts = new Map(
       readRecordsFromSheet_(
         requiredSheet_(spreadsheet, TABLES.accounts),
@@ -2024,9 +2014,11 @@ function saveInvestmentMonths_(inputs) {
         balances.set(balance.id, balance);
         balanceByMonth.set(monthKey, balance);
         normalizedUpserts.forEach(function (record) {
+          upsertAccountTransaction_(record);
           contributions.set(record.id, record);
         });
         normalizedDeletes.forEach(function (id) {
+          deleteAccountActivity_(id);
           contributions.delete(id);
         });
         saved.push({
@@ -2043,12 +2035,6 @@ function saveInvestmentMonths_(inputs) {
         TABLES.accountBalances,
         [...balances.values()],
         balanceRecords.length,
-      );
-      writeInvestmentRecords_(
-        contributionSheet,
-        TABLES.accountActivity,
-        [...contributions.values()],
-        contributionRecords.length,
       );
     }
     return { saved: saved, failed: failed };
@@ -2831,11 +2817,31 @@ function rebuildLedger() {
 function rebuildLedger_() {
   const ledger = getLedgerSheet_(),
     transactions = listTransactions_();
-  if (ledger.getLastRow() > 1)
+  const invalidDates = transactions.filter(function (transaction) {
+    return !/^\d{4}-\d{2}-\d{2}$/.test(String(transaction.date || ""));
+  });
+  if (invalidDates.length)
+    throw new Error(
+      "Ledger rebuild stopped before writing: " +
+        invalidDates.length +
+        " transaction(s) have a blank or invalid Date. Restore those dates, then run setup again.",
+    );
+  const rows = transactions.filter(ledgerVisible_).map(ledgerRow_),
+    existingRows = Math.max(ledger.getLastRow() - 1, 0),
+    outputRows = Math.max(existingRows, rows.length);
+  // Replace the body in one Sheets write. This is faster and cannot leave a
+  // cleared Ledger between separate clear and append operations on timeout.
+  if (outputRows) {
+    const blankRow = TABLES.ledger.headers.map(function () { return ""; });
+    const values = rows.concat(
+      Array.from({ length: outputRows - rows.length }, function () {
+        return blankRow.slice();
+      }),
+    );
     ledger
-      .getRange(2, 1, ledger.getLastRow() - 1, TABLES.ledger.headers.length)
-      .clearContent();
-  appendRows_(ledger, transactions.map(ledgerRow_));
+      .getRange(2, 1, outputRows, TABLES.ledger.headers.length)
+      .setValues(values);
+  }
   configureLedger_(ledger);
   PropertiesService.getScriptProperties().deleteProperty(
     APP.ledgerDirtyProperty,
@@ -2844,24 +2850,34 @@ function rebuildLedger_() {
   return { rows: transactions.length, status: "rebuilt" };
 }
 function appendLedgerRow_(transaction) {
+  if(!ledgerVisible_(transaction))return;
   const ledger = getLedgerSheet_();
   appendRows_(ledger, [ledgerRow_(transaction)]);
   configureLedger_(ledger);
 }
+function ledgerVisible_(transaction) {
+  if(!transaction.accountId)return true;
+  if(!transaction.accountType)return false;
+  if(transaction.accountType==="investment")return transaction.source==="deduction";
+  return Number(transaction.amount)>=0;
+}
 function ledgerRow_(transaction) {
+  const deduction=transaction.source==="deduction";
+  const type=transaction.accountType==="investment"?"income":transaction.type||"expense";
+  const notes=(transaction.notes?transaction.notes+" · ":"")+(transaction.account?transaction.account+" · ":"")+(deduction?"Deduction adds "+transaction.amount+" gross income":"");
   return [
     transaction.date,
-    transaction.type,
+    type,
     transaction.category,
     transaction.vendor,
     transaction.assignment,
     transaction.createdByName,
-    transaction.notes,
+    notes,
     transaction.amount,
     transaction.id,
-    transaction.categoryId,
+    transaction.resolvedCategoryId||transaction.categoryId,
     transaction.vendorId,
-    transaction.assignmentId,
+    transaction.resolvedAssignmentId||transaction.assignmentId,
     transaction.createdBy,
     transaction.createdAt,
   ];
@@ -2929,6 +2945,7 @@ function getTableSheet_(spec) {
   if (spec === TABLES.users) migrateLegacyUserHeaders_(sheet);
   if (spec === TABLES.accounts)
     migrateLegacyInvestmentHeaders_(sheet, spec);
+  if (spec === TABLES.accounts) migrateV11AccountHeaders_(sheet);
   ensureSheetHeaders_(sheet, spec.headers, spec.name);
   sheet.setFrozenRows(1);
   return sheet;
@@ -2979,21 +2996,28 @@ function migrateLegacyInvestmentHeaders_(sheet, spec) {
     })
     .map(function (row) {
       const isLegacy = oldHeaders === accountHeaders;
-      return [
-        row[0],
-        row[1],
-        isLegacy ? "manual" : row[2],
-        (isLegacy ? row[4] : "") || APP.sharedAssignmentId,
-        (isLegacy ? row[5] : row[3]) === ""
-          ? true
-          : (isLegacy ? row[5] : row[3]),
-        isLegacy ? row[6] : row[4],
-        isLegacy ? row[7] : row[5],
-      ];
+      return recordToRow_(spec, { id:row[0], name:row[1], type:"investment", assignmentId:(isLegacy?row[4]:"")||APP.sharedAssignmentId, active:(isLegacy?row[5]:row[3])===""?true:(isLegacy?row[5]:row[3]), createdAt:isLegacy?row[6]:row[4], updatedAt:isLegacy?row[7]:row[5], source:(isLegacy?"manual":row[2])==="paycheck"?"deduction":(isLegacy?"manual":row[2]), interestRate:"", categoryId:"" });
     });
   sheet
     .getRange(2, 1, migrated.length, spec.headers.length)
     .setValues(migrated);
+}
+
+function migrateV11AccountHeaders_(sheet) {
+  const currentHeaders = sheet.getRange(1,1,1,TABLES.accounts.headers.length).getValues()[0];
+  if (headersMatch_(currentHeaders, TABLES.accounts.headers)) return;
+  const oldHeaders = ["ID", "Name", "Type", "Assignment ID", "Active", "Created At", "Updated At", "Source", "Interest Rate"];
+  const current = sheet.getRange(1,1,1,oldHeaders.length).getValues()[0];
+  if (!headersMatch_(current, oldHeaders)) return;
+  const lastRow=sheet.getLastRow();
+  const rows=lastRow<2?[]:sheet.getRange(2,1,lastRow-1,oldHeaders.length).getValues();
+  sheet.getRange(1,1,Math.max(lastRow,1),TABLES.accounts.headers.length).clearContent();
+  sheet.getRange(1,1,1,TABLES.accounts.headers.length).setValues([TABLES.accounts.headers]);
+  if(rows.length) sheet.getRange(2,1,rows.length,TABLES.accounts.headers.length).setValues(rows.map(function(row){
+    const type=String(row[2]);
+    row[7]=row[7]==="paycheck"?"deduction":row[7]||"manual";
+    return row.concat([type==="debt"?APP.debtPaymentCategoryId:""]);
+  }));
 }
 
 function derivedInvestmentContributionId_(snapshotId) {
@@ -3037,7 +3061,6 @@ function migrateLegacyAccountsV11_() {
       active: record.active !== false, createdAt: record.createdAt,
       updatedAt: record.updatedAt, source: type === "investment" ? record.source : "",
       interestRate: type === "debt" ? record.interestRate : "",
-      lender: type === "debt" ? record.lender : "",
     };
     const previous = accountIds.get(unified.id);
     if (previous && (previous.type !== unified.type || previous.name !== unified.name || previous.assignmentId !== unified.assignmentId))
@@ -3071,7 +3094,7 @@ function migrateLegacyAccountsV11_() {
   }
   appendMissing(TABLES.accounts, [...accountIds.values()]);
   appendMissing(TABLES.accountBalances, balances);
-  appendMissing(TABLES.accountActivity, activity);
+  // AccountActivity is retained as a read-only migration/audit artifact.
 }
 
 function migrateInvestmentModelV6_() {
@@ -3275,11 +3298,11 @@ function getTransactionSheet_() {
   const spreadsheet = getSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(TABLES.transactions.name);
   if (!sheet) sheet = spreadsheet.insertSheet(TABLES.transactions.name);
-  const existing = sheet
-    .getRange(1, 1, 1, TABLES.transactions.headers.length)
-    .getValues()[0];
+  const existing = sheet.getRange(1, 1, 1, LEGACY_TRANSACTION_HEADERS.length).getValues()[0];
   if (headersMatch_(existing, LEGACY_TRANSACTION_HEADERS))
     migrateLegacyTransactions_(sheet);
+  const v11 = sheet.getRange(1,1,1,V11_TRANSACTION_HEADERS.length).getValues()[0];
+  if (headersMatch_(v11, V11_TRANSACTION_HEADERS)) migrateV11Transactions_(sheet);
   ensureSheetHeaders_(
     sheet,
     TABLES.transactions.headers,
@@ -3287,6 +3310,90 @@ function getTransactionSheet_() {
   );
   sheet.setFrozenRows(1);
   return sheet;
+}
+function migrateV11Transactions_(sheet) {
+  const lastRow=sheet.getLastRow();
+  const rows=lastRow<2?[]:sheet.getRange(2,1,lastRow-1,V11_TRANSACTION_HEADERS.length).getValues();
+  sheet.getRange(1,1,Math.max(lastRow,1),TABLES.transactions.headers.length).clearContent();
+  sheet.getRange(1,1,1,TABLES.transactions.headers.length).setValues([TABLES.transactions.headers]);
+  if(rows.length) sheet.getRange(2,1,rows.length,TABLES.transactions.headers.length).setValues(rows.map(function(row){return row.concat(["","manual",""]);}));
+}
+
+function migratedActivityId_(id) {
+  const compact=requireUuid_(id,"Legacy activity ID").replace(/-/g,"").split("");
+  compact[0]=((parseInt(compact[0],16)+8)%16).toString(16); compact[12]="4"; compact[16]="8";
+  return compact.slice(0,8).join("")+"-"+compact.slice(8,12).join("")+"-"+compact.slice(12,16).join("")+"-"+compact.slice(16,20).join("")+"-"+compact.slice(20).join("");
+}
+
+/** V12: make Transactions canonical while retaining AccountActivity untouched. */
+function migrateUnifiedActivityV12_() {
+  const accountSheet=getTableSheet_(TABLES.accounts);
+  const accountRowCount=Math.max(accountSheet.getLastRow()-1,0);
+  const accountRows=accountRowCount?accountSheet.getRange(2,1,accountRowCount,TABLES.accounts.headers.length).getValues():[];
+  const accounts=[];
+  const accountSources=[];
+  const accountCategories=[];
+  accountRows.forEach(function(row){
+    if(row[0]===""){
+      accountSources.push([row[7]||""]);
+      accountCategories.push([row[10]||""]);
+      return;
+    }
+    const account=rowToRecord_(TABLES.accounts,row);
+    account.source=account.source==="paycheck"||account.source==="deduction"?"deduction":"manual";
+    if(account.type==="debt"&&!account.categoryId) account.categoryId=APP.debtPaymentCategoryId;
+    accounts.push(account);
+    accountSources.push([account.source]);
+    accountCategories.push([account.categoryId||""]);
+  });
+  if(accountRowCount){
+    accountSheet.getRange(2,8,accountRowCount,1).setValues(accountSources);
+    accountSheet.getRange(2,11,accountRowCount,1).setValues(accountCategories);
+  }
+  const accountById=new Map(accounts.map(function(item){return [item.id,item];}));
+  const transactionSheet=getTableSheet_(TABLES.transactions);
+  const transactionRowCount=Math.max(transactionSheet.getLastRow()-1,0);
+  const transactionRows=transactionRowCount?transactionSheet.getRange(2,1,transactionRowCount,TABLES.transactions.headers.length).getValues():[];
+  const transactions=[];
+  const transactionSheetRows=[];
+  const metadataRows=transactionRows.map(function(row,index){
+    if(row[0]==="")return [row[10]||"",row[11]||"",row[12]||""];
+    const item=rowToRecord_(TABLES.transactions,row);
+    item.accountId=item.accountId||"";
+    item.source=item.source==="deduction"?"deduction":"manual";
+    item.legacyActivityId=item.legacyActivityId||"";
+    transactions.push(item);
+    transactionSheetRows.push(index);
+    return [item.accountId,item.source,item.legacyActivityId];
+  });
+  const existingTransactionCount=transactions.length;
+  const byId=new Map(transactions.map(function(item){return [item.id,item];}));
+  const imported=new Set(transactions.map(function(item){return item.legacyActivityId;}).filter(Boolean));
+  let legacyActivity=readRecords_(TABLES.accountActivity,true);
+  const spreadsheet=getSpreadsheet_();
+  const oldInvestments=spreadsheet.getSheetByName(LEGACY_ACCOUNT_TABLES.investmentContributions.name);
+  if(oldInvestments) legacyActivity=legacyActivity.concat(readRecordsFromSheet_(oldInvestments,LEGACY_ACCOUNT_TABLES.investmentContributions,true).map(function(item){return {...item,activityType:"contribution"};}));
+  const oldDebt=spreadsheet.getSheetByName(LEGACY_ACCOUNT_TABLES.debtPayments.name);
+  if(oldDebt) legacyActivity=legacyActivity.concat(readRecordsFromSheet_(oldDebt,LEGACY_ACCOUNT_TABLES.debtPayments,true).map(function(item){return {...item,accountId:item.debtAccountId,activityType:item.kind==="borrowing"?"borrowing":"payment"};}));
+  legacyActivity.forEach(function(activity){
+    if(!activity.id||imported.has(activity.id)) return;
+    const account=accountById.get(activity.accountId); if(!account)return;
+    let id=activity.id;
+    if(byId.has(id)){const same=byId.get(id);if(same.accountId===activity.accountId&&Number(same.amount)===Number(activity.amount)){same.legacyActivityId=activity.id;const existingIndex=transactions.indexOf(same);if(existingIndex>=0&&existingIndex<existingTransactionCount)metadataRows[transactionSheetRows[existingIndex]][2]=activity.id;imported.add(activity.id);return;}id=migratedActivityId_(activity.id);}
+    if(byId.has(id)){const same=byId.get(id);if(same.legacyActivityId===activity.id){imported.add(activity.id);return;}throw new Error("Cannot migrate AccountActivity: derived transaction ID collision for "+activity.id+".");}
+    const explicit=normalizeDateId_(activity.date);
+    const month=normalizeMonthId_(activity.month||explicit);
+    const date=/^\d{4}-\d{2}-\d{2}$/.test(explicit)?explicit:month+"-15";
+    let amount=Number(activity.amount)||0;
+    if(account.type==="debt"&&activity.activityType==="borrowing") amount=-Math.abs(amount);
+    const source=activity.flowType==="transfer"?"manual":account.source;
+    const record={id:id,createdAt:activity.createdAt,createdBy:activity.createdBy,type:"",amount:amount,date:date,categoryId:"",vendorId:"",assignmentId:"",notes:"",accountId:account.id,source:source,legacyActivityId:activity.id};
+    transactions.push(record);byId.set(id,record);imported.add(activity.id);
+  });
+  // Never rewrite the original budget columns. Only backfill the three V12
+  // metadata columns, then append account activity that was not already copied.
+  if(metadataRows.length)transactionSheet.getRange(2,11,metadataRows.length,3).setValues(metadataRows);
+  appendRows_(transactionSheet,transactions.slice(existingTransactionCount).map(function(item){return recordToRow_(TABLES.transactions,item);}));
 }
 function getLedgerSheet_() {
   const spreadsheet = getSpreadsheet_();
