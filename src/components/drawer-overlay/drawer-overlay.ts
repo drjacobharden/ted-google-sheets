@@ -30,10 +30,10 @@ export class DrawerOverlay extends HTMLElement {
   }
 
   set title(value: string) {
-    this.#title = value;
+    this.#title = String(value || "");
 
     if (this.#header) {
-      this.#header.setAttribute("title", value);
+      (this.#header as HTMLElement & { title: string }).title = this.#title;
     }
   }
 
@@ -63,6 +63,7 @@ export class DrawerOverlay extends HTMLElement {
     this.#header = header;
 
     const title = this.getAttribute("title") || this.#title;
+    this.removeAttribute("title");
     if (title) {
       this.title = title;
     }
@@ -85,7 +86,7 @@ export class DrawerOverlay extends HTMLElement {
       this.#tabControl = tabNode;
     } else if (this.#tabs.length) {
       this.#tabControl = document.createElement("segmented-control");
-      this.#tabControl.setAttribute("variant", "text");
+      this.#tabControl.setAttribute("variant", "section-tabs");
       tabsContainer.appendChild(this.#tabControl);
     }
 
@@ -124,6 +125,7 @@ export class DrawerOverlay extends HTMLElement {
       const tabsContainer = this.querySelector(".drawer-tabs");
       if (!tabsContainer) return;
       this.#tabControl = document.createElement("segmented-control");
+      this.#tabControl.setAttribute("variant", "section-tabs");
       tabsContainer.appendChild(this.#tabControl);
     }
 

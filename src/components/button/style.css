@@ -1,7 +1,6 @@
 custom-button {
   height: var(--button-height);
   padding: 3.5px 15px 3.5px 12px;
-  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -84,12 +83,12 @@ custom-button {
     height: var(--button-height);
     width: var(--button-height);
     padding: 0;
-    border-radius: calc(var(--button-height) * 0.25);
   }
 
   &.circle {
     height: var(--button-height);
     width: var(--button-height);
     padding: 0;
+    border-radius: 999px;
   }
 }

@@ -1,5 +1,6 @@
 dropdown-menu {
   z-index: 1;
+  font-family: var(--font-body);
 
   &[is-open] {
     z-index: 1000;
@@ -9,43 +10,66 @@ dropdown-menu {
     }
   }
 
-  .dropdown-trigger {
+  > .dropdown-trigger {
+    min-width: 152px;
+    height: 42px;
+    padding: 8px 12px;
+    border: var(--rule-thin) solid var(--color-rule-strong);
+    /* border-radius: var(--radius-subtle); */
+    background: transparent;
+    box-shadow: none;
+    color: var(--color-text);
+    font-size: var(--text-xs);
+
     span {
       margin-right: auto;
     }
 
-    &.ghost-button {
-      span {
-        opacity: var(--muted-opacity);
-      }
+    &:hover,
+    &:active {
+      background-color: var(--color-surface-subtle);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+
+    svg {
+      color: var(--color-text-muted);
     }
   }
 
-  .dropdown-menu-list {
-    width: min(250px, 95vw);
-    background-color: var(--surface);
-    white-space: wrap;
-    box-shadow: var(--shadow-prominent);
+  > .popover.dropdown-menu-list {
+    width: min(240px, calc(100vw - 32px));
+    padding: 6px;
+    border: var(--rule-thin) solid var(--color-rule-strong);
+    border-radius: var(--radius-subtle);
+    background: var(--color-surface-raised);
+    box-shadow: 0 12px 28px
+      color-mix(in srgb, var(--color-text) 14%, transparent);
     pointer-events: all;
-    border: 1px solid var(--border-strong);
-    padding-left: 8px;
-    padding-right: 8px;
-    border-radius: var(--radius-large);
+    white-space: wrap;
 
     .dropdown-menu-search {
       width: 100%;
       height: 38px;
       padding: 0 10px;
       border: 0;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--color-rule);
       margin-bottom: 4px;
       background: transparent;
-      color: var(--text);
-      font: inherit;
+      color: var(--color-text);
+      font-family: var(--font-body);
+      font-size: var(--text-xs);
       outline: none;
 
       &::placeholder {
-        color: var(--muted);
+        color: var(--color-text-subtle);
+      }
+
+      &:focus {
+        border-bottom-color: var(--color-accent);
       }
     }
 
@@ -81,119 +105,35 @@ dropdown-menu {
     }
 
     .dropdown-menu-options {
-      max-height: 320px;
+      max-height: 304px;
       overflow-y: auto;
       overscroll-behavior: contain;
       scrollbar-gutter: stable;
+    }
+
+    .dropdown-menu-group + .dropdown-menu-group {
+      margin-top: var(--space-2xs);
+    }
+
+    .dropdown-menu-group-title {
+      display: block;
+      padding: var(--space-xs) 10px var(--space-3xs);
+      color: var(--color-text-subtle);
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      font-weight: var(--weight-regular);
+      letter-spacing: var(--tracking-wide);
+      line-height: var(--leading-normal);
     }
 
     .dropdown-menu-item {
       display: flex;
       width: 100%;
       gap: 12px;
-      border-radius: calc(var(--radius-large) - 8px);
-      padding: 0px 12px;
-      height: 40px;
-      align-items: center;
-
-      &:hover {
-        background-color: var(--surface-highlight-subtle);
-      }
-
-      svg {
-        color: var(--text);
-        stroke-width: 2px;
-      }
-
-      span {
-        margin-right: auto;
-      }
-
-      &[destructive] span,
-      &[destructive] svg {
-        color: var(--danger);
-      }
-
-      .selection-indicator {
-        color: var(--row-selection-border);
-        opacity: 0;
-      }
-
-      &.is-selected .selection-indicator {
-        opacity: 1;
-      }
-    }
-  }
-}
-
-dropdown-menu[variant="editorial"] {
-  font-family: var(--font-body);
-
-  > .dropdown-trigger.secondary-button {
-    min-width: 152px;
-    height: 42px;
-    padding: 8px 12px;
-    border: var(--rule-thin) solid var(--color-rule-strong);
-    border-radius: var(--radius-subtle);
-    background: transparent;
-    color: var(--color-text);
-    font-size: var(--text-xs);
-    box-shadow: none;
-
-    &:hover,
-    &:active {
-      background-color: var(--color-surface-subtle);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--color-accent);
-      outline-offset: 2px;
-    }
-
-    svg {
-      color: var(--color-text-muted);
-    }
-  }
-
-  > .popover.dropdown-menu-list {
-    width: min(240px, calc(100vw - 32px));
-    padding: 6px;
-    border: var(--rule-thin) solid var(--color-rule-strong);
-    border-radius: var(--radius-subtle);
-    background: var(--color-surface-raised);
-    box-shadow: 0 12px 28px
-      color-mix(in srgb, var(--color-text) 14%, transparent);
-
-    .dropdown-menu-search {
-      border-bottom-color: var(--color-rule);
-      color: var(--color-text);
-      font-family: var(--font-body);
-      font-size: var(--text-xs);
-
-      &::placeholder {
-        color: var(--color-text-subtle);
-      }
-
-      &:focus {
-        border-bottom-color: var(--color-accent);
-      }
-    }
-
-    .dropdown-menu-search-row {
-      .dropdown-menu-search-action {
-        background: var(--color-text);
-        color: var(--color-text-inverse);
-      }
-    }
-
-    .dropdown-menu-options {
-      max-height: 304px;
-    }
-
-    .dropdown-menu-item {
       height: 38px;
       padding: 0 10px;
       border-radius: 0;
+      align-items: center;
       color: var(--color-text-muted);
       font-size: var(--text-xs);
 
@@ -204,21 +144,87 @@ dropdown-menu[variant="editorial"] {
         outline: none;
       }
 
-      &.is-selected {
-        color: var(--color-text);
+      svg {
+        color: currentColor;
+        stroke-width: 2px;
+      }
+
+      span {
+        margin-right: auto;
+      }
+
+      &[destructive] span,
+      &[destructive] svg {
+        color: var(--color-negative);
       }
 
       .selection-indicator {
         color: var(--color-accent);
+        opacity: 0;
+      }
+
+      &.is-selected {
+        color: var(--color-text);
+      }
+
+      &.is-selected .selection-indicator {
+        opacity: 1;
       }
     }
+  }
+}
+
+dropdown-menu[variant="ghost"] > .dropdown-trigger {
+  min-width: 0;
+  padding-inline: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-subtle);
+
+  &:hover {
+    background: transparent;
+    color: var(--color-text);
+  }
+
+  &:active {
+    background: transparent;
+    color: var(--color-text);
+  }
+
+  svg {
+    color: currentColor;
   }
 }
 
 dropdown-menu[search-action] {
   position: relative;
 
-  > .dropdown-trigger.secondary-button {
+  > .dropdown-trigger {
+    width: 100%;
+    height: 48px;
+    border-radius: 0;
+    background: transparent;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-regular);
+  }
+
+  > .popover.dropdown-menu-list {
+    position: absolute;
+    top: calc(100% + 4px) !important;
+    right: auto;
+    left: 0 !important;
+    width: 100%;
+    border-radius: 0;
+    background: var(--color-surface-overlay);
+  }
+}
+
+/* Non-searchable selects still need an in-flow anchor for drawer popovers. */
+dropdown-menu.source-select-menu,
+dropdown-menu.account-entry-type-menu {
+  position: relative;
+
+  > .dropdown-trigger {
     width: 100%;
     height: 48px;
     border-radius: 0;

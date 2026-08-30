@@ -50,6 +50,7 @@ const datePickerTemplate = () => `
           <span>Sa</span>
         </div>
         <div class="calendar-grid" role="grid"></div>
+        <p class="date-picker-selection" aria-live="polite"></p>
       </pop-over>
     </div>
   </div>
@@ -76,9 +77,10 @@ const datePickerTemplate = () => `
     #prevBtn = null;
     #nextBtn = null;
     #hiddenInput = null;
+    #selectionElement = null;
 
     static get observedAttributes() {
-      return ["value", "name", "alignment"];
+      return ["value", "name", "alignment", "variant"];
     }
 
     get alignment() {
@@ -103,15 +105,24 @@ const datePickerTemplate = () => `
     }
 
     get isOpen() {
-      return Boolean(this.#popoverElement?.classList.contains("is-visible"));
+      return this.isInline || Boolean(this.#popoverElement?.classList.contains("is-visible"));
+    }
+
+    get isInline() {
+      return this.getAttribute("variant") === "inline";
     }
 
     reportSelectionError() {
+      this.toggleAttribute("aria-invalid", true);
       this.#triggerElement?.setAttribute("aria-invalid", "true");
-      this.#triggerElement?.focus();
+      (this.isInline
+        ? this.#gridElement?.querySelector(".selected, button")
+        : this.#triggerElement
+      )?.focus();
     }
 
     closePopup({ focusTrigger = false } = {}) {
+      if (this.isInline) return;
       this.#closeCalendar();
       if (focusTrigger) this.#triggerElement?.focus();
     }
@@ -129,6 +140,7 @@ const datePickerTemplate = () => `
       this.#prevBtn = this.querySelector(".previous-month");
       this.#nextBtn = this.querySelector(".next-month");
       this.#hiddenInput = this.querySelector('input[type="hidden"]');
+      this.#selectionElement = this.querySelector(".date-picker-selection");
 
       // Set the date value
       if (!this.#value && !this.hasAttribute("allow-empty")) {
@@ -143,6 +155,15 @@ const datePickerTemplate = () => `
       if (this.#value) {
         const date = fromISODate(this.#value);
         this.#displayElement.textContent = longDateFormatter.format(date);
+        this.#selectionElement.textContent = `Selected — ${longDateFormatter.format(date)}`;
+      }
+
+      if (this.isInline) {
+        this.#triggerElement.hidden = true;
+        this.#popoverElement.classList.add("is-inline");
+        this.#popoverElement.setAttribute("role", "group");
+        this.#popoverElement.setAttribute("aria-label", "Choose a date");
+        this.#renderCalendar();
       }
 
       // Add listeners to the elements
@@ -160,6 +181,7 @@ const datePickerTemplate = () => `
       if (name === "value") {
         this.#value = newValue;
         this.#triggerElement?.removeAttribute("aria-invalid");
+        this.removeAttribute("aria-invalid");
 
         if (this.#hiddenInput) {
           this.#hiddenInput.value = newValue;
@@ -171,11 +193,23 @@ const datePickerTemplate = () => `
           if (this.#displayElement) {
             this.#displayElement.textContent = longDateFormatter.format(date); // Call shared formatter
           }
+          if (this.#selectionElement) {
+            this.#selectionElement.textContent = `Selected — ${longDateFormatter.format(date)}`;
+          }
           this.#visibleMonth = new Date(date.getFullYear(), date.getMonth(), 1);
           if (this.isOpen) this.#renderCalendar();
         } else if (this.#displayElement) {
           this.#displayElement.textContent = "Select a date";
+          if (this.#selectionElement) this.#selectionElement.textContent = "No date selected";
         }
+      }
+
+      if (name === "variant" && this.#popoverElement) {
+        this.#triggerElement.hidden = this.isInline;
+        this.#popoverElement.classList.toggle("is-inline", this.isInline);
+        this.#popoverElement.setAttribute("role", this.isInline ? "group" : "dialog");
+        if (this.isInline) this.#renderCalendar();
+        else this.#closeCalendar();
       }
 
       if (name === "name" && this.#hiddenInput) {
@@ -222,6 +256,7 @@ const datePickerTemplate = () => `
     }
 
     #closeCalendar() {
+      if (this.isInline) return;
       this.#popoverElement?.hide();
       this.#triggerElement.setAttribute("aria-expanded", "false");
     }
@@ -296,8 +331,10 @@ const datePickerTemplate = () => `
 
         button.addEventListener("click", () => {
           this.value = value;
-          this.#closeCalendar();
-          this.#triggerElement.focus();
+          if (!this.isInline) {
+            this.#closeCalendar();
+            this.#triggerElement.focus();
+          }
 
           this.dispatchEvent(
             new CustomEvent("date-change", {

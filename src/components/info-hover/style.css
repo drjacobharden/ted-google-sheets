@@ -1,0 +1,13 @@
+info-hover {
+  color: var(--color-text-subtle);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--color-text);
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}

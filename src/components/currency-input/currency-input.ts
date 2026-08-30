@@ -30,6 +30,7 @@ class CurrencyInput extends HTMLElement {
       const ariaLabel = this.getAttribute("aria-label");
       const label = this.getAttribute("label");
       const name = this.getAttribute("name");
+      const helper = this.getAttribute("helper");
 
       this.#label = this.querySelector(":scope > span")!;
 
@@ -37,6 +38,12 @@ class CurrencyInput extends HTMLElement {
       if (ariaLabel) this.#input.setAttribute("aria-label", ariaLabel);
       if (label) this.#label.textContent = label;
       if (name) this.#input.name = name;
+
+      const message = this.querySelector(".currency-input__message");
+      if (message && helper) {
+        message.textContent = helper;
+        message.hidden = false;
+      }
 
       for (const attribute of ["min", "max", "step", "inputmode"]) {
         const attributeValue = this.getAttribute(attribute);
@@ -64,6 +71,16 @@ class CurrencyInput extends HTMLElement {
 
   // Block inputs beyond two decimals
   #handleInput = (e) => {
+    const minimumValue = e.target.getAttribute("min");
+    const minimum = Number(minimumValue);
+    if (
+      minimumValue !== null &&
+      Number.isFinite(minimum) &&
+      minimum >= 0 &&
+      e.target.value.includes("-")
+    ) {
+      e.target.value = e.target.value.replaceAll("-", "");
+    }
     const value = e.target.value;
     if (value.includes(".")) {
       const parts = value.split(".");
@@ -82,6 +99,38 @@ class CurrencyInput extends HTMLElement {
 
   set label(text: string) {
     this.#label.textContent = text;
+  }
+
+  set helper(text: string) {
+    const message = this.querySelector(".currency-input__message");
+    if (!message) return;
+    message.textContent = text;
+    message.hidden = !text;
+  }
+
+  set min(value: string | number | null) {
+    const nextValue = value === null || value === "" ? null : String(value);
+    if (nextValue === null) {
+      this.removeAttribute("min");
+      this.#input?.removeAttribute("min");
+      return;
+    }
+    this.setAttribute("min", nextValue);
+    this.#input?.setAttribute("min", nextValue);
+  }
+
+  get value(): string {
+    return this.#input?.value ?? this.getAttribute("value") ?? "";
+  }
+
+  set value(value: string | number) {
+    const nextValue = String(value ?? "");
+    if (this.#input) this.#input.value = nextValue;
+    else this.setAttribute("value", nextValue);
+  }
+
+  focus(options?: FocusOptions): void {
+    this.#input?.focus(options);
   }
 }
 

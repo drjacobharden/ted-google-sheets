@@ -20,8 +20,6 @@ const peopleSelectTemplate = () => `
   </div>
 `;
 
-let nextId = 0;
-
 export class PeopleSelect extends HTMLElement {
   static get observedAttributes() {
     return ["value"];
@@ -118,11 +116,7 @@ export class PeopleSelect extends HTMLElement {
     this.innerHTML = peopleSelectTemplate();
     this.#form = this.closest("form");
     this.#dropdown = this.querySelector("dropdown-menu");
-    const id = `people-select-${++nextId}`;
-    this.#dropdown.id = id;
     this.#dropdown.setAttribute("aria-label", "Select an assignment");
-    this.querySelector(".people-select-label").id = `${id}-label`;
-    this.#dropdown.setAttribute("aria-labelledby", `${id}-label ${id}`);
     this.#dropdown.addEventListener("dropdown-selection", this);
     this.#dropdown.addEventListener("search-action-pressed", this);
     this.#refresh(initialValue);

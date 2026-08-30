@@ -12,6 +12,7 @@ DropdownMenuTemp.innerHTML = DropdownMenuTempString;
 export interface DropdownMenuItem {
   key: string;
   title: string;
+  group?: string;
   icon?: IconKeys;
   isDefaultValue?: boolean;
   destructive?: boolean;
@@ -35,6 +36,7 @@ export class DropdownMenu extends HTMLElement {
   #selection: HTMLElement | null = null;
   #hoverOpenTimer: ReturnType<typeof setTimeout> | null = null;
   #hoverCloseTimer: ReturnType<typeof setTimeout> | null = null;
+  #defaultLabel = "";
 
   /**
    *
@@ -59,6 +61,7 @@ export class DropdownMenu extends HTMLElement {
       this.#trigger.setAttribute("aria-haspopup", "menu");
       this.#trigger.setAttribute("aria-expanded", "false");
       this.#menu.setAttribute("role", "menu");
+      this.#defaultLabel = this.getAttribute("label") ?? "";
     }
 
     if (this.#listening) return;
@@ -111,13 +114,6 @@ export class DropdownMenu extends HTMLElement {
     const label = this.getAttribute("label")!;
     const icon = this.getAttribute("icon")! as IconKeys;
 
-    const variant = this.getAttribute("variant");
-
-    if (variant === "ghost") {
-      this.#trigger.classList.remove("secondary-button");
-      this.#trigger.classList.add("ghost-button");
-    }
-
     const hideTrailingChevron =
       this.hasAttribute("hide-trailing-chevron") ?? false;
 
@@ -139,9 +135,19 @@ export class DropdownMenu extends HTMLElement {
       this.getAttribute("items") ?? "[]",
     ) as DropdownMenuItem[];
 
-    const children = items.map((item) => {
-      const { key, title, icon, isDefaultValue, destructive, selectionIcon } =
-        item;
+    const groups = new Map<string, HTMLElement>();
+    const children: HTMLElement[] = [];
+
+    items.forEach((item) => {
+      const {
+        key,
+        title,
+        group,
+        icon,
+        isDefaultValue,
+        destructive,
+        selectionIcon,
+      } = item;
 
       const option = document.createElement("div");
       option.classList.add("dropdown-menu-item");
@@ -177,7 +183,29 @@ export class DropdownMenu extends HTMLElement {
         option.toggleAttribute("destructive", true);
       }
 
-      return option;
+      if (!group) {
+        children.push(option);
+        return;
+      }
+
+      let section = groups.get(group);
+      if (!section) {
+        section = document.createElement("div");
+        section.className = "dropdown-menu-group";
+        section.setAttribute("role", "group");
+
+        const heading = document.createElement("span");
+        const headingId = `${this.#menuKey}-group-${groups.size + 1}`;
+        heading.id = headingId;
+        heading.className = "dropdown-menu-group-title type-meta";
+        heading.textContent = group;
+        section.setAttribute("aria-labelledby", headingId);
+        section.append(heading);
+
+        groups.set(group, section);
+        children.push(section);
+      }
+      section.append(option);
     });
 
     if (this.hasAttribute("searchable")) {
@@ -312,6 +340,11 @@ export class DropdownMenu extends HTMLElement {
       item.hidden =
         normalizedQuery.length > 0 && !title.includes(normalizedQuery);
     }
+    for (const group of this.#menu.querySelectorAll<HTMLElement>(
+      ".dropdown-menu-group",
+    )) {
+      group.hidden = !group.querySelector(".dropdown-menu-item:not([hidden])");
+    }
   }
 
   /**
@@ -359,7 +392,10 @@ export class DropdownMenu extends HTMLElement {
     this.#selection = item;
     this.#value = item?.dataset.value ?? null;
     this.#selection?.classList.add("is-selected");
-    if (item && !this.hasAttribute("preserve-label") && this.#trigger) {
+
+    if (item === null) {
+      this.#trigger.label = this.#defaultLabel;
+    } else if (item && !this.hasAttribute("preserve-label") && this.#trigger) {
       this.#trigger.label = item.dataset.title ?? "";
     }
   }
@@ -471,6 +507,7 @@ export class DropdownMenu extends HTMLElement {
   handleSelection = this.#events.handleEvent;
   addSearchActionListener = this.#searchActionEvents.addListener;
   removeSearchActionListener = this.#searchActionEvents.removeListener;
+  handleSearchActionPressed = this.#searchActionEvents.handleEvent;
 }
 
 customElements.define("dropdown-menu", DropdownMenu);
