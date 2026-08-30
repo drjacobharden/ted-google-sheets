@@ -26,27 +26,46 @@ export class OverlayManager extends HTMLElement {
 
       // Add the tooltip to the manager layer
       const tooltip = document.createElement("tool-tip") as Tooltip;
-      manager.append(tooltip);
       this.#tooltip = tooltip;
 
       const refresh = document.createElement("reshresh-indicator");
-      manager.append(refresh);
       this.#refreshIndicator = refresh as RefreshIndicator;
 
       const splash = document.createElement("splash-indicator");
-      manager.append(splash);
       this.#splash = splash as SplashIndicator;
 
       const alert = document.createElement("app-alert");
       const toasts = document.createElement("toast-stack") as ToastStack;
       const syncNotifications = document.createElement("sync-notifications");
-      const transactionDrawer = document.createElement("transaction-drawer-screen");
+      const transactionDrawer = document.createElement(
+        "transaction-drawer-screen",
+      );
       const entityDrawer = document.createElement("entity-drawer-screen");
-      const investmentAccountDrawer = document.createElement("investment-account-drawer-screen");
-      const investmentMonthDrawer = document.createElement("investment-month-drawer-screen");
-      const investmentLedgerDrawer = document.createElement("investment-ledger-drawer-screen");
+      const investmentAccountDrawer = document.createElement(
+        "investment-account-drawer-screen",
+      );
+      const investmentMonthDrawer = document.createElement(
+        "investment-month-drawer-screen",
+      );
+      const investmentLedgerDrawer = document.createElement(
+        "investment-ledger-drawer-screen",
+      );
+
       const onboarding = document.createElement("onboarding-overlay");
-      manager.append(alert, toasts, syncNotifications, transactionDrawer, entityDrawer, investmentAccountDrawer, investmentMonthDrawer, investmentLedgerDrawer, onboarding);
+      manager.append(
+        alert,
+        toasts,
+        syncNotifications,
+        transactionDrawer,
+        entityDrawer,
+        investmentAccountDrawer,
+        investmentMonthDrawer,
+        investmentLedgerDrawer,
+        tooltip,
+        refresh,
+        splash,
+        onboarding,
+      );
       registerToastStack(toasts);
 
       this.append(manager);
@@ -88,7 +107,9 @@ export class OverlayManager extends HTMLElement {
         break;
 
       case "pointerdown":
-        if (!event.composedPath().some((item) => item instanceof DropdownMenu)) {
+        if (
+          !event.composedPath().some((item) => item instanceof DropdownMenu)
+        ) {
           appState.set("activeDropdownKey", null);
         }
 
@@ -109,7 +130,11 @@ export class OverlayManager extends HTMLElement {
     }
   }
 
-  showTooltip(anchor: HTMLElement, content: string | Node, options: PopoverOptions) {
+  showTooltip(
+    anchor: HTMLElement,
+    content: string | Node,
+    options: PopoverOptions,
+  ) {
     this.#tooltip.showTooltip(anchor, content, options);
   }
 
@@ -118,7 +143,19 @@ export class OverlayManager extends HTMLElement {
   }
 
   #clearDrawerRoute(): void {
-    router.updateParams({ drawer: null, transactionId: null, entityKind: null, entityId: null, investmentAccountId: null, investmentMonth: null, investmentReviewId: null, investmentLedgerId: null, investmentLedgerSource: null });
+    router.updateParams({
+      drawer: null,
+      transactionId: null,
+      entityKind: null,
+      entityId: null,
+      investmentAccountId: null,
+      investmentMonth: null,
+      investmentReviewId: null,
+      investmentLedgerId: null,
+      investmentLedgerSource: null,
+      accountDraftName: null,
+      accountCreateRequestId: null,
+    });
   }
 
   #handleRefreshStarted(event: CustomEvent) {

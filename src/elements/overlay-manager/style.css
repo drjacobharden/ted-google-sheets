@@ -3,6 +3,10 @@
   inset: 0;
   z-index: 1000;
   pointer-events: none;
+
+  tool-tip {
+    z-index: 1000;
+  }
 }
 
 #overlay-manager :is(.drawer-overlay, .overlay, .toast-stack, .app-notice) {
