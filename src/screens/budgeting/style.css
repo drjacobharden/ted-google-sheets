@@ -112,7 +112,6 @@ budgeting-header {
   #budgeting-section-selector {
     .segmented-control__list {
       width: max-content;
-      gap: 12px;
     }
 
     .segmented-control__item {

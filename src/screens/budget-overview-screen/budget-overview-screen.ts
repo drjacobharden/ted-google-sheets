@@ -1948,7 +1948,7 @@ export class BudgetOverviewScreen
     const budgetSavings = overview?.netBalance ?? 0;
     const paycheckDeductions = summary?.metrics.paycheckDeductions.total ?? 0;
     const breakdown = savingsRateBreakdown({
-      income,
+      income: income - paycheckDeductions,
       spend: overview?.totalSpend ?? 0,
       deductions: paycheckDeductions,
     });

@@ -32,6 +32,8 @@ const OVERLAY_PARAMS = new Set([
   "investmentAccountId",
   "investmentMonth",
   "investmentReviewId",
+  "accountDraftName",
+  "accountCreateRequestId",
 ]);
 
 function availableYears(): number[] {
@@ -328,7 +330,7 @@ export class BudgetingHeader
       return;
     }
     if (action === "new-transaction") {
-      router.updateParams({ drawer: "new", transactionId: null });
+      router.navigate("new-transaction");
       return;
     }
     const entityKind = {
