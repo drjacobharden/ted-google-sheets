@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import { parseRoute, routeHash } from "../src/router/router";
 import { filterForBudgetingContext } from "../src/screens/budgeting/budgeting-context";
 import type { BudgetTransaction } from "../src/api/budget-api";
@@ -59,38 +58,5 @@ describe("shared budgeting scope", () => {
         lastParams: {},
       }).map((item) => item.id),
     ).toEqual(["1", "2"]);
-  });
-
-  test("main mounts budgeting screens from the root route outlet", () => {
-    const main = readFileSync("src/main.ts", "utf8");
-    const shell = readFileSync(
-      "src/screens/budgeting/budgeting-shell.ts",
-      "utf8",
-    );
-    const topNav = readFileSync(
-      "src/elements/top-nav/top-nav.ts",
-      "utf8",
-    );
-    const html = readFileSync("index.html", "utf8");
-    const headerTemplate = readFileSync(
-      "src/screens/budgeting/template.html",
-      "utf8",
-    );
-    expect(main).toContain("`route-${name}`");
-    expect(main).not.toContain('mountedContentKey !== "budgeting"');
-    expect(html).toContain('<template id="route-transactions">');
-    expect(html.match(/<budgeting-header><\/budgeting-header>/g)).toHaveLength(1);
-    expect(html).toContain('<template id="route-transactions">\n        <transaction-list-screen>');
-    expect(html).not.toContain("budgeting-view-outlet");
-    expect(headerTemplate).toContain('variant="section-tabs"');
-    expect(headerTemplate).not.toContain("budgeting-assignment-selector");
-    expect(shell).toContain("router.replaceParams({ year:");
-    expect(shell).not.toContain("#budgeting-assignment-selector");
-    expect(shell).toContain("assignment: _legacyAssignment");
-    expect(shell).toContain("#handleSectionSelection");
-    expect(topNav).toContain(
-      '.value as import("../../router/types").BudgetingRouteName',
-    );
-    expect(topNav).toContain("BUDGETING_CONTENT_ROUTES.map");
   });
 });

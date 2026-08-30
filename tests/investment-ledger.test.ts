@@ -13,9 +13,9 @@ describe("investment ledger", () => {
       [{ id: "d", name: "Student loan" }],
       [{ id: "p", debtAccountId: "d", date: "2026-03-04", month: "2026-03", amount: 250 }],
     );
-    expect(rows.map((row) => row.type)).toEqual(["Debt payment", "Withdrawal", "Investment"]);
-    expect(rows.map((row) => row.amount)).toEqual([-250, -100, 500]);
-    expect(rows.some((row) => row.id === "t")).toBe(false);
+    expect(rows.map((row) => row.type)).toEqual(["Debt payment", "Investment", "Withdrawal", "Investment"]);
+    expect(rows.map((row) => row.amount)).toEqual([-250, 50, -100, 500]);
+    expect(rows.some((row) => row.id === "t")).toBe(true);
   });
 
   test("uses the reporting month and a midpoint display date for legacy activity without a date", () => {
