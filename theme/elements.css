@@ -327,6 +327,26 @@
   }
 }
 
+.form-field-label {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-regular);
+  letter-spacing: var(--tracking-wider);
+  line-height: var(--leading-normal);
+  text-transform: uppercase;
+
+  small {
+    margin-left: var(--space-2xs);
+    font: inherit;
+    letter-spacing: var(--tracking-wide);
+    opacity: 1;
+    white-space: nowrap;
+    text-transform: lowercase;
+  }
+}
+
 @media (max-width: 48rem) {
   .editorial-section-header {
     align-items: flex-start;
