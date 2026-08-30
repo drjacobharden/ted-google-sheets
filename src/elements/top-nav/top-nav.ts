@@ -265,18 +265,7 @@ class TopNavBar extends HTMLElement {
     const newTransaction = target.closest('[data-action="new-transaction"]');
     if (newTransaction) {
       event.preventDefault();
-      const context = appState.get("budgetingContext");
-      const destination = router.isBudgetingRoute(router.currentRoute())
-        ? router.currentRoute()
-        : context.lastRoute;
-      router.navigate(
-        destination as import("../../router/types").BudgetingRouteName,
-        {
-          ...context.lastParams,
-          drawer: "new",
-          transactionId: "",
-        },
-      );
+      router.navigate("new-transaction");
       return;
     }
 
