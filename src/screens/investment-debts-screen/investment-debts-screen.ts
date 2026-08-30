@@ -13,7 +13,6 @@ template.innerHTML = templateString;
 interface DebtLedgerRow {
   id: string;
   name: string;
-  lender: string;
   interestRate: number;
   assignment: string;
   balance: number;
@@ -49,7 +48,6 @@ export class InvestmentDebtsScreen extends EditorialEntityLedgerScreen<DebtLedge
   protected availableFilters(year: number): AvailableFilter<DebtLedgerRow>[] {
     return [
       { key: "name", title: "Name", dataType: "string" },
-      { key: "lender", title: "Lender", dataType: "string" },
       { key: "interestRate", title: "Interest rate", dataType: "number" },
       { key: "assignment", title: "Assignment", dataType: [...new Set(APIs.budget.listAllPeople().map((item) => item.name))].sort() },
       { key: "balance", title: "Balance", dataType: "number" },
@@ -59,7 +57,7 @@ export class InvestmentDebtsScreen extends EditorialEntityLedgerScreen<DebtLedge
 
   protected columns(year: number): DataTableColumn<DebtLedgerRow>[] {
     return [
-      { key: "name", title: "Name", sizing: 34, cellClass: ["primary"], formatter: (value) => escapeHTML(value), subline: (row) => escapeHTML([row.lender, row.assignment].filter(Boolean).join(" · ")) },
+      { key: "name", title: "Name", sizing: 34, cellClass: ["primary"], formatter: (value) => escapeHTML(value), subline: (row) => escapeHTML(row.assignment) },
       { key: "interestRate", title: "Interest rate", sizing: 18, textAlign: "right", formatter: (value) => `${Number(value).toFixed(2)}%`, cellClass: ["numeric", "align-right"] },
       { key: "balance", title: "Balance", sizing: 24, textAlign: "right", formatter: (value) => money(value), cellClass: ["strong", "align-right"] },
       { key: "comparison", title: `vs ${year - 1}`, sizing: 24, textAlign: "right", formatter: (value) => signedPercent(value as number | null), cellClass: ["comparison", "align-right", (row) => row.comparison === null ? "is-muted" : row.comparison <= 0 ? "is-positive" : "is-negative"], sorter: (row) => row.comparison ?? Number.NEGATIVE_INFINITY },
@@ -75,7 +73,7 @@ export class InvestmentDebtsScreen extends EditorialEntityLedgerScreen<DebtLedge
     return APIs.accounts.accounts().filter((item) => item.type === "debt" && item.active !== false).map((account) => {
       const balance = Number(latest(account.id, end)?.balance || 0);
       const previous = Number(latest(account.id, previousEnd)?.balance || 0);
-      return { id: account.id, name: account.name, lender: account.lender || "", interestRate: account.interestRate || 0, assignment: assignments.get(account.assignmentId) ?? "Shared", balance, comparison: percentageChange(balance, previous) };
+      return { id: account.id, name: account.name, interestRate: account.interestRate || 0, assignment: assignments.get(account.assignmentId) ?? "Shared", balance, comparison: percentageChange(balance, previous) };
     }).sort((left, right) => right.balance - left.balance || left.name.localeCompare(right.name));
   }
 

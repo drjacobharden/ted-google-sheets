@@ -58,6 +58,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let returnFocus = null;
   let initialFormState = "";
   let openedRouteKey = "";
+  const sourceControl = form.querySelector("#investment-ledger-source");
+  sourceControl.items=[{key:"manual",title:"Manual transfer",isDefaultValue:true},{key:"deduction",title:"Paycheck deduction"}];
   let closing = false;
   let closeTimer = 0;
   let closeAnimationHandler = null;
@@ -104,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
       amount: amountInput.value,
       date: datePicker.value,
       accountId: accountSelect.value,
+      source: sourceControl.selection,
     });
   }
 
@@ -187,6 +190,8 @@ document.addEventListener("DOMContentLoaded", () => {
     idLabel.textContent = current?.id || "";
 
     const record = rawRecord(current);
+    const owner=APIs.accounts.accounts().find((item)=>item.id===accountSelect.value);
+    sourceControl.selection=record?.source||owner?.source||"manual";
     const createdAt = record?.createdAt ? new Date(record.createdAt) : null;
     createdFootnote.textContent =
       createdAt && !Number.isNaN(createdAt.getTime())
@@ -271,11 +276,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return value;
   }
 
-  function saveInvestment(accountId, date, amount, id = "") {
+  function saveInvestment(accountId, date, amount, source, id = "") {
     const value = monthDataOrThrow(accountId, date);
     const activity = [
       ...value.activity.filter((item) => item.id !== id),
-      { id: id || undefined, amount, date, activityType: "contribution", flowType: "external" },
+      { id: id || undefined, amount, date, source, activityType: "contribution" },
     ];
     APIs.accounts.saveMonth({
       accountId,
@@ -307,6 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
   typeControl.addEventListener("dropdown-selection", (event) => {
     setType(event.detail.value, "");
   });
+  accountSelect.addEventListener("change",()=>{if(!current){const owner=APIs.accounts.accounts().find((item)=>item.id===accountSelect.value);sourceControl.selection=owner?.source||"manual";}});
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -341,17 +347,21 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (["debt-payment", "borrowing"].includes(type)) {
-        await APIs.accounts.saveMonth({ accountId, month: date.slice(0, 7), balance: APIs.accounts.monthData(accountId, date.slice(0, 7))?.balance?.balance || 0, existingActivity: APIs.accounts.monthData(accountId, date.slice(0, 7))?.activity || [], activity: [{
+        const debtMonth=APIs.accounts.monthData(accountId,date.slice(0,7));
+        const nextDebtActivity=[...(debtMonth?.activity||[]).filter((item)=>item.id!==(sameDebt?current.id:"")),{
           id: sameDebt ? current.id : undefined,
           date,
           amount,
+          source: sourceControl.selection,
           activityType: type === "borrowing" ? "borrowing" : "payment",
-        }] });
+        }];
+        await APIs.accounts.saveMonth({ accountId, month: date.slice(0, 7), balance: debtMonth?.balance?.balance || 0, existingActivity: debtMonth?.activity || [], activity: nextDebtActivity });
       } else {
         saveInvestment(
           accountId,
           date,
           type === "withdrawal" ? -amount : amount,
+          sourceControl.selection,
           sameInvestment ? current.id : "",
         );
       }

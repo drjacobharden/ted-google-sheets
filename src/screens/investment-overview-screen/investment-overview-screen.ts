@@ -156,8 +156,7 @@ export class InvestmentOverviewScreen
         .map((account) => account.id),
     );
     const lifetimeContributions = netFlows(
-      APIs.accounts.activity()
-        .filter((item) => item.activityType === "contribution")
+      APIs.accounts.investmentActivity()
         .filter(
           (item) =>
             activeAccountIds.has(item.accountId) && item.month <= range.end,
@@ -232,7 +231,7 @@ export class InvestmentOverviewScreen
       .filter((account) => account.type === "investment" && account.active !== false);
     const balances = InvestmentView.latestByAccount(range.end);
     const previousBalances = InvestmentView.latestByAccount(previousRange(range).end);
-    const flows = APIs.accounts.activity().filter((item) => item.activityType === "contribution");
+    const flows = APIs.accounts.investmentActivity();
     const rows = accounts.map((account) => {
       const balance = Number(balances.get(account.id)?.balance ?? 0);
       const contributions = netFlows(

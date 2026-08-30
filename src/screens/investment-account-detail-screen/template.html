@@ -1,41 +1,121 @@
-<section class="investment-detail editorial-theme">
+<article class="investment-account-detail editorial-theme">
   <header class="tab-header">
     <div class="tab-header-title">
       <h1 id="investment-detail-title">Investment account</h1>
       <p id="investment-detail-subtitle">Viewing summary</p>
     </div>
-    <button class="editorial-button" id="edit-investment-account" type="button">
-      Edit account
-    </button>
   </header>
-  <section class="editorial-section" aria-labelledby="investment-history-title">
+
+  <dl class="investment-account-detail__summary" aria-label="Account summary">
+    <div>
+      <dt>
+        <span>Balance</span>
+        <custom-icon
+          icon="info"
+          data-summary-help="balance"
+          tabindex="0"
+          aria-label="About balance"
+        ></custom-icon>
+      </dt>
+      <dd id="investment-detail-summary-balance">—</dd>
+    </div>
+    <div>
+      <dt>
+        <span>Contributions</span>
+        <custom-icon
+          icon="info"
+          data-summary-help="contributions"
+          tabindex="0"
+          aria-label="About contributions"
+        ></custom-icon>
+      </dt>
+      <dd id="investment-detail-summary-contributions">—</dd>
+    </div>
+    <div>
+      <dt>
+        <span>Account growth</span>
+        <custom-icon
+          icon="info"
+          data-summary-help="growth"
+          tabindex="0"
+          aria-label="About account growth"
+        ></custom-icon>
+      </dt>
+      <dd id="investment-detail-summary-growth">—</dd>
+    </div>
+    <div>
+      <dt>
+        <span>ROI</span>
+        <custom-icon
+          icon="info"
+          data-summary-help="roi"
+          tabindex="0"
+          aria-label="About ROI"
+        ></custom-icon>
+      </dt>
+      <dd id="investment-detail-summary-roi">—</dd>
+    </div>
+  </dl>
+
+  <section
+    class="investment-account-detail__chart editorial-section"
+    aria-labelledby="investment-detail-chart-title"
+  >
     <header class="editorial-section-header">
+      <h2 id="investment-detail-chart-title" class="type-section-title">
+        Account performance <span class="type-meta">— fig. 01</span>
+      </h2>
+      <dropdown-menu
+        id="investment-detail-chart-mode"
+        variant="ghost"
+        label="Balance"
+        aria-label="Account chart display"
+      ></dropdown-menu>
+    </header>
+    <div class="investment-account-detail__chart-frame editorial-surface">
+      <data-chart
+        id="investment-detail-chart"
+        aria-label="Investment account monthly performance"
+      ></data-chart>
+    </div>
+  </section>
+
+  <section
+    class="investment-account-detail__history editorial-section"
+    aria-labelledby="investment-history-title"
+  >
+    <header class="investment-account-detail__history-header">
       <h2 id="investment-history-title" class="type-section-title">
         Month by month
       </h2>
+      <div
+        class="investment-account-detail__tools"
+        aria-label="Account history controls"
+      >
+        <search-bar
+          id="investment-detail-search"
+          variant="editorial"
+          placeholder="search"
+          aria-label="Search account history"
+        ></search-bar>
+        <filter-bar
+          id="investment-detail-filter"
+          variant="editorial"
+        ></filter-bar>
+      </div>
     </header>
-    <div
-      class="investment-detail__table-wrap"
-      id="investment-account-history-wrap"
-    >
-      <table class="investment-detail__table">
-        <thead>
-          <tr>
-            <th>Month</th>
-            <th class="is-number">Contributions</th>
-            <th class="is-number">Balance</th>
-          </tr>
-        </thead>
-        <tbody id="investment-account-history-body"></tbody>
-        <tfoot id="investment-account-history-footer"></tfoot>
-      </table>
-    </div>
     <p
       id="investment-account-history-empty"
-      class="investment-detail__empty"
+      class="investment-account-detail__empty"
       hidden
     >
       No monthly balances have been recorded for this year.
     </p>
+    <data-table
+      id="investment-account-history-table"
+      sortable
+      interactive
+      aria-label="Investment account monthly history"
+    ></data-table>
   </section>
-</section>
+</article>

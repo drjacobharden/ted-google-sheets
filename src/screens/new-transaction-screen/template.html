@@ -1,0 +1,86 @@
+<section
+  class="new-transaction-page editorial-theme"
+  aria-labelledby="new-transaction-title"
+>
+  <header class="tab-header">
+    <div class="tab-header-title">
+      <h1 id="new-transaction-title">New transaction</h1>
+    </div>
+  </header>
+
+  <nav class="budgeting-header__sections" aria-label="Transction input actions">
+    <segmented-control
+      id="new-transaction-kind"
+      variant="section-tabs"
+      aria-label="Transaction type"
+    ></segmented-control>
+  </nav>
+
+  <form id="new-transaction-form" novalidate>
+    <input type="hidden" name="type" value="expense" />
+    <div class="new-transaction-page__grid">
+      <date-picker
+        id="new-transaction-date-inline"
+        class="new-transaction-page__calendar new-transaction-page__date--inline"
+        variant="inline"
+      ></date-picker>
+
+      <div class="new-transaction-page__fields">
+        <currency-input
+          id="new-transaction-amount"
+          class="transaction-field transaction-field--amount"
+          helper="Use negative amounts for refunds."
+        ></currency-input>
+        <date-picker
+          id="new-transaction-date-compact"
+          class="transaction-field new-transaction-page__date--compact"
+          name="date"
+          alignment="left"
+        ></date-picker>
+        <div class="new-transaction-page__field-grid">
+          <category-select class="transaction-field"></category-select>
+          <vendor-select class="transaction-field"></vendor-select>
+          <account-select
+            id="new-transaction-account"
+            class="transaction-field"
+            label="Account"
+            account-type="all"
+            create-via-drawer
+            hidden
+          ></account-select>
+          <people-select class="transaction-field"></people-select>
+
+          <source-select
+            id="new-transaction-source"
+            class="transaction-field"
+          ></source-select>
+          <label
+            class="form-field transaction-field transaction-field--wide new-transaction-page__notes"
+          >
+            <span>Description<small>(optional)</small></span>
+            <textarea
+              id="new-transaction_notes"
+              name="notes"
+              maxlength="500"
+              rows="3"
+            ></textarea>
+          </label>
+        </div>
+
+        <div class="new-transaction-page__footer">
+          <p
+            id="new-transaction-message"
+            class="form-message"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <custom-button
+            class="primary-button"
+            type="submit"
+            label="Add transaction"
+          ></custom-button>
+        </div>
+      </div>
+    </div>
+  </form>
+</section>

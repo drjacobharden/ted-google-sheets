@@ -60,7 +60,6 @@ investments-header {
 
   #investments-section-selector .segmented-control__list {
     width: max-content;
-    gap: 12px;
   }
 
   #investments-section-selector .segmented-control__item {

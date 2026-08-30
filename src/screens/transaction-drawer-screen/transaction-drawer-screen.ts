@@ -3,14 +3,14 @@ import { APIs } from "../../api/api";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
 import { DateUtils } from "../../utilities/date-utilities";
-import { InvestmentView } from "../../utilities/investment-view";
 import { showToast } from "../../components/toast-stack/toast-service";
 import templateString from "./template.html" with { type: "text" };
-import { CustomButton } from "../../components/button/button";
 import {
   addListener,
   handleCustomEvent,
 } from "../../utilities/event-utilities";
+import { TransactionFormController } from "../transaction-form-controller";
+
 export class TransactionDrawerScreen extends HTMLElement {
   connectedCallback(): void {
     if (!this.dataset.initialized) {
@@ -19,16 +19,16 @@ export class TransactionDrawerScreen extends HTMLElement {
     }
   }
 }
+
 if (!customElements.get("transaction-drawer-screen"))
   customElements.define("transaction-drawer-screen", TransactionDrawerScreen);
 
 document.addEventListener("DOMContentLoaded", () => {
-  const { createdDateTimeFormatter, toISODate } = DateUtils;
+  const { createdDateTimeFormatter } = DateUtils;
 
   const backdrop = document.getElementById("transaction-drawer-backdrop");
   const drawer = backdrop.querySelector(".side-drawer");
   const form = document.getElementById("transaction-edit-form");
-  const header = backdrop.querySelector("drawer-header");
   const typeInput = form.elements.type;
 
   const message = document.getElementById("transaction-edit-message");
@@ -36,90 +36,36 @@ document.addEventListener("DOMContentLoaded", () => {
   const appShell = document.querySelector(".app-shell");
   const deleteButton = document.getElementById("delete-transaction");
 
-  const saveButton = form.querySelector(
-    'custom-button[type="submit"]',
-  ) as CustomButton;
-  const transactionMetadata = backdrop.querySelector(".metadata");
-  const batchEntryToggle = document.getElementById("batch-entry-toggle");
-  const batchEntryInput = form.elements.batchEntry;
+  const saveButton = form.querySelector('custom-button[type="submit"]');
   const transactionIdElement = document.getElementById("transaction-edit-id");
   const createdFootnote = document.getElementById(
     "transaction-created-footnote",
   );
 
   const categorySelect = form.querySelector("category-select");
-  const vendorSelect = form.querySelector("vendor-input");
+  const vendorSelect = form.querySelector("vendor-select");
   const peopleSelect = form.querySelector("people-select");
+  const sourceSelect = form.querySelector("source-select");
+  const accountSelect = form.querySelector("account-select");
+  const amountControl = form.querySelector("currency-input");
+  const formController = new TransactionFormController();
 
-  let mode = "create";
   let transactionId = "";
   let openedBase = null;
-  let initialFormState = "";
   let drawerDirty = false;
   let trackDrawerChanges = false;
   let returnFocus = null;
   let activeType = "expense";
   let expenseDraft = { categoryId: "", vendorId: "" };
-  let incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID };
+  let incomeDraft = {
+    categoryId: APIs.budget.INCOME_CATEGORY_ID,
+    vendorId: "",
+  };
   let closing = false;
   let closeTimer = 0;
   let closeAnimationHandler = null;
 
-  //  Open the drawer in creation mode to add a new transaction
-  //    - 1: Set the flag for mode to create and clear the transaction id
-  //    - 2: Reset the form so it shows all blanks
-  //    - 3: Set the title, eyebrow, and subtitles while hiding the metadata
-  function openCreate() {
-    trackDrawerChanges = false;
-    drawerDirty = false;
-    mode = "create";
-    transactionId = "";
-    openedBase = null;
-    returnFocus = document.activeElement;
-
-    message.textContent = "";
-    message.className = "form-message";
-
-    setTransactionTypeSelection("expense");
-    form.elements.amount.value = "";
-    form.elements.notes.value = "";
-    batchEntryInput.checked = false;
-    activeType = "expense";
-    expenseDraft = { categoryId: "", vendorId: "" };
-    incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID };
-
-    categorySelect.clearFallbackSelection();
-    vendorSelect.clearFallbackSelection();
-    peopleSelect.clearFallbackSelection();
-
-    if (datePickerElement) {
-      datePickerElement.value = toISODate(new Date());
-    }
-
-    populateFormOptions();
-
-    header.title = "New transaction";
-    saveButton.label = "Add transaction";
-    transactionMetadata.hidden = true;
-    batchEntryToggle.hidden = false;
-    deleteButton.hidden = true;
-
-    initialFormState = formState();
-    showDrawer();
-    window.setTimeout(() => {
-      if (mode === "create" && !backdrop.hidden) {
-        initialFormState = formState();
-        trackDrawerChanges = true;
-      }
-    }, 0);
-    return true;
-  }
-
-  //  Open the drawer in edit mode to edit an existing transaction
-  //    - 1: Set the flag for mode to edit and populate the transaction id
-  //    - 2: If no transaction was found, throw a toast error up to alert the user
-  //    - 2: Populate the form with the data from the transaction
-  //    - 3: Set the title, eyebrow, and subtitles while showing the metadata
+  // Open the drawer to edit an existing transaction or resolve its conflict.
   function openEdit(id, options = {}) {
     trackDrawerChanges = false;
     drawerDirty = false;
@@ -134,7 +80,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     }
 
-    mode = "edit";
     transactionId = id;
     returnFocus = document.activeElement;
 
@@ -169,16 +114,12 @@ document.addEventListener("DOMContentLoaded", () => {
         record.type === "income"
           ? record.categoryId || APIs.budget.INCOME_CATEGORY_ID
           : APIs.budget.INCOME_CATEGORY_ID,
+      vendorId: record.type === "income" ? record.vendorId || "" : "",
     };
-
     populateFormFromRecord(record);
+    accountSelect.value = record.accountId || "";
+    sourceSelect.value = record.source || "manual";
 
-    header.title = "Edit transaction";
-    saveButton.label = "Save changes";
-    transactionMetadata.hidden = false;
-    batchEntryToggle.hidden = true;
-    deleteButton.hidden = false;
-    batchEntryInput.checked = false;
     transactionIdElement.textContent = record.id;
 
     const createdAt = new Date(record.createdAt);
@@ -188,18 +129,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     createdFootnote.textContent = `Created by ${record.createdByName || "Unknown"} on ${createdWhen}`;
 
-    initialFormState = formState();
     showDrawer();
     window.setTimeout(() => {
-      if (mode === "edit" && !backdrop.hidden) {
-        initialFormState = formState();
+      if (!backdrop.hidden) {
         trackDrawerChanges = true;
       }
     }, 0);
     return true;
   }
 
-  //  Shared display logic that runs regardless of the mode
+  // Reveal the populated edit drawer and move focus into the form.
   function showDrawer() {
     message.textContent = "";
     if (closeTimer) window.clearTimeout(closeTimer);
@@ -228,12 +167,6 @@ document.addEventListener("DOMContentLoaded", () => {
     backdrop.classList.add("is-open");
     document.body.classList.add("drawer-open");
     appShell.inert = true;
-
-    // drawer.focus();
-
-    // setTimeout(() => {
-    //   form.elements.amount.focus();
-    // }, 0);
   }
 
   function populateFormOptions({
@@ -256,12 +189,15 @@ document.addEventListener("DOMContentLoaded", () => {
         : null,
     );
 
-    activeType = typeInput.value === "income" ? "income" : "expense";
+    activeType = ["income", "account"].includes(typeInput.value)
+      ? typeInput.value
+      : "expense";
     if (activeType === "expense") {
       expenseDraft = { categoryId, vendorId };
     } else {
       incomeDraft = {
         categoryId: categoryId || APIs.budget.INCOME_CATEGORY_ID,
+        vendorId,
       };
     }
     updateTypeFields(activeType);
@@ -269,7 +205,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function populateFormFromRecord(record) {
-    setTransactionTypeSelection(record.type || "expense");
+    setTransactionTypeSelection(
+      record.accountId ? "account" : record.type || "expense",
+    );
 
     form.elements.amount.value =
       record.amount === undefined || record.amount === null
@@ -293,29 +231,28 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateTypeFields(type) {
+    const account = type === "account";
     const income = type === "income";
-    categorySelect.hidden = false;
+    categorySelect.hidden = account;
     categorySelect.type = income ? "income" : "expense";
     categorySelect.value = income
       ? incomeDraft.categoryId
       : expenseDraft.categoryId;
-    vendorSelect.hidden = income;
-    vendorSelect.value = income ? "" : expenseDraft.vendorId;
+    vendorSelect.toggleAttribute("optional", income);
+    vendorSelect.hidden = account;
+    vendorSelect.value = income ? incomeDraft.vendorId : expenseDraft.vendorId;
+    peopleSelect.hidden = account;
+    accountSelect.hidden = !account;
+    amountControl.helper = account
+      ? "Use negative amounts for investment withdrawals or additional borrowing on your debt."
+      : "Use negative amounts for refunds.";
+    amountControl.min = null;
     activeType = type;
   }
 
   function setTransactionTypeSelection(type) {
-    const nextType = type === "income" ? "income" : "expense";
+    const nextType = ["income", "account"].includes(type) ? type : "expense";
     typeInput.value = nextType;
-  }
-
-  function formState() {
-    const state = Object.fromEntries(new FormData(form));
-    state.date = datePickerElement.value;
-    state.categoryId = categorySelect.value;
-    state.vendorId = vendorSelect.value;
-    state.assignmentId = peopleSelect.value;
-    return JSON.stringify(state);
   }
 
   function isDirty() {
@@ -337,9 +274,8 @@ document.addEventListener("DOMContentLoaded", () => {
     appShell.inert = false;
     transactionId = "";
     openedBase = null;
-    initialFormState = "";
     expenseDraft = { categoryId: "", vendorId: "" };
-    incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID };
+    incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID, vendorId: "" };
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
       : document.querySelector('[data-tab="budgeting"]')
@@ -390,6 +326,13 @@ document.addEventListener("DOMContentLoaded", () => {
       showSelectionError(datePickerElement, "Choose a transaction date.");
       return false;
     }
+    if (type === "account") {
+      if (!accountSelect.value) {
+        showSelectionError(accountSelect, "Choose an account.");
+        return false;
+      }
+      return true;
+    }
     if (!categorySelect.value) {
       showSelectionError(categorySelect, "Choose a category.");
       return false;
@@ -423,43 +366,30 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const draft = {
+    const draft = formController.buildDraft({
       id: transactionId,
-      type,
-      amount: Number(values.get("amount")),
+      kind: type,
+      amount: values.get("amount"),
       date: datePickerElement.value,
       categoryId: categorySelect.value,
-      vendorId: type === "income" ? "" : vendorSelect.value,
+      vendorId: vendorSelect.value,
       assignmentId: peopleSelect.value,
-      notes: String(values.get("notes") || "").trim(),
-    };
+      accountId: accountSelect.value,
+      notes: values.get("notes"),
+      source: sourceSelect.value,
+    });
 
     try {
-      if (mode === "create") {
-        createTransaction(draft);
-      } else {
-        updateTransaction({
-          ...draft,
-          id: transactionId,
-        });
-      }
+      updateTransaction({
+        ...draft,
+        id: transactionId,
+      });
 
-      initialFormState = formState();
-      if (mode === "create" && batchEntryInput.checked) {
-        resetForBatchEntry(draft.date);
-      } else {
-        close(true);
-      }
+      close(true);
     } catch (error) {
       message.className = "form-message error";
       message.textContent = error.message;
     }
-  }
-
-  // Create a new transaction
-  function createTransaction(draft) {
-    APIs.budget.queueTransaction(draft);
-    showToast("Transaction added. Syncing…");
   }
 
   // Update an existing transaction
@@ -471,7 +401,6 @@ document.addEventListener("DOMContentLoaded", () => {
   async function deleteCurrentTransaction() {
     if (
       deleteButton.hasAttribute("disabled") ||
-      mode !== "edit" ||
       !transactionId ||
       !window.confirm("Delete this transaction? This cannot be undone.")
     )
@@ -490,36 +419,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function resetForBatchEntry(date) {
-    setTransactionTypeSelection("expense");
-    form.elements.amount.value = "";
-    form.elements.notes.value = "";
-    activeType = "expense";
-    expenseDraft = { categoryId: "", vendorId: "" };
-    incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID };
-    categorySelect.clearFallbackSelection();
-    vendorSelect.clearFallbackSelection();
-    peopleSelect.clearFallbackSelection();
-    datePickerElement.value = date;
-    populateFormOptions();
-    message.className = "form-message success";
-    message.textContent = "Transaction added. Ready for the next one.";
-    initialFormState = formState();
-    form.elements.amount.focus({ preventScroll: true });
-  }
-
   addListener("segmented-control-selection", drawer, (event) => {
     handleCustomEvent("segmented-control-selection", event, ({ value }) => {
-      const nextType = value === "income" ? "income" : "expense";
+      const nextType = ["income", "account"].includes(value)
+        ? value
+        : "expense";
       if (activeType === "expense") {
         expenseDraft = {
           categoryId: categorySelect.value,
           vendorId: vendorSelect.value,
         };
-      } else {
+      } else if (activeType === "income") {
         incomeDraft.categoryId = categorySelect.value;
       }
-      // typeInput.value = nextType;
+      setTransactionTypeSelection(nextType);
       updateTypeFields(nextType);
       if (trackDrawerChanges) drawerDirty = true;
     });
@@ -536,12 +449,16 @@ document.addEventListener("DOMContentLoaded", () => {
   vendorSelect.addEventListener("vendor-selected", () => {
     if (trackDrawerChanges) drawerDirty = true;
     if (activeType === "expense") expenseDraft.vendorId = vendorSelect.value;
+    else incomeDraft.vendorId = vendorSelect.value;
+  });
+  sourceSelect.addEventListener("source-selected", () => {
+    if (trackDrawerChanges) drawerDirty = true;
+  });
+  accountSelect.addEventListener("account-selected", () => {
+    if (trackDrawerChanges) drawerDirty = true;
   });
 
-  //  Form submission
-  //    - 1: Check to see if all data is valid. If not, throw an error message.
-  //    - 2: Process the data and get it ready to submit to the spreadsheet
-  //    - 3: Queue the submission for editing or creating
+  // Queue edits after the shared transaction validation succeeds.
   form.addEventListener("submit", handleSubmit);
   saveButton.addEventListener("click", () => form.requestSubmit());
   form.addEventListener("input", () => {
@@ -551,19 +468,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (trackDrawerChanges) drawerDirty = true;
   });
 
-  // Handle the clicks that open the new transaction drawer
-  function handleNewTransactionClick(event) {
-    const button = event.target.closest('[data-action="new-transaction"]');
-    if (!button) return;
-    event.preventDefault();
-    router.updateParams({
-      drawer: "new",
-      transactionId: null,
-    });
-  }
-
-  document.addEventListener("click", handleNewTransactionClick);
-
   let openedRouteKey = "";
 
   function openDrawerFromCurrentRoute() {
@@ -572,18 +476,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const id = params.transactionId;
     const routeKey = `${action || ""}:${id || ""}`;
 
-    if (!["new", "edit", "review"].includes(action)) {
+    if (action === "new") {
+      router.navigate("new-transaction");
+      return;
+    }
+
+    if (!["edit", "review"].includes(action)) {
       openedRouteKey = "";
       if (!backdrop.hidden) close(true, { updateRoute: false });
       return;
     }
 
     if (routeKey === openedRouteKey && !backdrop.hidden) return;
-
-    if (action === "new") {
-      if (openCreate()) openedRouteKey = routeKey;
-      return;
-    }
 
     if (!id) {
       router.updateParams({ drawer: null, transactionId: null });

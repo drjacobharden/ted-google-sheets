@@ -566,18 +566,23 @@ export class EntityDetailScreen
           this.#selectedMonth === null ||
           row.date.slice(5, 7) === this.#selectedMonth,
       )
-      .filter((row) => {
-        if (!this.#query) return true;
-        return [row.notes, row.category, row.vendor, row.assignment].some(
-          (value) =>
-            String(value ?? "").toLowerCase().includes(this.#query),
-        );
-      })
+      .filter((row) => this.#matchesSearch(row))
       .filter((row) =>
         matchesLedgerFilterGroups(row, this.#filters, (item, key) =>
           key === "amount" ? signedTransactionAmount(item) : item[key],
         ),
       );
+  }
+
+  #matchesSearch(row: BudgetTransaction): boolean {
+    if (!this.#query) return true;
+    return this.#columns().some((column) => {
+      const rawValue = row[column.key];
+      const value = column.sorter?.(row) ?? rawValue;
+      if (typeof value === "number") return String(value).startsWith(this.#query);
+      const text = column.formatter?.(rawValue, row) ?? String(value ?? "");
+      return text.toLowerCase().includes(this.#query);
+    });
   }
 
   #filterValues(

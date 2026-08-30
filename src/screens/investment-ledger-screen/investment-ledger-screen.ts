@@ -56,6 +56,7 @@ export class InvestmentLedgerScreen
   #selectedMonth: string | null = null;
   #query = "";
   #filters: AppliedFilter<InvestmentLedgerRow>[] = [];
+  #sourceRows: InvestmentLedgerRow[] = [];
   #visibleRows: InvestmentLedgerRow[] = [];
 
   connectedCallback(): void {
@@ -76,6 +77,7 @@ export class InvestmentLedgerScreen
     this.#table.rowSelection.addListener(this);
     window.addEventListener("budget:accounts-changed", this);
     window.addEventListener("app:route-changed", this);
+    this.#refreshSourceRows();
     this.#configureFilters();
     this.#render();
   }
@@ -129,6 +131,7 @@ export class InvestmentLedgerScreen
         break;
 
       default:
+        this.#refreshSourceRows();
         this.#configureFilters();
         this.#render();
     }
@@ -173,20 +176,27 @@ export class InvestmentLedgerScreen
   }
 
   #filteredRows(): InvestmentLedgerRow[] {
-    return investmentLedgerRows()
+    return this.#sourceRows
       .filter((row) => row.month.startsWith(String(this.#year())))
       .filter(
         (row) =>
           !this.#selectedMonth || row.month.slice(5, 7) === this.#selectedMonth,
       )
-      .filter(
-        (row) =>
-          !this.#query ||
-          `${row.type} ${row.account}`.toLowerCase().includes(this.#query),
-      )
+      .filter((row) => this.#matchesSearch(row))
       .filter((row) =>
         matchesLedgerFilterGroups(row, this.#filters, (item, key) => item[key]),
       );
+  }
+
+  #matchesSearch(row: InvestmentLedgerRow): boolean {
+    if (!this.#query) return true;
+    return this.#columns().some((column) => {
+      const rawValue = row[column.key];
+      const value = column.sorter?.(row) ?? rawValue;
+      if (typeof value === "number") return String(value).startsWith(this.#query);
+      const text = column.formatter?.(rawValue, row) ?? String(value ?? "");
+      return text.toLowerCase().includes(this.#query);
+    });
   }
 
   #render(): void {
@@ -213,7 +223,6 @@ export class InvestmentLedgerScreen
   }
 
   #configureFilters(): void {
-    const rows = investmentLedgerRows();
     this.#filter.availableFilters = [
       {
         key: "type",
@@ -223,12 +232,16 @@ export class InvestmentLedgerScreen
       {
         key: "account",
         title: "Account",
-        dataType: [...new Set(rows.map((row) => row.account))].sort(),
+        dataType: [...new Set(this.#sourceRows.map((row) => row.account))].sort(),
         searchable: true,
       },
       { key: "date", title: "Date", dataType: "date" },
       { key: "amount", title: "Amount", dataType: "number" },
     ];
+  }
+
+  #refreshSourceRows(): void {
+    this.#sourceRows = investmentLedgerRows();
   }
 
 }

@@ -25,9 +25,10 @@ import { filterForBudgetingContext } from "../budgeting/budgeting-context";
 import {
   editorialPeriod,
   matchesLedgerFilterGroups,
-  signedTransactionAmount,
 } from "../../utilities/entity-ledger";
 import templateString from "./template.html" with { type: "text" };
+import { budgetingActivities, activityEffects } from "../../utilities/activity-effects";
+import { APIs } from "../../api/api";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -45,6 +46,8 @@ const monthItems: DropdownMenuItem[] = [
     title: monthFormatter.format(new Date(2024, index, 1)),
   })),
 ];
+const rowAmount=(row:BudgetTransaction)=>{const effect=activityEffects(row,APIs.accounts.accounts());return effect.expense?-effect.expense:effect.income||effect.investmentFlow||Number(row.amount);};
+const netBudgetAmount=(row:BudgetTransaction)=>{const effect=activityEffects(row,APIs.accounts.accounts());return effect.income-effect.expense;};
 
 export class TransactionScreen
   extends HTMLElement
@@ -182,7 +185,7 @@ export class TransactionScreen
           escapeHTML(
             String(value ?? "").trim() || row.category || "Uncategorized",
           ),
-        subline: (row) => escapeHTML(row.vendor || "No vendor"),
+        subline: (row) => escapeHTML(row.source === "deduction" ? `${row.account || row.vendor || "Payroll"} · Deduction (+${money(activityEffects(row,APIs.accounts.accounts()).income)} gross income)` : row.account || row.vendor || "No vendor"),
         sizing: 35,
         cellClass: ["primary"],
       },
@@ -204,11 +207,11 @@ export class TransactionScreen
         key: "amount",
         title: "Amount",
         formatter: (_value: unknown, row) =>
-          money(signedTransactionAmount(row)),
+          money(rowAmount(row)),
         sizing: "narrow",
         cellClass: ["numeric", "align-right"],
         headerClass: "align-right",
-        sorter: signedTransactionAmount,
+        sorter: rowAmount,
       },
     ];
   }
@@ -217,7 +220,7 @@ export class TransactionScreen
     rows: readonly BudgetTransaction[],
   ): DataTableData<BudgetTransaction> {
     const visibleTotal = rows.reduce(
-      (total, row) => total + signedTransactionAmount(row),
+      (total, row) => total + netBudgetAmount(row),
       0,
     );
 
@@ -240,32 +243,35 @@ export class TransactionScreen
     this.#table.data = this.#tableData(rows);
   }
 
+  #matchesSearch(row: BudgetTransaction): boolean {
+    if (!this.#query) return true;
+    return this.#columns().some((column) => {
+      const rawValue = row[column.key];
+      const value = column.sorter?.(row) ?? rawValue;
+      if (typeof value === "number") return String(value).startsWith(this.#query);
+      const text = column.formatter?.(rawValue, row) ?? String(value ?? "");
+      return text.toLowerCase().includes(this.#query);
+    });
+  }
+
   #filteredRows(): BudgetTransaction[] {
-    return filterForBudgetingContext(appController.getTransactions())
+    return filterForBudgetingContext(budgetingActivities(appController.getTransactions(), APIs.accounts.accounts(), APIs.budget.listAllCategories(), APIs.budget.listAllPeople()))
       .filter(
         (row) =>
           this.#selectedMonth === null ||
           row.date.slice(5, 7) === this.#selectedMonth,
       )
-      .filter((row) => {
-        if (!this.#query) return true;
-        return [row.notes, row.category, row.vendor, row.assignment].some(
-          (value) =>
-            String(value ?? "")
-              .toLowerCase()
-              .includes(this.#query),
-        );
-      })
+      .filter((row) => this.#matchesSearch(row))
       .filter((row) =>
         matchesLedgerFilterGroups(row, this.#filters, (item, key) =>
-          key === "amount" ? signedTransactionAmount(item) : item[key],
+          key === "amount" ? rowAmount(item) : item[key],
         ),
       );
   }
 
   #filterValues(key: "category" | "vendor" | "assignment"): string[] {
     const values = new Map<string, string>();
-    for (const transaction of appController.getTransactions()) {
+    for (const transaction of budgetingActivities(appController.getTransactions(), APIs.accounts.accounts(), APIs.budget.listAllCategories(), APIs.budget.listAllPeople())) {
       const value = String(transaction[key] ?? "").trim();
       if (value) values.set(value.toLocaleLowerCase("en-US"), value);
     }
@@ -311,6 +317,11 @@ export class TransactionScreen
         .find((item) => item.id === id);
       if (!transaction) return;
       if (event instanceof KeyboardEvent) event.preventDefault();
+      if (transaction.accountId) {
+        const effect = activityEffects(transaction, APIs.accounts.accounts());
+        router.updateParams({ drawer: "investment-ledger-entry", investmentLedgerId: transaction.id, investmentLedgerSource: effect.account?.type || "investment" });
+        return;
+      }
       router.updateParams({ drawer: "edit", transactionId: transaction.id });
     });
   }

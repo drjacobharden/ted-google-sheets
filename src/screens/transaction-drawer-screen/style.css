@@ -15,7 +15,6 @@
 
     .segmented-control__list {
       width: max-content;
-      gap: var(--space-lg);
       padding: 0;
     }
 
@@ -45,7 +44,7 @@
   .drawer-form-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-sm);
+    gap: var(--space-md);
     margin-top: 20px;
   }
 
@@ -61,14 +60,18 @@
   currency-input,
   date-picker,
   category-select,
-  vendor-input,
-  people-select {
+  vendor-select,
+  people-select,
+  source-select,
+  account-select {
     gap: var(--space-2xs);
 
     > span,
     .category-select-label,
     .vendor-select-label,
-    .people-select-label {
+    .people-select-label,
+    .source-select-label,
+    .account-select-label {
       margin: 0;
       color: var(--color-text-subtle);
       font-family: var(--font-mono);
@@ -198,6 +201,10 @@
     font-weight: var(--weight-regular);
     line-height: var(--leading-normal);
     resize: vertical;
+
+    &:focus-visible {
+      outline: 0;
+    }
   }
 
   .select-menu .select-popup,

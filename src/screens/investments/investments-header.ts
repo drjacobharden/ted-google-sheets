@@ -111,6 +111,17 @@ export class InvestmentsHeader
       return;
     }
     if (event.type === "click") {
+      const editAccount = (event.target as Element | null)?.closest<HTMLElement>(
+        "[data-edit-investment-account]",
+      );
+      if (editAccount && this.#route?.name === "investment-account-detail") {
+        router.updateParams({
+          drawer: "investment-account",
+          investmentAccountId: this.#route.params.accountId ?? null,
+          investmentLedgerSource: "investment",
+        });
+        return;
+      }
       const ledgerEntry = (event.target as Element | null)?.closest<HTMLElement>("[data-ledger-entry]");
       if (ledgerEntry) {
         const year = Number(this.#selectedYear());
@@ -197,10 +208,20 @@ export class InvestmentsHeader
     }));
     this.#sectionSelector.selection = contentRoute(detail.name);
     const onAccounts = contentRoute(detail.name) === "investment-accounts";
+    const onAccountDetail = detail.name === "investment-account-detail";
     const onDebts = contentRoute(detail.name) === "investment-debts";
     const onLedger = contentRoute(detail.name) === "investment-ledger";
-    this.#primaryAction.label = onLedger ? "Add ledger entry" : onDebts ? "Add debt account" : onAccounts ? "Add account" : "Add investment entry";
-    this.#primaryAction.toggleAttribute("data-account-new", onAccounts);
+    this.#primaryAction.label = onAccountDetail
+      ? "Edit account"
+      : onLedger
+        ? "Add ledger entry"
+        : onDebts
+          ? "Add debt account"
+          : onAccounts
+            ? "Add account"
+            : "Add investment entry";
+    this.#primaryAction.toggleAttribute("data-edit-investment-account", onAccountDetail);
+    this.#primaryAction.toggleAttribute("data-account-new", onAccounts && !onAccountDetail);
     this.#primaryAction.toggleAttribute("data-debt-account-new", onDebts);
     this.#primaryAction.toggleAttribute("data-ledger-entry", onLedger);
     this.#primaryAction.toggleAttribute("data-balance", !onAccounts && !onDebts && !onLedger);

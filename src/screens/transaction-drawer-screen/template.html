@@ -1,24 +1,34 @@
 <drawer-overlay
   id="transaction-drawer-backdrop"
   title="Edit transaction"
-  tabs='[{"key":"expense","title":"Expense","isDefaultValue":true},{"key":"income","title":"Income"}]'
+  tabs='[{"key":"expense","title":"Expense","isDefaultValue":true},{"key":"income","title":"Income"},{"key":"account","title":"Accounts"}]'
   hidden
 >
   <form id="transaction-edit-form" class="edit-form" novalidate>
     <input type="hidden" name="type" value="expense" />
     <div class="drawer-form-grid">
       <currency-input
+        id="transaction-drawer-amount"
         class="transaction-field transaction-field--amount"
+        helper="Use negative amounts for refunds."
       ></currency-input>
       <date-picker
         class="transaction-field transaction-field--date"
         name="date"
       ></date-picker>
       <category-select class="transaction-field"></category-select>
-      <vendor-input class="transaction-field"></vendor-input>
-      <people-select
-        class="transaction-field transaction-field--wide"
-      ></people-select>
+      <vendor-select class="transaction-field"></vendor-select>
+      <people-select class="transaction-field"></people-select>
+      <account-select
+        id="transaction-account"
+        class="transaction-field"
+        label="Account"
+        account-type="all"
+      ></account-select>
+      <source-select
+        id="transaction-source"
+        class="transaction-field"
+      ></source-select>
       <label
         class="form-field transaction-field transaction-field--wide transaction-note"
       >
@@ -39,7 +49,6 @@
           type="button"
           label="Delete transaction"
           leading-icon="trash"
-          hidden
         ></custom-button>
         <custom-button
           label="Save changes"
@@ -47,13 +56,6 @@
           type="submit"
         ></custom-button>
       </footer>
-      <label class="batch-entry-toggle" id="batch-entry-toggle">
-        <span>
-          <strong>Batch input</strong>
-          <small>Create multiple entries without leaving</small>
-        </span>
-        <input type="checkbox" name="batchEntry" role="switch" />
-      </label>
     </div>
     <div class="metadata">
       <p>

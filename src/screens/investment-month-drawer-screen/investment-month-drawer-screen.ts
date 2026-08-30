@@ -69,8 +69,17 @@ document.addEventListener("DOMContentLoaded", () => {
     <div class="investment-flow-row" data-flow-id="${record?.id || ""}">
       <currency-input data-flow-amount value="${Math.abs(Number(record?.amount || 0)) || ""}" aria-label="${label} amount"></currency-input>
       <date-picker data-flow-date optional alignment="center" value="${record?.date || ""}" aria-label="${label} date"></date-picker>
+      <dropdown-menu data-flow-source variant="editorial" aria-label="${label} source" data-source="${record?.source || ""}"></dropdown-menu>
       <custom-button class="tertiary square" data-remove-flow leading-icon="close" aria-label="Remove ${label.toLowerCase()}" type="button"></custom-button>
     </div>`;
+  }
+
+  function configureFlowSources() {
+    const owner=APIs.accounts.accounts().find((item)=>item.id===accountSelect.value);
+    form.querySelectorAll("[data-flow-source]").forEach((menu:any)=>{
+      menu.items=[{key:"manual",title:"Manual transfer",isDefaultValue:true},{key:"deduction",title:"Paycheck deduction"}];
+      menu.selection=menu.dataset.source||owner?.source||"manual";
+    });
   }
 
   function flowAmountInput(row) {
@@ -87,6 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
         id: row.dataset.flowId,
         amount: flowAmountInput(row).value,
         date: row.querySelector("[data-flow-date]").value,
+        source: row.querySelector("[data-flow-source]").selection,
       })),
     });
   }
@@ -135,6 +145,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter((item) => item.activityType === "borrowing")
         .map((item) => flowRow(item, "New borrowing"))
         .join("");
+      configureFlowSources();
     } else balanceInput.value = "";
     if (kind === "investment") {
       paymentList.replaceChildren(); borrowingList.replaceChildren();
@@ -262,6 +273,7 @@ document.addEventListener("DOMContentLoaded", () => {
     list
       .querySelector(".investment-flow-row:last-child currency-input input")
       ?.focus();
+    configureFlowSources();
   }
 
   function collect(list, sign = 1) {
@@ -275,6 +287,7 @@ document.addEventListener("DOMContentLoaded", () => {
           id: row.dataset.flowId || undefined,
           amount: sign * amount,
           date: row.querySelector("[data-flow-date]").value || defaultDate(),
+          source: row.querySelector("[data-flow-source]").selection,
         },
       ];
     });
@@ -328,7 +341,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const current = APIs.accounts.monthData(activeAccountSelect().value, monthPicker.value);
       await APIs.accounts.saveMonth({ accountId: activeAccountSelect().value, month: monthPicker.value, balance: balanceInput.value, asOfDate: monthEnd(monthPicker.value), balanceId: current?.balance?.id, existingActivity: current?.activity || [], activity: kind === "investment"
-        ? [...collect(contributionList, 1), ...collect(withdrawalList, -1)].map((item) => ({ ...item, activityType: "contribution", flowType: "external" }))
+        ? [...collect(contributionList, 1), ...collect(withdrawalList, -1)].map((item) => ({ ...item, activityType: "contribution" }))
         : [...collect(paymentList), ...collect(borrowingList)].map((item, index, all) => ({ ...item, activityType: index < paymentList.querySelectorAll(".investment-flow-row").length ? "payment" : "borrowing" })) });
       initialState = state();
       showToast(`${kind === "debt" ? "Debt" : "Investment"} month saved.`);

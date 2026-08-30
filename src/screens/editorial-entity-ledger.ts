@@ -125,12 +125,21 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
     this.repaint();
   }
 
+  #matchesSearch(row: Row, year: number): boolean {
+    if (!this.#query) return true;
+    return this.columns(year).some((column) => {
+      const value = row[column.key];
+      if (typeof value === "number") return String(value).startsWith(this.#query);
+      return String(value ?? "").toLowerCase().includes(this.#query);
+    });
+  }
+
   protected repaint(): void {
     const year = this.currentYear();
     this.#filterBar.availableFilters = this.availableFilters(year);
     this.#subtitle.textContent = this.subtitle(year);
     let rows = this.sourceRows(year)
-      .filter((row) => !this.#query || row.name.toLowerCase().includes(this.#query))
+      .filter((row) => this.#matchesSearch(row, year))
       .filter((row) => matchesLedgerFilterGroups(row, this.filters));
     this.#visibleRows = rows;
     const data: DataTableData<Row> = {

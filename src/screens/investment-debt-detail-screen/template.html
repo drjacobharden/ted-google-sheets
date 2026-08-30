@@ -1,33 +1,79 @@
-<section class="investment-detail editorial-theme">
+<article class="investment-account-detail editorial-theme">
   <header class="tab-header">
     <div class="tab-header-title">
       <h1 id="debt-detail-title">Debt account</h1>
       <p id="debt-detail-subtitle">Viewing summary</p>
     </div>
-    <button class="editorial-button" id="edit-debt-account" type="button">
-      Edit debt
-    </button>
   </header>
-  <section class="editorial-section" aria-labelledby="debt-history-title">
-    <header class="editorial-section-header">
-      <h2 id="debt-history-title" class="type-section-title">Month by month</h2>
-    </header>
-    <div class="investment-detail__table-wrap" id="debt-history-wrap">
-      <table class="investment-detail__table">
-        <thead>
-          <tr>
-            <th>Month</th>
-            <th class="is-number">Payments</th>
-            <th class="is-number">New borrowing</th>
-            <th class="is-number">Balance</th>
-          </tr>
-        </thead>
-        <tbody id="debt-history-body"></tbody>
-        <tfoot id="debt-history-footer"></tfoot>
-      </table>
+
+  <dl
+    class="investment-account-detail__summary investment-account-detail__summary--three"
+    aria-label="Debt summary"
+  >
+    <div>
+      <dt>
+        <span>Payments</span>
+        <custom-icon icon="info" data-summary-help="payments" tabindex="0" aria-label="About payments"></custom-icon>
+      </dt>
+      <dd id="debt-detail-summary-payments">—</dd>
     </div>
-    <p id="debt-history-empty" class="investment-detail__empty" hidden>
-      No monthly balances have been recorded for this year.
-    </p>
+    <div>
+      <dt>
+        <span>Balance</span>
+        <custom-icon icon="info" data-summary-help="balance" tabindex="0" aria-label="About balance"></custom-icon>
+      </dt>
+      <dd id="debt-detail-summary-balance">—</dd>
+    </div>
+    <div>
+      <dt>
+        <span>Percent change</span>
+        <custom-icon icon="info" data-summary-help="change" tabindex="0" aria-label="About percent change"></custom-icon>
+      </dt>
+      <dd id="debt-detail-summary-change">—</dd>
+    </div>
+  </dl>
+
+  <section class="investment-account-detail__chart editorial-section" aria-labelledby="debt-detail-chart-title">
+    <header class="editorial-section-header">
+      <h2 id="debt-detail-chart-title" class="type-section-title">
+        Debt performance <span class="type-meta">— fig. 01</span>
+      </h2>
+      <dropdown-menu
+        id="debt-detail-chart-mode"
+        variant="ghost"
+        label="Balance"
+        aria-label="Debt chart display"
+      ></dropdown-menu>
+    </header>
+    <div class="investment-account-detail__chart-frame editorial-surface">
+      <data-chart
+        id="debt-detail-chart"
+        aria-label="Debt account monthly performance"
+      ></data-chart>
+    </div>
   </section>
-</section>
+
+  <section class="investment-account-detail__history editorial-section" aria-labelledby="debt-history-title">
+    <header class="investment-account-detail__history-header">
+      <h2 id="debt-history-title" class="type-section-title">Month by month</h2>
+      <div class="investment-account-detail__tools" aria-label="Debt history controls">
+        <search-bar
+          id="debt-detail-search"
+          variant="editorial"
+          placeholder="search"
+          aria-label="Search debt history"
+        ></search-bar>
+        <filter-bar id="debt-detail-filter" variant="editorial"></filter-bar>
+      </div>
+    </header>
+    <p id="debt-history-empty" class="investment-account-detail__empty" hidden>
+      No monthly debt data has been recorded for this year.
+    </p>
+    <data-table
+      id="debt-history-table"
+      sortable
+      interactive
+      aria-label="Debt account monthly history"
+    ></data-table>
+  </section>
+</article>
