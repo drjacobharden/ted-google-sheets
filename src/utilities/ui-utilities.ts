@@ -7,4 +7,4 @@ export function dateRangeDetail(event: Event): DateRangeValue | null {
   return event.detail as DateRangeValue;
 }
 export function eventTargetElement(event: Event): Element | null { return event.target instanceof Element ? event.target : null; }
-export function isInvestmentSource(value: FormDataEntryValue | null): value is InvestmentSource { return value === "manual" || value === "paycheck"; }
+export function isInvestmentSource(value: FormDataEntryValue | null): value is InvestmentSource { return value === "manual" || value === "deduction"; }

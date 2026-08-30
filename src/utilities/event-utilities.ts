@@ -1,3 +1,4 @@
+import { Account } from "../api/account-api";
 import { AppliedFilter } from "../components/filter-bar/filter-bar";
 import { DatePickerStep, DateRange } from "./date-utilities";
 
@@ -18,6 +19,8 @@ type EventDetails<T = any> = Readonly<{
   "drawer:close-requested": {};
   "scroll-changed": { position: number };
   "table-row-selected": { id: string };
+  "budget:account-created": { account: Account; requestId: string };
+  "date-changed": { value: string };
 }>;
 
 export const addListener = (

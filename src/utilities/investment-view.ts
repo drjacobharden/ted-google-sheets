@@ -2,7 +2,7 @@
 import { APIs } from "../api/api";
 import { DateUtils } from "./date-utilities";
 import { escapeHTML, money, netFlows } from "./view-formatters";
-import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interpolateValue, midpoint } from "./investment-returns";
+import { annualBoundaries, chainLinkedReturn, commonCutoff, dollarReturn, interpolateValue, midpoint, monthEnd } from "./investment-returns";
 import { calculateInvestmentGrowth } from "./investment-calculations";
 
   function targetEnd(year) {
@@ -12,37 +12,53 @@ import { calculateInvestmentGrowth } from "./investment-calculations";
 
   function valuesForAccount(accountId, dates) {
     const source = APIs.accounts.balances().filter((item) => item.accountId === accountId)
-      .map((item) => ({ date: item.asOfDate, value: Number(item.balance || 0) }));
+      .map((item) => ({ date: monthEnd(item.month), value: Number(item.balance || 0) }));
     return dates.map((date) => interpolateValue(source, date)).filter(Boolean);
   }
 
   function contributionFlows(accountId, startMonth, endMonth, externalOnly = false) {
-    return APIs.accounts.activity()
+    return APIs.accounts.activityForAccount(accountId)
       .filter((item) => item.activityType === "contribution")
-      .filter((item) => item.accountId === accountId)
-      .filter((item) => !externalOnly || item.flowType !== "transfer")
+      .filter(() => true)
       .filter((item) => item.month > startMonth && item.month <= endMonth)
       .map((item) => ({ ...item, date: /^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")) ? item.date : midpoint(item.month) }));
   }
 
   function accountPerformance(accountId, year, forcedCutoff = "") {
     const rows = APIs.accounts.balances().filter((item) => item.accountId === accountId);
-    const cutoff = forcedCutoff || rows.filter((item) => item.asOfDate <= targetEnd(year)).at(-1)?.asOfDate;
-    if (!cutoff) return { rate: null, dollarReturn: null, estimated: false, reason: "No closing balance" };
-    const boundaries = annualBoundaries(year, cutoff);
-    const values = valuesForAccount(accountId, boundaries);
-    if (values.length !== boundaries.length) return { rate: null, dollarReturn: null, estimated: false, start: boundaries[0], end: cutoff, reason: "Add an opening and closing balance" };
-    const flows = contributionFlows(accountId, boundaries[0].slice(0, 7), cutoff.slice(0, 7));
+    const targetMonth = (forcedCutoff || targetEnd(year)).slice(0, 7);
+    const yearRows = rows
+      .filter((item) => item.month.startsWith(`${year}-`) && item.month <= targetMonth)
+      .sort((a, b) => a.month.localeCompare(b.month));
+    const opening = rows
+      .filter((item) => item.month < `${year}-01`)
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .at(-1);
+    const closing = yearRows.at(-1);
+    if (!opening || !closing) return { rate: null, dollarReturn: null, estimated: false, reason: "Add an opening and closing balance" };
+    const cutoff = monthEnd(closing.month);
+    const values = [
+      { date: monthEnd(opening.month), value: Number(opening.balance), interpolated: false },
+      ...yearRows.map((item) => ({ date: monthEnd(item.month), value: Number(item.balance), interpolated: false })),
+    ];
+    const flows = contributionFlows(accountId, opening.month, closing.month);
     const linked = chainLinkedReturn(values, flows);
-    return { ...linked, dollarReturn: dollarReturn(values[0].value, values.at(-1).value, flows), opening: values[0].value, ending: values.at(-1).value };
+    return { ...linked, cutoff, dollarReturn: dollarReturn(values[0].value, values.at(-1).value, flows), opening: values[0].value, ending: values.at(-1).value };
   }
 
   function portfolioPerformance(year) {
     const investmentAccounts = APIs.accounts.accounts().filter((item) => item.type === "investment" && item.active !== false);
     const debtAccounts = APIs.accounts.accounts().filter((item) => item.type === "debt" && item.active !== false);
     const target = targetEnd(year);
-    const latestInvestment = investmentAccounts.map((account) => APIs.accounts.balances().filter((item) => item.accountId === account.id && item.asOfDate <= target).at(-1)?.asOfDate || "");
-    const latestDebt = debtAccounts.map((account) => APIs.accounts.balances().filter((item) => item.accountId === account.id && item.asOfDate <= target).at(-1)?.asOfDate || "");
+    const targetMonth = target.slice(0, 7);
+    const latestMonthEnd = (accountId) => {
+      const latest = APIs.accounts.balances()
+        .filter((item) => item.accountId === accountId && item.month <= targetMonth)
+        .at(-1);
+      return latest ? monthEnd(latest.month) : "";
+    };
+    const latestInvestment = investmentAccounts.map((account) => latestMonthEnd(account.id));
+    const latestDebt = debtAccounts.map((account) => latestMonthEnd(account.id));
     const cutoff = commonCutoff([...latestInvestment, ...latestDebt]);
     if (!cutoff) return { available: false, reason: "Add opening and closing balances for every active account.", staleAccounts: [] };
     const boundaries = annualBoundaries(year, cutoff);
@@ -51,7 +67,7 @@ import { calculateInvestmentGrowth } from "./investment-calculations";
       return values.every(Boolean) ? { date, value: values.reduce((sum, item) => sum + item.value, 0), interpolated: values.some((item) => item.interpolated) } : null;
     });
     const debtSeries = boundaries.map((date) => {
-      const values = debtAccounts.map((account) => interpolateValue(APIs.accounts.balances().filter((item) => item.accountId === account.id).map((item) => ({ date: item.asOfDate, value: Number(item.balance || 0) })), date));
+      const values = debtAccounts.map((account) => interpolateValue(APIs.accounts.balances().filter((item) => item.accountId === account.id).map((item) => ({ date: monthEnd(item.month), value: Number(item.balance || 0) })), date));
       return values.every(Boolean) ? { date, value: values.reduce((sum, item) => sum + item.value, 0), interpolated: values.some((item) => item.interpolated) } : debtAccounts.length ? null : { date, value: 0, interpolated: false };
     });
     if (investmentSeries.some((item) => !item) || debtSeries.some((item) => !item)) return { available: false, cutoff, reason: "Add balances around the prior year-end so the opening value can be calculated.", staleAccounts: [] };
@@ -77,7 +93,7 @@ import { calculateInvestmentGrowth } from "./investment-calculations";
   }
 
   function sourceLabel(source) {
-    return source === "paycheck" ? "Paycheck deduction" : "Manual transfer";
+    return source === "deduction" ? "Paycheck deduction" : "Manual transfer";
   }
 
   function formatMonth(value) {
@@ -97,7 +113,7 @@ import { calculateInvestmentGrowth } from "./investment-calculations";
 
   function metrics(range) {
     const allBalances = APIs.accounts.balances();
-    const allFlows = APIs.accounts.activity().filter((item) => item.activityType === "contribution");
+    const allFlows = APIs.accounts.investmentActivity();
     const accounts = APIs.accounts.accounts().filter((item) => item.type === "investment" && item.active !== false);
     const ending = latestByAccount(range.end || "9999-12");
     let balance = 0;
@@ -331,7 +347,7 @@ import { calculateInvestmentGrowth } from "./investment-calculations";
     return options
       ? buildTrendSeries({
           balances: APIs.accounts.balances(),
-          contributions: APIs.accounts.activity().filter((item) => item.activityType === "contribution"),
+          contributions: APIs.accounts.investmentActivity(),
           accounts: APIs.accounts.accounts().filter((item) => item.type === "investment"),
           range: monthRangeFromDates(options.range),
         })

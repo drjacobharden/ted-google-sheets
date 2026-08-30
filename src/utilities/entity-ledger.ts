@@ -136,6 +136,7 @@ export function buildEntityLedgerRows(
     const values = new Map<string, { count: number; total: number }>();
     rows.forEach((transaction) => {
       const id = transaction[options.idKey];
+      if (!id) return;
       const value = values.get(id) ?? { count: 0, total: 0 };
       value.count += 1;
       value.total += Number(transaction.amount) || 0;
@@ -176,6 +177,7 @@ export function buildPersonLedgerRows(
   const aggregate = (rows: ReadonlyArray<BudgetTransaction>) => {
     const values = new Map<string, { income: number; expense: number }>();
     rows.forEach((transaction) => {
+      if (!transaction.assignmentId || (transaction.type !== "income" && transaction.type !== "expense")) return;
       const value = values.get(transaction.assignmentId) ?? {
         income: 0,
         expense: 0,

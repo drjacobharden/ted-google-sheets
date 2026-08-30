@@ -49,6 +49,7 @@ interface DatedValue {
   day: number;
   value: number;
   type: "expense" | "income";
+  source?: "manual" | "deduction";
 }
 
 interface MonthlyValues {
@@ -106,32 +107,25 @@ export function buildAnnualSummaryCards(
     (transaction): DatedValue[] => {
       const date = parseDate(transaction.date);
       const value = Number(transaction.amount);
-      return date && date.year <= currentYear && Number.isFinite(value)
-        ? [{ ...date, value, type: transaction.type }]
+      return date && date.year <= currentYear && Number.isFinite(value) && (transaction.type === "income" || transaction.type === "expense")
+        ? [{ ...date, value, type: transaction.type, source:transaction.source }]
         : [];
     },
   );
-  const paycheckAccountIds = new Set(
-    accounts
-      .filter(
-        (account) =>
-          account.source === "paycheck" &&
-          (options.assignmentId == null ||
-            account.assignmentId === options.assignmentId),
-      )
-      .map((account) => account.id),
-  );
-  const paycheckContributions = contributions.flatMap((contribution) => {
+  const eligibleAccountIds = new Set(accounts.filter((account) => options.assignmentId == null || account.assignmentId === options.assignmentId).map((account) => account.id));
+  const projectedDeductions=datedTransactions.filter(item=>item.type==="income"&&item.source==="deduction").map(item=>({year:item.year,month:item.month,value:item.value}));
+  const paycheckContributions = projectedDeductions.length?projectedDeductions:contributions.flatMap((contribution) => {
     const date = parseMonth(contribution.month);
     const value = Number(contribution.amount);
 
     return date &&
       date.year <= currentYear &&
       Number.isFinite(value) &&
-      paycheckAccountIds.has(contribution.accountId)
+      contribution.source === "deduction" && eligibleAccountIds.has(contribution.accountId)
       ? [{ ...date, value }]
       : [];
   });
+  const deductionsIncludedInIncome=projectedDeductions.length>0;
   const hasPaycheckDeductionHistory = paycheckContributions.length > 0;
   const years = new Set<number>([currentYear]);
   datedTransactions.forEach((item) => years.add(item.year));
@@ -222,7 +216,7 @@ export function buildAnnualSummaryCards(
       };
     return {
       values: trim(
-        income.map((value, index) => value - spend[index] + deductions[index]),
+        income.map((value, index) => value - spend[index] + (deductionsIncludedInIncome?0:deductions[index])),
       ),
       hasData: [spendData, incomeData, deductionData].some((flags) =>
         flags.slice(0, monthLimit).some(Boolean),
