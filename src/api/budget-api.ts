@@ -8,6 +8,7 @@ import {
 
 export type EntityKind = "category" | "vendor" | "assignment";
 export type TransactionType = "income" | "expense";
+export type ActivitySource = "manual" | "deduction";
 export type SyncState = "pending" | "syncing" | "failed";
 
 export interface BudgetConfig {
@@ -39,16 +40,20 @@ export interface BudgetTransaction {
   id: string;
   createdAt: string;
   createdBy: string;
-  type: TransactionType;
+  type?: TransactionType | "";
   amount: number;
   date: string;
-  categoryId: string;
-  vendorId: string;
-  assignmentId: string;
+  categoryId?: string;
+  vendorId?: string;
+  assignmentId?: string;
+  accountId?: string;
+  source: ActivitySource;
+  legacyActivityId?: string;
   notes: string;
   category?: string;
   vendor?: string;
   assignment?: string;
+  account?: string;
   createdByName?: string;
   syncStatus?: SyncState;
   syncError?: string;
@@ -58,12 +63,14 @@ export interface BudgetTransaction {
 export interface BudgetTransactionInput extends Partial<
   Omit<BudgetTransaction, "type" | "amount">
 > {
-  type: TransactionType;
+  type?: TransactionType;
   amount: number | string;
   date: string;
-  categoryId: string;
-  vendorId: string;
-  assignmentId: string;
+  categoryId?: string;
+  vendorId?: string;
+  assignmentId?: string;
+  accountId?: string;
+  source?: ActivitySource;
 }
 
 export interface SyncSummary {
@@ -214,7 +221,7 @@ export interface BudgetAPIContract {
 }
 
 interface BudgetIntegrations {
-  accounts?: { load(options?: { refresh?: boolean }): Promise<unknown>; applyBootstrapData(data: unknown): unknown };
+  accounts?: { accounts(): Array<{id:string;active?:boolean}>; load(options?: { refresh?: boolean }): Promise<unknown>; applyBootstrapData(data: unknown): unknown };
   imports?: { listProfiles(options?: { refresh?: boolean }): Promise<unknown[]>; applyBootstrapData(data: unknown): unknown };
 }
 let integrations: BudgetIntegrations = {};
@@ -238,14 +245,14 @@ export function BudgetAPI(): BudgetAPIContract {
     entityOutbox: "myFinance.entityOutbox.v1",
     schema: "myFinance.schemaVersion",
   });
-  const SCHEMA_VERSION = "2";
+  const SCHEMA_VERSION = "3";
   const INCOME_CATEGORY_ID = "00000000-0000-4000-8000-000000000001";
   const SHARED_ASSIGNMENT_ID = "00000000-0000-4000-8000-000000000101";
   const DEFAULT_CATEGORIES = Object.freeze([
     { id: INCOME_CATEGORY_ID, name: "Income", type: "income" },
   ]);
   const OUTBOX_BATCH_SIZE = 50;
-  const CONFIRMED_TRANSACTION_CACHE_VERSION = 1;
+  const CONFIRMED_TRANSACTION_CACHE_VERSION = 2;
   const TRANSACTION_FIELDS = Object.freeze([
     "id",
     "createdAt",
@@ -257,6 +264,9 @@ export function BudgetAPI(): BudgetAPIContract {
     "vendorId",
     "assignmentId",
     "notes",
+    "accountId",
+    "source",
+    "legacyActivityId",
     "category",
     "vendor",
     "assignment",
@@ -406,11 +416,12 @@ export function BudgetAPI(): BudgetAPIContract {
     }));
     const activeUserId = localStorage.getItem(KEYS.activeUser) || "";
     const transactions = readArray(KEYS.transactions).map((transaction) => {
-      const type = transaction.type === "income" ? "income" : "expense";
+      const accountId = String(transaction.accountId || "");
+      const type = accountId ? "" : transaction.type === "income" ? "income" : "expense";
       let category = categories.find(
         (item) => item.id === transaction.categoryId,
       );
-      if (!category)
+      if (!accountId && !category)
         category =
           type === "income"
             ? categories.find((item) => item.id === INCOME_CATEGORY_ID)
@@ -436,7 +447,7 @@ export function BudgetAPI(): BudgetAPIContract {
       let assignment = assignments.find(
         (item) => item.id === transaction.assignmentId,
       );
-      if (!assignment) {
+      if (!accountId && !assignment) {
         assignment = byName(assignments, transaction.assignment || "Shared");
         if (!assignment) {
           assignment = canonicalRecord({
@@ -453,11 +464,28 @@ export function BudgetAPI(): BudgetAPIContract {
         type,
         amount: Number(transaction.amount) || 0,
         date: transaction.date,
-        categoryId: category.id,
-        vendorId: type === "income" ? "" : vendor?.id || "",
-        assignmentId: assignment.id,
+        categoryId: accountId ? "" : category?.id || "",
+        vendorId: accountId ? "" : vendor?.id || "",
+        assignmentId: accountId ? "" : assignment?.id || "",
+        accountId,
+        source: transaction.source === "deduction" || transaction.source === "paycheck" ? "deduction" : "manual",
+        legacyActivityId: String(transaction.legacyActivityId || ""),
         notes: String(transaction.notes || ""),
       };
+    });
+    const localAccounts=[...readArray("myFinance.accounts.v1"),...readArray("myFinance.investmentAccounts.v1").map(item=>({...item,type:"investment"})),...readArray("myFinance.debtAccounts.v1").map(item=>({...item,type:"debt",source:"manual"}))];
+    const localAccountById=new Map(localAccounts.map(item=>[item.id,item]));
+    const importedLegacyIds=new Set(transactions.flatMap(item=>item.legacyActivityId?[item.legacyActivityId]:[]));
+    const legacyLocalActivity=[...readArray("myFinance.accountActivity.v1"),...readArray("myFinance.investmentContributions.v1").map(item=>({...item,activityType:"contribution"})),...readArray("myFinance.debtPayments.v1").map(item=>({...item,accountId:item.accountId||item.debtAccountId,activityType:item.kind||"payment"}))];
+    legacyLocalActivity.forEach((activity)=>{
+      if(!activity.id||importedLegacyIds.has(activity.id))return;
+      const owner=localAccountById.get(activity.accountId||activity.debtAccountId);if(!owner)return;
+      if(transactions.some(item=>item.id===activity.id))return;
+      const month=String(activity.month||activity.date||"").slice(0,7);
+      const date=/^\d{4}-\d{2}-\d{2}$/.test(String(activity.date||"").slice(0,10))?String(activity.date).slice(0,10):`${month}-15`;
+      const borrowing=owner.type==="debt"&&(activity.activityType==="borrowing"||activity.kind==="borrowing");
+      transactions.push({id:activity.id,createdAt:activity.createdAt||timestamp,createdBy:activity.createdBy||activeUserId,type:"",amount:borrowing?-Math.abs(Number(activity.amount)):Number(activity.amount),date,categoryId:"",vendorId:"",assignmentId:"",notes:"",accountId:owner.id,source:activity.flowType==="transfer"?"manual":owner.source==="paycheck"||owner.source==="deduction"?"deduction":"manual",legacyActivityId:activity.id});
+      importedLegacyIds.add(activity.id);
     });
 
     writeArray(KEYS.categories, categories);
@@ -1626,6 +1654,8 @@ export function BudgetAPI(): BudgetAPIContract {
     const creator = users.find((item) => item.id === transaction.createdBy);
     return {
       ...transaction,
+      accountId: String(transaction.accountId || ""),
+      source: transaction.source === "deduction" ? "deduction" : "manual",
       category: category?.name || transaction.category || "Unknown",
       vendor: vendor?.name || transaction.vendor || "",
       assignment: assignment?.name || transaction.assignment || "Unknown",
@@ -1794,21 +1824,25 @@ export function BudgetAPI(): BudgetAPIContract {
     ensureLocalData();
     const activeUser = getActiveUser();
     if (!activeUser) throw new Error("Choose or add a user in Settings first.");
-    const type = transaction.type === "income" ? "income" : "expense";
+    const accountId = String(transaction.accountId || "");
+    const type = accountId ? "" : transaction.type === "income" ? "income" : "expense";
     const category = listCategories({ type }).find(
       (item) => item.id === transaction.categoryId,
     );
     const assignment = listPeople().find(
       (item) => item.id === transaction.assignmentId,
     );
-    const vendor =
-      type === "income"
-        ? null
-        : listVendors().find((item) => item.id === transaction.vendorId);
-    if (!category)
+    const vendor = listVendors().find(
+      (item) => item.id === transaction.vendorId,
+    );
+    if (!accountId && !category)
       throw new Error("Choose a valid category for this transaction type.");
-    if (!assignment) throw new Error("Choose a valid assignment.");
-    if (type !== "income" && !vendor) throw new Error("Choose a valid vendor.");
+    if (!accountId && !assignment) throw new Error("Choose a valid assignment.");
+    if (!accountId && type !== "income" && !vendor) throw new Error("Choose a valid vendor.");
+    if (!accountId && type === "income" && transaction.vendorId && !vendor)
+      throw new Error("Choose a valid vendor.");
+    if (accountId && !integrations.accounts?.accounts().some((item) => item.id === accountId && item.active !== false))
+      throw new Error("Choose a valid account.");
     const amount = Number(transaction.amount);
     if (!Number.isFinite(amount) || amount === 0)
       throw new Error("Amount must be a non-zero value.");
@@ -1816,7 +1850,11 @@ export function BudgetAPI(): BudgetAPIContract {
       ...transaction,
       type,
       amount: Math.round(amount * 100) / 100,
-      vendorId: type === "income" ? "" : transaction.vendorId,
+      categoryId: accountId ? "" : transaction.categoryId,
+      vendorId: accountId ? "" : vendor?.id || "",
+      assignmentId: accountId ? "" : transaction.assignmentId,
+      accountId,
+      source: transaction.source === "deduction" ? "deduction" : "manual",
       id: transaction.id || uuid(),
       createdAt: transaction.createdAt || now(),
       createdBy: transaction.createdBy || activeUser.id,
@@ -2018,23 +2056,34 @@ export function BudgetAPI(): BudgetAPIContract {
   function createUpdatedTransactionRecord(transaction, base) {
     if (!base?.id || transaction.id !== base.id)
       throw new Error("That transaction could not be edited.");
-    const type = transaction.type === "income" ? "income" : "expense";
+    const accountId =
+      transaction.accountId !== undefined
+        ? String(transaction.accountId || "")
+        : String(base.accountId || "");
+    const type = accountId
+      ? ""
+      : transaction.type === "income"
+        ? "income"
+        : "expense";
     const category = listCategories({ type }).find(
       (item) => item.id === transaction.categoryId,
     );
     const assignment = listPeople().find(
       (item) => item.id === transaction.assignmentId,
     );
-    const vendor =
-      type === "income"
-        ? null
-        : listVendors().find((item) => item.id === transaction.vendorId);
-    if (!category && transaction.categoryId !== base.categoryId)
+    const vendor = listVendors().find(
+      (item) => item.id === transaction.vendorId,
+    );
+    if (!accountId && !category && transaction.categoryId !== base.categoryId)
       throw new Error("Choose a valid category for this transaction type.");
-    if (!assignment && transaction.assignmentId !== base.assignmentId)
+    if (!accountId && !assignment && transaction.assignmentId !== base.assignmentId)
       throw new Error("Choose a valid assignment.");
-    if (type !== "income" && !vendor && transaction.vendorId !== base.vendorId)
+    if (!accountId && type !== "income" && !vendor && transaction.vendorId !== base.vendorId)
       throw new Error("Choose a valid vendor.");
+    if (!accountId && type === "income" && transaction.vendorId && !vendor && transaction.vendorId !== base.vendorId)
+      throw new Error("Choose a valid vendor.");
+    if (accountId && !integrations.accounts?.accounts().some((item) => item.id === accountId && item.active !== false))
+      throw new Error("Choose a valid account.");
     const amount = Number(transaction.amount);
     if (!Number.isFinite(amount) || amount === 0)
       throw new Error("Amount must be a non-zero value.");
@@ -2047,9 +2096,11 @@ export function BudgetAPI(): BudgetAPIContract {
       type,
       amount: Math.round(amount * 100) / 100,
       date: transaction.date,
-      categoryId: transaction.categoryId,
-      vendorId: type === "income" ? "" : transaction.vendorId,
-      assignmentId: transaction.assignmentId,
+      categoryId: accountId ? "" : transaction.categoryId,
+      vendorId: accountId ? "" : vendor?.id || "",
+      assignmentId: accountId ? "" : transaction.assignmentId,
+      accountId,
+      source: transaction.source === "deduction" ? "deduction" : "manual",
       notes: String(transaction.notes || "").trim(),
     };
   }
