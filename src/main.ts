@@ -16,6 +16,7 @@ import "./components/checkbox/checkbox.ts";
 import "./components/date-range-picker/date-range-picker.ts";
 import "./components/dropdown-menu/dropdown-menu.ts";
 import "./components/data-table/data-table.ts";
+import "./components/data-chart/data-chart.ts";
 import "./components/segmented-control/segmented-control.ts";
 import "./components/filter-bar/filter-bar.ts";
 import "./components/close-button/close-button.ts";
@@ -25,10 +26,11 @@ import "./components/date-picker/date-picker.ts";
 import "./components/currency-input/currency-input.ts";
 import "./components/month-picker/month-picker.js";
 import "./components/select-create-controller/select-create-controller.ts";
-import "./components/category-select/category-select.ts";
-import "./components/vendor-input/vendor-input.ts";
-import "./components/people-select/people-select.ts";
-import "./components/account-select/account-select.ts";
+import "./components/dropdowns/category-select.ts";
+import "./components/dropdowns/vendor-select.ts";
+import "./components/dropdowns/people-select.ts";
+import "./components/dropdowns/source-select.ts";
+import "./components/dropdowns/account-select.ts";
 import "./components/table-title/table-title.ts";
 import "./components/user-form/user-form.ts";
 import "./components/url-form/url-form.ts";
@@ -41,6 +43,7 @@ import { OnboardingUI } from "./components/onboarding/onboarding";
 import "./components/date-range-picker/date-range-picker-2";
 import "./components/table/table.ts";
 import "./components/icon/icon.ts";
+import "./components/info-hover/info-hover.ts";
 
 import "./elements/top-nav/top-nav.ts";
 import "./elements/navigation-bar/navigation-bar.ts";
@@ -65,6 +68,7 @@ import "./screens/people-screen/people-screen.ts";
 import "./screens/settings-screen/settings-screen.ts";
 import "./screens/sync-screen/sync-screen.ts";
 import "./screens/transaction-list-screen/transactions.ts";
+import "./screens/new-transaction-screen/new-transaction-screen.ts";
 import "./screens/vendors-screen/vendors-screen.ts";
 import "./screens/transaction-drawer-screen/transaction-drawer-screen.ts";
 import "./screens/entity-drawer-screen/entity-drawer-screen.ts";
@@ -84,6 +88,8 @@ const OVERLAY_PARAMS = new Set([
   "investmentReviewId",
   "investmentLedgerId",
   "investmentLedgerSource",
+  "accountDraftName",
+  "accountCreateRequestId",
 ]);
 let mountedContentKey = "";
 let pendingRoute: {
@@ -119,11 +125,14 @@ function renderRoute({
   if (!outlet || !template)
     throw new Error(`Missing template for route: ${name}`);
   outlet.replaceChildren(template.content.cloneNode(true));
-  const activeTab = router.isBudgetingRoute(name)
-    ? "budgeting"
-    : name.startsWith("investment-")
-      ? "investment-overview"
-      : name;
+  const activeTab =
+    name === "new-transaction"
+      ? "budgeting"
+      : router.isBudgetingRoute(name)
+        ? "budgeting"
+        : name.startsWith("investment-")
+          ? "investment-overview"
+          : name;
   updateActiveTab(activeTab);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
