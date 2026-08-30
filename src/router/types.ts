@@ -12,6 +12,7 @@ export type BudgetingRouteName =
 export type RouteName =
   | BudgetingRouteName
   | "dashboard"
+  | "new-transaction"
   | "import"
   | "sync"
   | "settings"
@@ -23,7 +24,6 @@ export type RouteName =
   | "investment-debt-detail";
 
 export type DrawerName =
-  | "new"
   | "edit"
   | "review"
   | "entity-new"
@@ -47,6 +47,8 @@ export interface KnownRouteParams {
   investmentReviewId?: string;
   investmentLedgerId?: string;
   investmentLedgerSource?: string;
+  accountDraftName?: string;
+  accountCreateRequestId?: string;
 }
 
 export type RouteParams = Record<string, string> & Partial<KnownRouteParams>;

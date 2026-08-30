@@ -17,6 +17,7 @@ const BUDGETING_ROUTES = new Set<BudgetingRouteName>([
 const ROUTES = new Set<RouteName>([
   ...BUDGETING_ROUTES,
   "dashboard",
+  "new-transaction",
   "import",
   "sync",
   "settings",
