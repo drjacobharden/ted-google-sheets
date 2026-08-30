@@ -35,7 +35,7 @@ entity-drawer-screen {
     display: block;
     width: 100%;
 
-    > .dropdown-trigger.secondary-button {
+    > .dropdown-trigger {
       width: 100%;
       height: 48px;
       border-radius: 0;
@@ -63,7 +63,7 @@ entity-drawer-screen {
   .drawer-form-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-sm);
+    gap: var(--space-md);
     margin-top: 20px;
   }
 
