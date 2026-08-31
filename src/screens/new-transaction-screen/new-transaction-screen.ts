@@ -15,6 +15,8 @@ import { VendorSelect } from "../../components/dropdowns/vendor-select";
 import { PeopleSelect } from "../../components/dropdowns/people-select";
 import { AccountSelect } from "../../components/dropdowns/account-select";
 import { SourceSelect } from "../../components/dropdowns/source-select";
+import { PaymentTypeSelect } from "../../components/dropdowns/payment-type-select";
+import type { AccountType } from "../../api/account-api";
 
 const KIND_OPTIONS = [
   { key: "expense", title: "Expense", isDefaultValue: true },
@@ -40,11 +42,15 @@ export class NewTransactionScreen extends HTMLElement {
   #peopleSelect!: PeopleSelect;
   #accountSelect!: AccountSelect;
   #sourceSelect!: SourceSelect;
+  #paymentType!: PaymentTypeSelect;
   #message!: HTMLElement;
   #initialState = "";
   #accountRequestId = "";
   #expenseDraft = { categoryId: "", vendorId: "" };
   #incomeDraft = { categoryId: "", vendorId: "" };
+  #selectedCategoryId: string | null = null;
+  #selectedVendorId: string | null = null;
+  #selectedAccountType: AccountType | null = null;
 
   connectedCallback(): void {
     if (!this.dataset.initialized) {
@@ -64,8 +70,7 @@ export class NewTransactionScreen extends HTMLElement {
 
   handleEvent(event: Event) {
     switch (event.type) {
-      case "buget:account-created":
-        handleCustomEvent("budget:account-created", event, ({ account }) => {});
+      case "budget:account-created":
         this.#handleAccountCreated(event);
         break;
 
@@ -106,8 +111,16 @@ export class NewTransactionScreen extends HTMLElement {
     this.#peopleSelect = this.querySelector("people-select")!;
     this.#accountSelect = this.querySelector("account-select")!;
     this.#sourceSelect = this.querySelector("source-select")!;
+    this.#paymentType = this.querySelector("#new-transaction-payment-type")!;
     this.#message = this.querySelector("#new-transaction-message")!;
     this.#noteInput = this.querySelector("#new-transaction_notes")!;
+
+    this.querySelectorAll(
+      ".new-transaction-page__detail-list dropdown-menu",
+    ).forEach((dropdown) => {
+      dropdown.removeAttribute("align-start");
+      dropdown.removeAttribute("align-center");
+    });
   }
 
   #bindEvents(): void {
@@ -132,6 +145,7 @@ export class NewTransactionScreen extends HTMLElement {
     return JSON.stringify({
       kind: this.#formController.kind,
       amount: this.#amountInput.value,
+      paymentType: this.#paymentType.value,
       date: this.#dateValue,
       categoryId: this.#categorySelect.value,
       vendorId: this.#vendorSelect.value,
@@ -172,15 +186,15 @@ export class NewTransactionScreen extends HTMLElement {
     this.#categorySelect.value = null;
     this.#vendorSelect.hidden = isAccount;
     this.#vendorSelect.toggleAttribute("optional", isIncome);
-    this.#vendorSelect.value = isIncome
-      ? this.#incomeDraft.vendorId
-      : this.#expenseDraft.vendorId;
     this.#peopleSelect.hidden = isAccount;
     this.#accountSelect.hidden = !isAccount;
-    this.#amountInput.helper = isAccount
-      ? "Use negative amounts for investment withdrawals or additional borrowing on a debt."
-      : "Use negative amounts for refunds.";
-    this.#amountInput.min = null;
+    this.#amountInput.min = "0.01";
+    this.#paymentType.kind = kind;
+    this.#paymentType.accountType = isAccount
+      ? this.#selectedAccountType
+      : null;
+
+    this.#sourceSelect.hidden = value === "income";
 
     this.#sourceSelect.tooltip =
       value === "expense"
@@ -192,6 +206,8 @@ export class NewTransactionScreen extends HTMLElement {
 
   #handleAccountSelected = (event: CustomEvent): void => {
     const account = event.detail.account;
+    this.#selectedAccountType = account?.type || null;
+    this.#paymentType.accountType = this.#selectedAccountType;
     this.#sourceSelect.value = account?.source || "manual";
   };
 
@@ -214,6 +230,8 @@ export class NewTransactionScreen extends HTMLElement {
 
         this.#accountRequestId = "";
         this.#accountSelect.value = account.id;
+        this.#selectedAccountType = account.type || null;
+        this.#paymentType.accountType = this.#selectedAccountType;
         this.#sourceSelect.value = account.source || "manual";
       },
     );
@@ -277,7 +295,9 @@ export class NewTransactionScreen extends HTMLElement {
       APIs.budget.queueTransaction(
         this.#formController.buildDraft({
           kind,
-          amount: values.get("amount") as string,
+          amount: this.#paymentType.signedAmount(
+            values.get("amount") as string,
+          ),
           date: this.#dateValue,
           categoryId: this.#categorySelect.value,
           vendorId: this.#vendorSelect.value,
@@ -310,6 +330,9 @@ export class NewTransactionScreen extends HTMLElement {
     this.#vendorSelect.clearFallbackSelection?.();
     this.#peopleSelect.clearFallbackSelection?.();
     this.#accountSelect.value = "";
+    this.#selectedAccountType = null;
+    this.#paymentType.value = "positive";
+    this.#paymentType.accountType = null;
     this.#sourceSelect.value = "manual";
     this.#peopleSelect.value = APIs.budget.SHARED_ASSIGNMENT_ID;
     this.#setKind("expense");

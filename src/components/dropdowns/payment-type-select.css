@@ -1,0 +1,11 @@
+payment-type-select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+
+  > dropdown-menu {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+}

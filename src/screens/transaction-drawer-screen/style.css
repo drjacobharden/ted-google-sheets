@@ -43,7 +43,7 @@
 
   .drawer-form-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-md);
     margin-top: 20px;
   }
@@ -289,6 +289,253 @@
   }
 }
 
+transaction-drawer-screen {
+  .drawer-content {
+    padding-top: 0;
+  }
+
+  .transaction-amount-editor {
+    padding-block: var(--space-md);
+  }
+
+  .transaction-amount-editor currency-input {
+    gap: 0;
+
+    > span,
+    .currency-input__message {
+      display: none;
+    }
+
+    .input-shell {
+      min-height: 0;
+      border: 0;
+      background: transparent;
+      overflow: visible;
+
+      &:focus-within {
+        border: 0 !important;
+      }
+
+      custom-icon {
+        width: var(--text-3xl);
+        height: var(--text-3xl);
+        margin: 0 var(--space-2xs) 0 0;
+        color: var(--color-text);
+
+        svg {
+          width: 100%;
+          height: 100%;
+        }
+      }
+
+      input {
+        min-width: 0;
+        height: auto;
+        padding: 0;
+        appearance: textfield;
+        background: transparent;
+        color: var(--color-text);
+        font-family: var(--font-display);
+        font-size: var(--text-4xl);
+        font-variant-numeric: lining-nums tabular-nums;
+        font-weight: var(--weight-regular);
+        letter-spacing: var(--tracking-tight);
+        line-height: var(--leading-none);
+
+        &::-webkit-inner-spin-button,
+        &::-webkit-outer-spin-button {
+          margin: 0;
+          appearance: none;
+        }
+
+        &:focus-visible {
+          outline: 0;
+        }
+      }
+    }
+  }
+
+  .transaction-detail-list {
+    border-top: var(--rule-thin) solid var(--color-rule);
+
+    > [hidden] {
+      display: none;
+    }
+
+    > :is(
+      date-picker,
+      category-select,
+      vendor-select,
+      people-select,
+      source-select,
+      account-select
+    ),
+    > .transaction-detail-row,
+    > .transaction-note {
+      display: block;
+      border-bottom: var(--rule-thin) solid var(--color-rule);
+    }
+
+    > :is(
+        date-picker,
+        category-select,
+        vendor-select,
+        people-select,
+        source-select,
+        account-select
+      )
+      > .form-field,
+    > .transaction-detail-row,
+    > .transaction-note {
+      display: grid;
+      min-height: 48px;
+      grid-template-columns: minmax(112px, 0.7fr) minmax(0, 1.3fr);
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
+    :is(
+        date-picker,
+        category-select,
+        vendor-select,
+        people-select,
+        source-select,
+        account-select
+      )
+      > .form-field {
+      gap: var(--space-sm);
+    }
+
+    :is(
+        date-picker,
+        category-select,
+        vendor-select,
+        people-select,
+        source-select,
+        account-select
+      )
+      > .form-field
+      > :is(span, .horizontal-center),
+    .transaction-detail-label,
+    .transaction-note > span {
+      margin: 0;
+      color: var(--color-text-subtle);
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      font-weight: var(--weight-regular);
+      letter-spacing: var(--tracking-wider);
+      line-height: var(--leading-normal);
+      text-transform: uppercase;
+      justify-content: flex-start;
+      gap: var(--space-xs);
+    }
+
+    .date-picker-container,
+    dropdown-menu {
+      position: relative;
+      display: block;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .date-picker-trigger,
+    dropdown-menu > .dropdown-trigger {
+      width: 100%;
+      min-width: 0;
+      height: 48px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      justify-content: flex-end;
+
+      &:hover,
+      &:active,
+      &:focus-visible,
+      &[aria-expanded="true"] {
+        border: 0;
+        background: transparent;
+        outline: 0;
+        color: var(--color-text);
+      }
+
+      > .custom-button-icon:first-child {
+        display: none;
+      }
+
+      span {
+        margin: 0 0 0 auto;
+        color: var(--color-text);
+        font-family: var(--font-body);
+        font-size: var(--text-sm);
+        font-weight: var(--weight-regular);
+        line-height: var(--leading-normal);
+        text-align: right;
+      }
+
+      svg {
+        color: var(--color-text-subtle);
+      }
+    }
+
+    > .transaction-payment-type dropdown-menu > .popover.dropdown-menu-list,
+    > :is(
+        category-select,
+        vendor-select,
+        people-select,
+        source-select,
+        account-select
+      )
+      dropdown-menu
+      > .popover.dropdown-menu-list {
+      position: absolute;
+      right: 0 !important;
+      left: auto !important;
+      width: min(280px, 100%);
+    }
+
+    > .transaction-payment-type
+      .payment-type-menu
+      > .popover.dropdown-menu-list {
+      background: var(--color-surface-overlay);
+    }
+
+    date-picker .calendar-popover {
+      right: 0 !important;
+      left: auto !important;
+    }
+
+    .transaction-note {
+      > span {
+        align-self: center;
+      }
+
+      input {
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font-family: var(--font-body);
+        font-size: var(--text-sm);
+        font-weight: var(--weight-regular);
+        text-align: right;
+
+        &::placeholder {
+          color: var(--color-text-subtle);
+          opacity: 1;
+        }
+
+        &:focus-visible {
+          border: 0;
+          outline: 0;
+        }
+      }
+    }
+  }
+}
+
 @media (max-width: 640px) {
   :is(transaction-drawer-screen, investment-ledger-drawer-screen) {
     .transaction-drawer {
@@ -308,6 +555,29 @@
     .transaction-field,
     .transaction-field--wide {
       grid-column: 1;
+    }
+  }
+
+  transaction-drawer-screen {
+    .transaction-amount-editor {
+      padding-block: var(--space-md);
+    }
+
+    .transaction-detail-list {
+      > :is(
+          date-picker,
+          category-select,
+          vendor-select,
+          people-select,
+          source-select,
+          account-select
+        )
+        > .form-field,
+      > .transaction-detail-row,
+      > .transaction-note {
+        grid-template-columns: minmax(92px, 0.65fr) minmax(0, 1.35fr);
+        gap: var(--space-xs);
+      }
     }
   }
 }

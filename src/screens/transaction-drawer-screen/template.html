@@ -1,39 +1,49 @@
 <drawer-overlay
   id="transaction-drawer-backdrop"
   title="Edit transaction"
-  tabs='[{"key":"expense","title":"Expense","isDefaultValue":true},{"key":"income","title":"Income"},{"key":"account","title":"Accounts"}]'
   hidden
 >
   <form id="transaction-edit-form" class="edit-form" novalidate>
     <input type="hidden" name="type" value="expense" />
-    <div class="drawer-form-grid">
+    <div class="transaction-amount-editor">
       <currency-input
         id="transaction-drawer-amount"
-        class="transaction-field transaction-field--amount"
-        helper="Use negative amounts for refunds."
+        min="0.01"
       ></currency-input>
+    </div>
+    <div class="transaction-detail-list">
       <date-picker
-        class="transaction-field transaction-field--date"
         name="date"
       ></date-picker>
-      <category-select class="transaction-field"></category-select>
-      <vendor-select class="transaction-field"></vendor-select>
-      <people-select class="transaction-field"></people-select>
+      <div class="transaction-detail-row transaction-payment-type">
+        <span class="transaction-detail-label">Payment Type</span>
+        <payment-type-select
+          id="transaction-payment-type"
+          kind="expense"
+          value="positive"
+        ></payment-type-select>
+      </div>
+      <category-select></category-select>
+      <vendor-select></vendor-select>
+      <people-select></people-select>
       <account-select
         id="transaction-account"
-        class="transaction-field"
         label="Account"
         account-type="all"
       ></account-select>
       <source-select
         id="transaction-source"
-        class="transaction-field"
       ></source-select>
       <label
-        class="form-field transaction-field transaction-field--wide transaction-note"
+        class="form-field transaction-note"
       >
         <span>Description<small>(optional)</small></span>
-        <textarea name="notes" maxlength="500" rows="2"></textarea>
+        <input
+          name="notes"
+          type="text"
+          maxlength="500"
+          placeholder="enter note..."
+        />
       </label>
     </div>
     <p

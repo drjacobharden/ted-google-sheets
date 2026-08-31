@@ -317,11 +317,6 @@ export class TransactionScreen
         .find((item) => item.id === id);
       if (!transaction) return;
       if (event instanceof KeyboardEvent) event.preventDefault();
-      if (transaction.accountId) {
-        const effect = activityEffects(transaction, APIs.accounts.accounts());
-        router.updateParams({ drawer: "investment-ledger-entry", investmentLedgerId: transaction.id, investmentLedgerSource: effect.account?.type || "investment" });
-        return;
-      }
       router.updateParams({ drawer: "edit", transactionId: transaction.id });
     });
   }

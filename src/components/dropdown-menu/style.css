@@ -1,4 +1,6 @@
 dropdown-menu {
+  --dropdown-option-height: 38px;
+
   z-index: 1;
   font-family: var(--font-body);
 
@@ -23,6 +25,7 @@ dropdown-menu {
 
     span {
       margin-right: auto;
+      line-height: var(--leading-normal);
     }
 
     &:hover,
@@ -130,7 +133,7 @@ dropdown-menu {
       display: flex;
       width: 100%;
       gap: 12px;
-      height: 38px;
+      height: var(--dropdown-option-height);
       padding: 0 10px;
       border-radius: 0;
       align-items: center;
@@ -172,6 +175,12 @@ dropdown-menu {
       }
     }
   }
+}
+
+dropdown-menu.vendor-select-menu
+  > .popover.dropdown-menu-list
+  .dropdown-menu-options {
+  max-height: 228px;
 }
 
 dropdown-menu[variant="ghost"] > .dropdown-trigger {

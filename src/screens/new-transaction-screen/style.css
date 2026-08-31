@@ -17,8 +17,10 @@ new-transaction-screen {
 
   #new-transaction-kind {
     display: block;
-    border-bottom: var(--rule-thin) solid var(--color-rule-strong);
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border-bottom: var(--rule-thin) solid var(--color-rule-strong);
 
     .segmented-control__list {
       width: max-content;
@@ -32,6 +34,12 @@ new-transaction-screen {
     }
   }
 
+  #new-transaction-form {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
   .new-transaction-page__grid {
     display: grid;
     grid-template-columns: minmax(300px, 0.72fr) minmax(480px, 1.45fr);
@@ -39,108 +47,310 @@ new-transaction-screen {
     padding-top: var(--space-lg);
   }
 
-  .new-transaction-page__fields,
-  .new-transaction-page__field-grid {
+  .new-transaction-page__fields {
     display: grid;
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
-    gap: var(--space-md);
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
   }
 
-  .new-transaction-page__date--compact {
-    display: none;
+  .new-transaction-page__amount-editor,
+  .new-transaction-page__detail-list,
+  .new-transaction-page__footer {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
-  .new-transaction-page__field-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .new-transaction-page__amount-editor {
+    padding-block: var(--space-md);
   }
 
-  .transaction-field--amount,
-  .transaction-field--wide {
-    grid-column: 1 / -1;
-  }
+  .new-transaction-page__amount-editor currency-input {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2xs);
 
-  .transaction-field--amount .input-shell {
-    min-height: 64px;
+    > span {
+      display: none;
+    }
 
-    input {
-      height: 64px;
-      font-family: var(--font-display);
-      font-size: var(--text-2xl);
-      font-variant-numeric: tabular-nums;
+    .input-shell {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      min-height: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      overflow: visible;
+
+      &:focus-within {
+        border: 0;
+        outline: 0;
+      }
+
+      custom-icon {
+        width: var(--text-3xl);
+        height: var(--text-3xl);
+        margin: 0 var(--space-2xs) 0 0;
+        color: var(--color-text);
+
+        svg {
+          width: 100%;
+          height: 100%;
+        }
+      }
+
+      input {
+        min-width: 0;
+        height: auto;
+        padding: 0;
+        appearance: textfield;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--color-text);
+        font-family: var(--font-display);
+        font-size: var(--text-4xl);
+        font-variant-numeric: lining-nums tabular-nums;
+        font-weight: var(--weight-regular);
+        letter-spacing: var(--tracking-tight);
+        line-height: var(--leading-none);
+        box-shadow: none;
+
+        &::-webkit-inner-spin-button,
+        &::-webkit-outer-spin-button {
+          margin: 0;
+          appearance: none;
+        }
+
+        &:focus-visible {
+          outline: 0;
+        }
+      }
+    }
+
+    .currency-input__message {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      margin-top: var(--space-xs);
+      overflow-wrap: anywhere;
+      color: var(--color-text-subtle);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      line-height: var(--leading-normal);
     }
   }
 
-  .form-field,
-  currency-input,
-  date-picker,
-  category-select,
-  vendor-select,
-  people-select,
-  source-select,
-  account-select {
-    gap: var(--space-2xs);
+  .new-transaction-page__detail-list {
+    border-top: var(--rule-thin) solid var(--color-rule);
 
-    > span,
+    > [hidden] {
+      display: none;
+    }
+
+    > :is(
+      date-picker,
+      category-select,
+      vendor-select,
+      people-select,
+      source-select,
+      account-select
+    ),
+    > .new-transaction-page__detail-row,
+    > .new-transaction-page__notes {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      border-bottom: var(--rule-thin) solid var(--color-rule);
+    }
+
+    > :is(
+        date-picker,
+        category-select,
+        vendor-select,
+        people-select,
+        source-select,
+        account-select
+      )
+      > .form-field,
+    > .new-transaction-page__detail-row,
+    > .new-transaction-page__notes {
+      display: grid;
+      min-height: 48px;
+      min-width: 0;
+      grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
     :is(
-      .category-select-label,
-      .vendor-select-label,
-      .people-select-label,
-      .source-select-label,
-      .account-select-label,
-      .select-label
-    ) {
+        date-picker,
+        category-select,
+        vendor-select,
+        people-select,
+        source-select,
+        account-select
+      )
+      > .form-field {
+      gap: var(--space-sm);
+    }
+
+    :is(
+        date-picker,
+        category-select,
+        vendor-select,
+        people-select,
+        source-select,
+        account-select
+      )
+      > .form-field
+      > :is(span, .horizontal-center),
+    .form-field-label,
+    .new-transaction-page__detail-label,
+    .new-transaction-page__notes > span {
       margin: 0;
-      color: var(--color-text-subtle);
+      color: var(--color-text-muted);
       font-family: var(--font-mono);
       font-size: var(--text-2xs);
       font-weight: var(--weight-regular);
       letter-spacing: var(--tracking-wider);
       line-height: var(--leading-normal);
       text-transform: uppercase;
+      justify-content: flex-start;
+      gap: var(--space-xs);
 
       small {
         margin-left: var(--space-2xs);
         font: inherit;
+        letter-spacing: var(--tracking-wide);
         text-transform: lowercase;
+      }
+    }
+
+    .date-picker-container,
+    dropdown-menu {
+      position: relative;
+      display: block;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .date-picker-trigger,
+    dropdown-menu > .dropdown-trigger {
+      width: 100%;
+      min-width: 0;
+      height: 48px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      justify-content: flex-end;
+
+      &:hover,
+      &:active,
+      &:focus-visible,
+      &[aria-expanded="true"] {
+        border: 0;
+        background: transparent;
+        outline: 0;
+        color: var(--color-text);
+      }
+
+      > .custom-button-icon:first-child {
+        display: none;
+      }
+
+      span {
+        max-width: 100%;
+        min-width: 0;
+        margin: 0 0 0 auto;
+        overflow: hidden;
+        color: var(--color-text);
+        font-family: var(--font-body);
+        font-size: var(--text-sm);
+        font-weight: var(--weight-regular);
+        line-height: var(--leading-normal);
+        text-align: right;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      svg {
+        color: var(--color-text-subtle);
+      }
+    }
+
+    > .new-transaction-page__payment-type
+      dropdown-menu
+      > .popover.dropdown-menu-list,
+    > :is(
+        category-select,
+        vendor-select,
+        people-select,
+        source-select,
+        account-select
+      )
+      dropdown-menu
+      > .popover.dropdown-menu-list {
+      position: absolute;
+      right: 0 !important;
+      left: auto !important;
+      width: min(280px, 100%);
+      border-radius: 0;
+      background: var(--color-surface-overlay);
+    }
+
+    date-picker .calendar-popover {
+      right: 0 !important;
+      left: auto !important;
+      border: var(--rule-thin) solid var(--color-rule-strong);
+      border-radius: 0;
+      background: var(--color-surface-overlay);
+      color: var(--color-text);
+      box-shadow: 0 18px 36px rgb(43 36 30 / 16%);
+    }
+
+    .new-transaction-page__notes {
+      > span {
+        align-self: center;
+      }
+
+      input {
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font-family: var(--font-body);
+        font-size: var(--text-sm);
+        font-weight: var(--weight-regular);
+        text-align: right;
+
+        &::placeholder {
+          color: var(--color-text-subtle);
+          opacity: 1;
+        }
+
+        &:focus-visible {
+          border: 0;
+          outline: 0;
+        }
       }
     }
   }
 
-  currency-input .input-shell,
-  .select-menu .select-trigger,
-  textarea {
-    min-height: 48px;
-    border: var(--rule-thin) solid var(--color-rule-strong);
-    border-radius: 0;
-    outline: 0;
-    background: transparent;
-    color: var(--color-text);
-    box-shadow: none;
-  }
-
-  currency-input .input-shell input {
-    border: 0;
-    outline: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .select-menu .select-trigger {
-    height: 48px;
-    padding-inline: var(--space-xs);
-  }
-
-  textarea {
-    width: 100%;
-    min-height: 112px;
-    padding: var(--space-sm);
-    font-family: var(--font-body);
-    font-size: var(--text-sm);
-    line-height: var(--leading-normal);
-
-    &:focus-visible {
-      outline: 0;
-    }
+  .new-transaction-page__detail-list > .new-transaction-page__date--compact {
+    display: none;
   }
 
   .new-transaction-page__footer {
@@ -150,7 +360,6 @@ new-transaction-screen {
     justify-content: space-between;
     gap: var(--space-md);
     padding-top: var(--space-md);
-    border-top: var(--rule-thin) solid var(--color-rule);
   }
 
   .form-message {
@@ -179,91 +388,29 @@ new-transaction-screen {
       display: none;
     }
 
-    .new-transaction-page__date--compact {
-      display: grid;
-    }
-
-    .new-transaction-page__date--compact .date-picker-container {
+    .new-transaction-page__detail-list > .new-transaction-page__date--compact {
       display: block;
-    }
-
-    .new-transaction-page__date--compact .date-picker-trigger {
-      width: 100%;
-      height: 48px;
-      min-height: 48px;
-      padding-inline: var(--space-xs);
-      border: var(--rule-thin) solid var(--color-rule-strong);
-      border-radius: 0;
-      background: transparent;
-      color: var(--color-text);
-      box-shadow: none;
-
-      &:focus-visible,
-      &[aria-expanded="true"] {
-        border-color: var(--color-accent-strong);
-        outline: 0;
-      }
-
-      span {
-        margin-left: var(--space-2xs);
-        color: var(--color-text);
-        font-family: var(--font-body);
-        font-size: var(--text-sm);
-        font-weight: var(--weight-regular);
-      }
-
-      svg {
-        color: var(--color-text-muted);
-        stroke: currentColor;
-      }
-
-      &.placeholder span {
-        color: var(--color-text-subtle);
-        opacity: 1;
-      }
-    }
-
-    .new-transaction-page__date--compact .calendar-popover {
-      border: var(--rule-thin) solid var(--color-rule-strong);
-      border-radius: 0;
-      background: var(--color-surface-overlay);
-      color: var(--color-text);
-      box-shadow: 0 18px 36px rgb(43 36 30 / 16%);
-
-      .calendar-header button:hover,
-      .calendar-grid button:hover:not(:disabled) {
-        background: color-mix(
-          in srgb,
-          var(--color-accent) 12%,
-          var(--color-surface-overlay)
-        );
-        color: var(--color-accent-strong);
-      }
-
-      .calendar-header button:focus-visible,
-      .calendar-grid button:focus-visible {
-        outline: 2px solid
-          color-mix(in srgb, var(--color-accent) 48%, transparent);
-        outline-offset: 1px;
-      }
-
-      .calendar-grid button.today {
-        color: var(--color-accent-strong);
-        box-shadow: inset 0 0 0 1px var(--color-accent);
-      }
-
-      .calendar-grid button.selected {
-        background: var(--color-text);
-        color: var(--color-text-inverse);
-      }
     }
   }
 }
 
 @media (max-width: 620px) {
   new-transaction-screen {
-    .new-transaction-page__field-grid {
-      grid-template-columns: minmax(0, 1fr);
+    .new-transaction-page__detail-list {
+      > :is(
+          date-picker,
+          category-select,
+          vendor-select,
+          people-select,
+          source-select,
+          account-select
+        )
+        > .form-field,
+      > .new-transaction-page__detail-row,
+      > .new-transaction-page__notes {
+        grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.35fr);
+        gap: var(--space-xs);
+      }
     }
 
     .new-transaction-page__footer {

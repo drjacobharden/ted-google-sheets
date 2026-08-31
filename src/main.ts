@@ -31,6 +31,7 @@ import "./components/dropdowns/vendor-select.ts";
 import "./components/dropdowns/people-select.ts";
 import "./components/dropdowns/source-select.ts";
 import "./components/dropdowns/account-select.ts";
+import "./components/dropdowns/payment-type-select.ts";
 import "./components/table-title/table-title.ts";
 import "./components/user-form/user-form.ts";
 import "./components/url-form/url-form.ts";

@@ -5,11 +5,12 @@ import { appController } from "../../state/app-controller";
 import { DateUtils } from "../../utilities/date-utilities";
 import { showToast } from "../../components/toast-stack/toast-service";
 import templateString from "./template.html" with { type: "text" };
-import {
-  addListener,
-  handleCustomEvent,
-} from "../../utilities/event-utilities";
+import type { AccountType } from "../../api/account-api";
 import { TransactionFormController } from "../transaction-form-controller";
+import {
+  transactionEditPresentation,
+  type TransactionEditKind,
+} from "./transaction-edit-presentation";
 
 export class TransactionDrawerScreen extends HTMLElement {
   connectedCallback(): void {
@@ -29,6 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const backdrop = document.getElementById("transaction-drawer-backdrop");
   const drawer = backdrop.querySelector(".side-drawer");
   const form = document.getElementById("transaction-edit-form");
+  const header = backdrop.querySelector("drawer-header");
   const typeInput = form.elements.type;
 
   const message = document.getElementById("transaction-edit-message");
@@ -48,19 +50,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const sourceSelect = form.querySelector("source-select");
   const accountSelect = form.querySelector("account-select");
   const amountControl = form.querySelector("currency-input");
+  const paymentTypeElement = document.getElementById(
+    "transaction-payment-type",
+  );
   const formController = new TransactionFormController();
+
+  // The shared selectors center their menus by default. Detail values in this
+  // drawer are right-aligned, so their menus should terminate at the same edge.
+  form
+    .querySelectorAll(".transaction-detail-list dropdown-menu")
+    .forEach((dropdown) => {
+      dropdown.removeAttribute("align-start");
+      dropdown.removeAttribute("align-center");
+    });
 
   let transactionId = "";
   let openedBase = null;
   let drawerDirty = false;
   let trackDrawerChanges = false;
   let returnFocus = null;
-  let activeType = "expense";
-  let expenseDraft = { categoryId: "", vendorId: "" };
-  let incomeDraft = {
-    categoryId: APIs.budget.INCOME_CATEGORY_ID,
-    vendorId: "",
-  };
+  let transactionKind: TransactionEditKind = "expense";
+  let selectedAccountType: AccountType | null = null;
   let closing = false;
   let closeTimer = 0;
   let closeAnimationHandler = null;
@@ -102,23 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
     message.textContent = "";
     message.className = "form-message";
 
-    expenseDraft =
-      record.type === "expense"
-        ? {
-            categoryId: record.categoryId || "",
-            vendorId: record.vendorId || "",
-          }
-        : { categoryId: "", vendorId: "" };
-    incomeDraft = {
-      categoryId:
-        record.type === "income"
-          ? record.categoryId || APIs.budget.INCOME_CATEGORY_ID
-          : APIs.budget.INCOME_CATEGORY_ID,
-      vendorId: record.type === "income" ? record.vendorId || "" : "",
-    };
     populateFormFromRecord(record);
-    accountSelect.value = record.accountId || "";
-    sourceSelect.value = record.source || "manual";
 
     transactionIdElement.textContent = record.id;
 
@@ -188,31 +182,30 @@ document.addEventListener("DOMContentLoaded", () => {
         ? { id: assignmentId, name: assignment, archived: true }
         : null,
     );
-
-    activeType = ["income", "account"].includes(typeInput.value)
-      ? typeInput.value
-      : "expense";
-    if (activeType === "expense") {
-      expenseDraft = { categoryId, vendorId };
-    } else {
-      incomeDraft = {
-        categoryId: categoryId || APIs.budget.INCOME_CATEGORY_ID,
-        vendorId,
-      };
-    }
-    updateTypeFields(activeType);
+    categorySelect.value = categoryId;
+    vendorSelect.value = vendorId;
     peopleSelect.value = assignmentId;
   }
 
   function populateFormFromRecord(record) {
-    setTransactionTypeSelection(
-      record.accountId ? "account" : record.type || "expense",
-    );
+    transactionKind = record.accountId
+      ? "account"
+      : record.type === "income"
+        ? "income"
+        : "expense";
+    typeInput.value = transactionKind;
+    selectedAccountType = record.accountId
+      ? APIs.accounts.accounts().find((item) => item.id === record.accountId)
+          ?.type || null
+      : null;
 
-    form.elements.amount.value =
+    const signedAmount =
       record.amount === undefined || record.amount === null
         ? ""
         : Number(record.amount);
+    form.elements.amount.value =
+      signedAmount === "" ? "" : Math.abs(signedAmount);
+    paymentTypeElement.setFromSignedAmount(signedAmount || 0);
 
     form.elements.notes.value = record.notes || "";
 
@@ -220,6 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
       datePickerElement.value = record.date || "";
     }
 
+    updateTypeFields();
     populateFormOptions({
       categoryId: record.categoryId || "",
       category: record.category || "",
@@ -228,31 +222,35 @@ document.addEventListener("DOMContentLoaded", () => {
       assignmentId: record.assignmentId || APIs.budget.SHARED_ASSIGNMENT_ID,
       assignment: record.assignment || "Shared",
     });
+    accountSelect.value = record.accountId || "";
+    sourceSelect.value = record.source || "manual";
+    updatePresentation();
   }
 
-  function updateTypeFields(type) {
-    const account = type === "account";
-    const income = type === "income";
+  function updateTypeFields() {
+    const account = transactionKind === "account";
+    const income = transactionKind === "income";
     categorySelect.hidden = account;
     categorySelect.type = income ? "income" : "expense";
-    categorySelect.value = income
-      ? incomeDraft.categoryId
-      : expenseDraft.categoryId;
     vendorSelect.toggleAttribute("optional", income);
     vendorSelect.hidden = account;
-    vendorSelect.value = income ? incomeDraft.vendorId : expenseDraft.vendorId;
     peopleSelect.hidden = account;
     accountSelect.hidden = !account;
-    amountControl.helper = account
-      ? "Use negative amounts for investment withdrawals or additional borrowing on your debt."
-      : "Use negative amounts for refunds.";
-    amountControl.min = null;
-    activeType = type;
+    amountControl.min = 0.01;
+    paymentTypeElement.kind = transactionKind;
+    paymentTypeElement.accountType = account ? selectedAccountType : null;
   }
 
-  function setTransactionTypeSelection(type) {
-    const nextType = ["income", "account"].includes(type) ? type : "expense";
-    typeInput.value = nextType;
+  function updatePresentation() {
+    const presentation = transactionEditPresentation(
+      transactionKind,
+      amountControl.value,
+      selectedAccountType,
+    );
+    header.title = presentation.title;
+    paymentTypeElement.kind = transactionKind;
+    paymentTypeElement.accountType =
+      transactionKind === "account" ? selectedAccountType : null;
   }
 
   function isDirty() {
@@ -274,8 +272,8 @@ document.addEventListener("DOMContentLoaded", () => {
     appShell.inert = false;
     transactionId = "";
     openedBase = null;
-    expenseDraft = { categoryId: "", vendorId: "" };
-    incomeDraft = { categoryId: APIs.budget.INCOME_CATEGORY_ID, vendorId: "" };
+    transactionKind = "expense";
+    selectedAccountType = null;
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
       : document.querySelector('[data-tab="budgeting"]')
@@ -369,7 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const draft = formController.buildDraft({
       id: transactionId,
       kind: type,
-      amount: values.get("amount"),
+      amount: paymentTypeElement.signedAmount(values.get("amount")),
       date: datePickerElement.value,
       categoryId: categorySelect.value,
       vendorId: vendorSelect.value,
@@ -419,42 +417,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  addListener("segmented-control-selection", drawer, (event) => {
-    handleCustomEvent("segmented-control-selection", event, ({ value }) => {
-      const nextType = ["income", "account"].includes(value)
-        ? value
-        : "expense";
-      if (activeType === "expense") {
-        expenseDraft = {
-          categoryId: categorySelect.value,
-          vendorId: vendorSelect.value,
-        };
-      } else if (activeType === "income") {
-        incomeDraft.categoryId = categorySelect.value;
-      }
-      setTransactionTypeSelection(nextType);
-      updateTypeFields(nextType);
-      if (trackDrawerChanges) drawerDirty = true;
-    });
-  });
-
   categorySelect.addEventListener("category-selected", () => {
     if (trackDrawerChanges) drawerDirty = true;
-    if (activeType === "expense") {
-      expenseDraft.categoryId = categorySelect.value;
-    } else {
-      incomeDraft.categoryId = categorySelect.value;
-    }
   });
   vendorSelect.addEventListener("vendor-selected", () => {
     if (trackDrawerChanges) drawerDirty = true;
-    if (activeType === "expense") expenseDraft.vendorId = vendorSelect.value;
-    else incomeDraft.vendorId = vendorSelect.value;
   });
   sourceSelect.addEventListener("source-selected", () => {
     if (trackDrawerChanges) drawerDirty = true;
   });
-  accountSelect.addEventListener("account-selected", () => {
+  accountSelect.addEventListener("account-selected", (event) => {
+    selectedAccountType = event.detail?.account?.type || null;
+    updatePresentation();
+    if (trackDrawerChanges) drawerDirty = true;
+  });
+  paymentTypeElement.addEventListener("payment-type-change", () => {
     if (trackDrawerChanges) drawerDirty = true;
   });
 
