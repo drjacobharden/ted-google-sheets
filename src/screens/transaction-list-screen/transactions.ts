@@ -27,7 +27,7 @@ import {
   matchesLedgerFilterGroups,
 } from "../../utilities/entity-ledger";
 import templateString from "./template.html" with { type: "text" };
-import { budgetingActivities, activityEffects } from "../../utilities/activity-effects";
+import { budgetingActivities, activityEffects, ledgerVendorLabel } from "../../utilities/activity-effects";
 import { APIs } from "../../api/api";
 
 const template = document.createElement("template");
@@ -47,7 +47,6 @@ const monthItems: DropdownMenuItem[] = [
   })),
 ];
 const rowAmount=(row:BudgetTransaction)=>{const effect=activityEffects(row,APIs.accounts.accounts());return effect.expense?-effect.expense:effect.income||effect.investmentFlow||Number(row.amount);};
-const netBudgetAmount=(row:BudgetTransaction)=>{const effect=activityEffects(row,APIs.accounts.accounts());return effect.income-effect.expense;};
 
 export class TransactionScreen
   extends HTMLElement
@@ -58,11 +57,14 @@ export class TransactionScreen
   #monthSelector!: DropdownMenu;
   #search!: SearchBar;
   #subtitle!: HTMLElement;
+  #loadMore!: HTMLButtonElement;
 
   #selectedMonth: string | null = null;
   #query = "";
   #filters: AppliedFilter<BudgetTransaction>[] = [];
   #listening = false;
+  #visibleLimit = 250;
+  #defaultSortInitialized = false;
   #unsubscribeBudgetingContext: (() => void) | null = null;
 
   connectedCallback(): void {
@@ -76,6 +78,7 @@ export class TransactionScreen
       this.#monthSelector = this.querySelector("#transaction-month-selector")!;
       this.#search = this.querySelector("#transaction-search")!;
       this.#subtitle = this.querySelector("#transaction-ledger-subtitle")!;
+      this.#loadMore = this.querySelector("#transaction-list-load-more")!;
       this.#monthSelector.items = monthItems;
       this.#configureFilters();
     }
@@ -87,6 +90,7 @@ export class TransactionScreen
 
     this.#monthSelector.addListener(this);
     this.#search.addEventListener("search-changed", this);
+    this.#loadMore.addEventListener("click", this);
 
     for (const eventName of [
       "budget:transaction-sync-changed",
@@ -112,6 +116,7 @@ export class TransactionScreen
     removeListener("filters-changed", this, this);
     this.#monthSelector.removeListener(this);
     this.#search.removeEventListener("search-changed", this);
+    this.#loadMore.removeEventListener("click", this);
     this.#table.rowSelection.removeListener(this);
 
     for (const eventName of [
@@ -137,6 +142,7 @@ export class TransactionScreen
           event,
           ({ filters }) => {
             this.#filters = filters;
+            this.#visibleLimit = 250;
             this.#repaint();
           },
         );
@@ -147,6 +153,7 @@ export class TransactionScreen
         if (selection.currentTarget !== this.#monthSelector) break;
         this.#selectedMonth =
           selection.detail.value === "all" ? null : selection.detail.value;
+        this.#visibleLimit = 250;
         this.#repaint();
         break;
       }
@@ -155,7 +162,15 @@ export class TransactionScreen
         this.#query = (event as CustomEvent<{ value: string }>).detail.value
           .trim()
           .toLowerCase();
+        this.#visibleLimit = 250;
         this.#repaint();
+        break;
+
+      case "click":
+        if (event.target === this.#loadMore) {
+          this.#visibleLimit += 250;
+          this.#repaint();
+        }
         break;
 
       case "table-row-selected":
@@ -201,7 +216,7 @@ export class TransactionScreen
         title: "Vendor",
         sizing: 25,
         cellClass: ["detail"],
-        formatter: (value) => escapeHTML(value),
+        formatter: (_value, row) => escapeHTML(ledgerVendorLabel(row)),
       },
       {
         key: "amount",
@@ -219,18 +234,9 @@ export class TransactionScreen
   #tableData(
     rows: readonly BudgetTransaction[],
   ): DataTableData<BudgetTransaction> {
-    const visibleTotal = rows.reduce(
-      (total, row) => total + netBudgetAmount(row),
-      0,
-    );
-
     return {
       columns: this.#columns(),
       rows,
-      footer: {
-        cells: [null, "Total", null, null, money(visibleTotal)],
-        ariaLabel: `Transaction total ${money(visibleTotal)}`,
-      },
       interactiveRows: true,
       rowKey: (row) => row.id,
     };
@@ -240,7 +246,13 @@ export class TransactionScreen
     const year = appState.get("budgetingContext").year;
     this.#subtitle.textContent = `Showing all transactions recorded for ${editorialPeriod(year, this.#selectedMonth)}`;
     const rows = this.#filteredRows();
-    this.#table.data = this.#tableData(rows);
+    this.#loadMore.hidden = rows.length <= this.#visibleLimit;
+    this.#loadMore.textContent = `Load more${rows.length > this.#visibleLimit ? ` (${rows.length - this.#visibleLimit} remaining)` : ""}`;
+    this.#table.data = this.#tableData(rows.slice(0, this.#visibleLimit));
+    if (!this.#defaultSortInitialized) {
+      this.#table.sort = { key: "date", direction: "descending" };
+      this.#defaultSortInitialized = true;
+    }
   }
 
   #matchesSearch(row: BudgetTransaction): boolean {
@@ -264,15 +276,22 @@ export class TransactionScreen
       .filter((row) => this.#matchesSearch(row))
       .filter((row) =>
         matchesLedgerFilterGroups(row, this.#filters, (item, key) =>
-          key === "amount" ? rowAmount(item) : item[key],
+          key === "amount"
+            ? rowAmount(item)
+            : key === "vendor"
+              ? ledgerVendorLabel(item)
+              : item[key],
         ),
-      );
+      )
+      .sort((left, right) => right.date.localeCompare(left.date));
   }
 
   #filterValues(key: "category" | "vendor" | "assignment"): string[] {
     const values = new Map<string, string>();
     for (const transaction of budgetingActivities(appController.getTransactions(), APIs.accounts.accounts(), APIs.budget.listAllCategories(), APIs.budget.listAllPeople())) {
-      const value = String(transaction[key] ?? "").trim();
+      const value = key === "vendor"
+        ? ledgerVendorLabel(transaction)
+        : String(transaction[key] ?? "").trim();
       if (value) values.set(value.toLocaleLowerCase("en-US"), value);
     }
     return [...values.values()].sort((left, right) =>

@@ -23,6 +23,11 @@ transaction-list-screen {
     }
   }
 
+  .transaction-ledger__load-more {
+    align-self: center;
+    margin-top: var(--space-md);
+  }
+
   data-table {
     --data-table-row-padding: 12px;
     --table-row-height: 70px;
