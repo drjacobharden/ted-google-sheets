@@ -221,6 +221,8 @@ document.addEventListener("DOMContentLoaded", () => {
     },
   });
 
+  submit.addEventListener("click", () => form.requestSubmit());
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
