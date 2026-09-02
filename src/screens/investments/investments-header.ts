@@ -111,6 +111,22 @@ export class InvestmentsHeader
       return;
     }
     if (event.type === "click") {
+      const section = (event.target as Element | null)?.closest<HTMLElement>(
+        ".segmented-control__item",
+      );
+      if (section && this.#route) {
+        const activeCollection = contentRoute(this.#route.name);
+        if (
+          (this.#route.name === "investment-account-detail" ||
+            this.#route.name === "investment-debt-detail") &&
+          section.dataset.segmentKey === activeCollection
+        ) {
+          router.navigate(activeCollection as RouteName, {
+            year: this.#selectedYear(),
+          });
+          return;
+        }
+      }
       const editAccount = (event.target as Element | null)?.closest<HTMLElement>(
         "[data-edit-investment-account]",
       );

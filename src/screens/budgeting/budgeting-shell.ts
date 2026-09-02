@@ -98,6 +98,7 @@ export class BudgetingHeader
     if (!this.#listening) {
       this.#listening = true;
       this.#sectionSelector.addListener(this);
+      this.#sectionSelector.addEventListener("click", this);
       this.#yearSelector.addListener(this);
       this.#scope.addEventListener("click", this);
       this.#actions.addEventListener("click", this);
@@ -119,6 +120,7 @@ export class BudgetingHeader
     if (!this.#listening) return;
     this.#listening = false;
     this.#sectionSelector.removeListener(this);
+    this.#sectionSelector.removeEventListener("click", this);
     this.#yearSelector.removeListener(this);
     this.#scope.removeEventListener("click", this);
     this.#actions.removeEventListener("click", this);
@@ -140,6 +142,22 @@ export class BudgetingHeader
       return;
     }
     if (event.type === "click") {
+      const section = (event.target as Element | null)?.closest<HTMLElement>(
+        ".segmented-control__item",
+      );
+      const currentRoute = router.currentRoute();
+      if (section && (currentRoute === "entity-detail" || currentRoute === "entity-archive")) {
+        const kind = router.currentParams().kind;
+        const collection = kind === "vendor"
+          ? "vendors"
+          : kind === "assignment"
+            ? "people"
+            : "categories";
+        if (section.dataset.segmentKey === collection) {
+          router.navigate(collection, this.#scopeParams());
+          return;
+        }
+      }
       if (this.#handleYearStep(event)) return;
       this.#handleAction(event);
       return;
