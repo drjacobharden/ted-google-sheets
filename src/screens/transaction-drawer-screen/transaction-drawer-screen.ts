@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? ""
         : Number(record.amount);
     form.elements.amount.value =
-      signedAmount === "" ? "" : Math.abs(signedAmount);
+      signedAmount === "" ? "" : Math.abs(signedAmount).toFixed(2);
     paymentTypeElement.setFromSignedAmount(signedAmount || 0);
 
     form.elements.notes.value = record.notes || "";
