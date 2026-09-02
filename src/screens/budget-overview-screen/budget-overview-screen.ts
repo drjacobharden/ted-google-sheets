@@ -200,6 +200,15 @@ function signedMoney(value: number): string {
   return `${value > 0 ? "+ " : "− "}${money(Math.abs(value), false)}`;
 }
 
+function summaryTableMoney(value: number): string {
+  return money(value, Math.abs(value) < 1);
+}
+
+function signedSummaryTableMoney(value: number): string {
+  if (Math.abs(value) < 0.005) return summaryTableMoney(0);
+  return `${value > 0 ? "+ " : "− "}${summaryTableMoney(Math.abs(value))}`;
+}
+
 function percentChange(current: number, previous: number): number | null {
   if (
     !Number.isFinite(current) ||
@@ -1374,10 +1383,10 @@ export class BudgetOverviewScreen
       }
       return {
         month: monthLabel,
-        income: hasData ? money(income) : "—",
-        spend: hasData ? money(spend) : "—",
-        amount: hasData ? money(net) : "—",
-        comparison: difference === null ? "—" : signedMoney(difference),
+        income: hasData ? summaryTableMoney(income) : "—",
+        spend: hasData ? summaryTableMoney(spend) : "—",
+        amount: hasData ? summaryTableMoney(net) : "—",
+        comparison: difference === null ? "—" : signedSummaryTableMoney(difference),
         amountValue: net,
         comparisonValue: difference,
         hasData,
@@ -1430,10 +1439,10 @@ export class BudgetOverviewScreen
       footer: {
         cells: [
           "Year total",
-          money(totals.income),
-          money(totals.spend),
-          money(totals.net),
-          yearDifference === null ? "—" : signedMoney(yearDifference),
+          summaryTableMoney(totals.income),
+          summaryTableMoney(totals.spend),
+          summaryTableMoney(totals.net),
+          yearDifference === null ? "—" : signedSummaryTableMoney(yearDifference),
         ],
       },
     };
@@ -1458,7 +1467,7 @@ export class BudgetOverviewScreen
       label.title = item.name;
       const value = document.createElement("strong");
       value.className = "rank-total";
-      value.textContent = money(item.total);
+      value.textContent = summaryTableMoney(item.total);
       const inflation = document.createElement("span");
       inflation.className = "rank-inflation";
       inflation.textContent =
