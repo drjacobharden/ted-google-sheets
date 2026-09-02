@@ -1,6 +1,8 @@
 export interface SavingsRateBreakdownInput {
+  /** Gross income, including all deduction-sourced income. */
   income: number;
   spend: number;
+  /** The portion of gross income represented by deducted savings. */
   deductions: number;
 }
 
@@ -31,9 +33,9 @@ export function savingsRateBreakdown({
   const normalizedIncome = finite(income);
   const normalizedSpend = finite(spend);
   const normalizedDeductions = finite(deductions);
-  const totalIncome = normalizedIncome + normalizedDeductions;
+  const totalIncome = normalizedIncome;
   const amountSaved =
-    normalizedIncome - normalizedSpend + normalizedDeductions;
+    normalizedIncome - normalizedSpend - normalizedDeductions;
 
   if (totalIncome <= 0) {
     return {
@@ -46,18 +48,18 @@ export function savingsRateBreakdown({
     };
   }
 
-  const rate = (amountSaved / totalIncome) * 100;
-  const spendPercent = clamp((normalizedSpend / totalIncome) * 100, 0, 100);
-  const remainingAfterSpend = 100 - spendPercent;
+  const spendPercent = (normalizedSpend / totalIncome) * 100;
   const deductionsPercent = clamp(
     (normalizedDeductions / totalIncome) * 100,
     0,
-    remainingAfterSpend,
+    100,
   );
-  const savingsPercent = Math.max(
+  const savingsPercent = clamp(
+    (amountSaved / totalIncome) * 100,
     0,
-    100 - spendPercent - deductionsPercent,
+    100,
   );
+  const rate = savingsPercent + deductionsPercent;
 
   return {
     amountSaved,

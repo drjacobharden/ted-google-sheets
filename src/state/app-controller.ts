@@ -269,11 +269,15 @@ export const appController = {
         : transactions.filter(
             (transaction) => transaction.assignmentId === assignmentId,
           );
+    const reportTransactions = reportingTransactions(
+      sourceTransactions,
+      APIs.accounts.accounts(),
+    );
     return {
       monthlyTransactionSummaries:
-        buildMonthlyTransactionSummaries(sourceTransactions),
+        buildMonthlyTransactionSummaries(reportTransactions),
       annualSummaryCards: buildAnnualSummaryCards(
-        sourceTransactions,
+        reportTransactions,
         APIs.accounts
           .accounts()
           .filter(

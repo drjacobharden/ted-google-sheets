@@ -112,12 +112,20 @@
   --color-focus: var(--slate-600);
 
   /* Data visualization roles */
-  --color-chart-trend: var(--moss-500);
-  --color-chart-bars: var(--slate-500);
-  --color-chart-bars-muted: var(--slate-300);
+  --color-chart-income: var(--moss-500);
+  --color-chart-income-muted: var(--moss-300);
+  --color-chart-expense: var(--clay-500);
+  --color-chart-expense-muted: var(--clay-300);
+  --color-chart-expense-debt: var(--clay-400);
+  --color-chart-expense-lightest: var(--clay-200);
+  --color-chart-savings: var(--slate-500);
+  --color-chart-savings-muted: var(--slate-300);
+  --color-chart-trend: var(--color-chart-income);
+  --color-chart-bars: var(--color-chart-savings);
+  --color-chart-bars-muted: var(--plum-400);
   --color-chart-bars-subdued: var(--slate-100);
-  --color-chart-negative-bars: var(--clay-300);
-  --color-chart-comparison: var(--clay-500);
+  --color-chart-negative-bars: var(--color-chart-expense-muted);
+  --color-chart-comparison: var(--charcoal-400);
   --color-chart-deductions: var(--paper-950);
   --color-chart-track: var(--paper-500);
   --color-chart-grid: var(--paper-600);

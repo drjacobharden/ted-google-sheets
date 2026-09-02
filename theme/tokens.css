@@ -56,6 +56,15 @@
   --ochre-800: #543f25;
   --ochre-900: #453520;
 
+  --plum-500: #72527d;
+  --plum-400: hsl(285, 20%, 55%);
+
+  --charcoal-200: hsl(220, 3%, 80%);
+  --charcoal-300: hsl(220, 3%, 70%);
+  --charcoal-400: hsl(220, 3%, 60%);
+  --charcoal-500: hsl(220, 4%, 45%);
+  --charcoal-600: hsl(220, 6%, 20%);
+
   /* Fluid type scale: compact on phones, editorial on larger screens. */
   --text-2xs: 0.6875rem;
   --text-xs: 0.75rem;

@@ -12,6 +12,7 @@ DropdownMenuTemp.innerHTML = DropdownMenuTempString;
 export interface DropdownMenuItem {
   key: string;
   title: string;
+  selectionLabel?: string;
   group?: string;
   icon?: IconKeys;
   isDefaultValue?: boolean;
@@ -142,6 +143,7 @@ export class DropdownMenu extends HTMLElement {
       const {
         key,
         title,
+        selectionLabel,
         group,
         icon,
         isDefaultValue,
@@ -153,6 +155,7 @@ export class DropdownMenu extends HTMLElement {
       option.classList.add("dropdown-menu-item");
       option.dataset.value = key;
       option.dataset.title = title;
+      if (selectionLabel) option.dataset.selectionTitle = selectionLabel;
 
       if (icon) {
         option.append(getIcon(icon));
@@ -176,7 +179,7 @@ export class DropdownMenu extends HTMLElement {
         this.#selection = option;
         this.#selection.classList.add("is-selected");
         this.#value = key;
-        if (!this.hasAttribute("preserve-label")) this.#trigger.label = title;
+        if (!this.hasAttribute("preserve-label")) this.#trigger.label = selectionLabel ?? title;
       }
 
       if (destructive) {
@@ -318,13 +321,13 @@ export class DropdownMenu extends HTMLElement {
     this.#selection?.classList.add("is-selected");
     this.#value = item.dataset.value ?? null;
     if (!this.hasAttribute("preserve-label")) {
-      this.#trigger.label = item.dataset.title!;
+      this.#trigger.label = item.dataset.selectionTitle ?? item.dataset.title!;
     }
     this.#events.dispatch(
       {
         id: this.#menuKey,
         value: item.dataset.value!,
-        title: item.dataset.title!,
+        title: item.dataset.selectionTitle ?? item.dataset.title!,
       },
       { bubbles },
     );
@@ -396,7 +399,7 @@ export class DropdownMenu extends HTMLElement {
     if (item === null) {
       this.#trigger.label = this.#defaultLabel;
     } else if (item && !this.hasAttribute("preserve-label") && this.#trigger) {
-      this.#trigger.label = item.dataset.title ?? "";
+      this.#trigger.label = item.dataset.selectionTitle ?? item.dataset.title ?? "";
     }
   }
 

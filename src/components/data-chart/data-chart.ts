@@ -1,7 +1,8 @@
-import { buildCurrencyAxisScale } from "../../utilities/currency-axis-scale";
+import { buildDataChartScale } from "../../utilities/data-chart-scale";
 
-export type DataChartType = "bar" | "line";
+export type DataChartType = "bar" | "stacked-bar" | "value-marker" | "line";
 export type DataChartVariant = "primary" | "secondary";
+export type DataChartPalette = "income" | "expense" | "expense-muted" | "expense-debt" | "expense-lightest" | "savings" | "comparison" | "neutral";
 export type DataChartFormat = "monthly" | string;
 
 export interface DataChartPoint {
@@ -14,7 +15,17 @@ export interface DataChartSeries {
   type: DataChartType;
   points: readonly DataChartPoint[];
   variant?: DataChartVariant;
+  palette?: DataChartPalette;
+  /** Width multiplier for bar and stacked-bar plots. */
+  barWidthScale?: number;
+  /** Groups bar series into one x-position without stacking their values. */
+  overlay?: string;
   label?: string;
+  /**
+   * For stacked bars, series with the same name share one bar. Omit the name
+   * for a single default stack; use different names for side-by-side stacks.
+   */
+  stack?: string;
 }
 
 export interface DataChartData {
@@ -54,32 +65,6 @@ function yearFromDate(date: string): number | null {
   return Number.isInteger(year) ? year : null;
 }
 
-function niceScale(values: readonly number[]): {
-  min: number;
-  max: number;
-  ticks: number[];
-} {
-  const minimum = Math.min(0, ...values);
-  const maximum = Math.max(0, ...values);
-  if (minimum === maximum) {
-    const scale = buildCurrencyAxisScale(Math.abs(maximum) || 1);
-    return { min: 0, max: scale.maximum, ticks: scale.ticks };
-  }
-
-  const roughStep = (maximum - minimum) / 4;
-  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
-  const normalized = roughStep / magnitude;
-  const step =
-    (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) *
-    magnitude;
-  const min = Math.floor(minimum / step) * step;
-  const max = Math.ceil(maximum / step) * step;
-  const ticks: number[] = [];
-  for (let value = min; value <= max + step / 2; value += step) {
-    ticks.push(Math.abs(value) < step / 1000 ? 0 : value);
-  }
-  return { min, max, ticks };
-}
 
 function escapeXML(value: string): string {
   return value.replace(/[&<>"']/g, (character) =>
@@ -87,6 +72,78 @@ function escapeXML(value: string): string {
       character
     ]!,
   );
+}
+
+interface BarPlot {
+  stacked: boolean;
+  series: DataChartSeries[];
+}
+
+interface DataChartPeak {
+  index: number;
+  kind: "bar" | "line";
+  palette: DataChartPalette;
+  plotIndex?: number;
+  series?: DataChartSeries;
+  value: number;
+}
+
+function barPlots(series: readonly DataChartSeries[]): BarPlot[] {
+  const plots = new Map<string, BarPlot>();
+  series.forEach((item, index) => {
+    if (item.type === "bar") {
+      const key = item.overlay ? `overlay-${item.overlay}` : `bar-${index}`;
+      const plot = plots.get(key);
+      if (plot) plot.series.push(item);
+      else plots.set(key, { stacked: false, series: [item] });
+      return;
+    }
+    if (item.type !== "stacked-bar") return;
+    const key = `stack-${item.stack ?? "default"}`;
+    const plot = plots.get(key);
+    if (plot) plot.series.push(item);
+    else plots.set(key, { stacked: true, series: [item] });
+  });
+  return [...plots.values()];
+}
+
+function scaleValues(
+  series: readonly DataChartSeries[],
+  plots: readonly BarPlot[],
+): number[] {
+  const values = series
+    .filter((item) => item.type === "line" || item.type === "value-marker")
+    .flatMap((item) =>
+      item.points.map((point) => Number(point.value)).filter(Number.isFinite),
+    );
+
+  plots.forEach((plot) => {
+    if (!plot.stacked) {
+      values.push(
+        ...plot.series.flatMap((item) =>
+          item.points
+            .map((point) => Number(point.value))
+            .filter(Number.isFinite),
+        ),
+      );
+      return;
+    }
+    for (let index = 0; index < 12; index += 1) {
+      let positive = 0;
+      let negative = 0;
+      plot.series.forEach((item) => {
+        const point = item.points.find(
+          (candidate) => monthIndex(candidate.date) === index,
+        );
+        const value = Number(point?.value);
+        if (!Number.isFinite(value)) return;
+        if (value >= 0) positive += value;
+        else negative += value;
+      });
+      values.push(positive, negative);
+    }
+  });
+  return values;
 }
 
 export class DataChart extends HTMLElement {
@@ -132,12 +189,12 @@ export class DataChart extends HTMLElement {
     const series = this.#data.series ?? [];
     const firstPoint = series.flatMap((item) => item.points)[0];
     const year = this.#data.year ?? (firstPoint ? yearFromDate(firstPoint.date) : null);
-    const values = series.flatMap((item) =>
+    const rawValues = series.flatMap((item) =>
       item.points.map((point) => Number(point.value)).filter(Number.isFinite),
     );
     if (
-      !values.length ||
-      values.every((value) => value === 0) ||
+      !rawValues.length ||
+      rawValues.every((value) => value === 0) ||
       year === null
     ) {
       const emptyState = document.createElement("p");
@@ -154,7 +211,9 @@ export class DataChart extends HTMLElement {
     const plotWidth = width - plot.left - plot.right;
     const plotHeight = height - plot.top - plot.bottom;
     const intervalWidth = plotWidth / 12;
-    const scale = niceScale(values);
+    const plots = barPlots(series);
+    const values = scaleValues(series, plots);
+    const scale = buildDataChartScale(values);
     const span = Math.max(scale.max - scale.min, 1);
     const x = (index: number) =>
       plot.left + intervalWidth * (index + 0.5);
@@ -164,11 +223,79 @@ export class DataChart extends HTMLElement {
     const valueAt = (item: DataChartSeries, index: number): DataChartPoint | undefined =>
       item.points.find((point) => monthIndex(point.date) === index);
     const zeroY = y(0);
-    const bars = series.filter((item) => item.type === "bar");
+    const plotGap = Math.min(4, intervalWidth * 0.06);
+    const barAreaWidth = intervalWidth * 0.82;
     const barWidth = Math.max(
-      5,
-      Math.min(56, intervalWidth / Math.max(bars.length, 1) - 4),
+      0,
+      Math.min(
+        56,
+        (barAreaWidth - plotGap * Math.max(plots.length - 1, 0)) /
+          Math.max(plots.length, 1),
+      ),
     );
+    const plotWidths = plots.map((plot) =>
+      barWidth * Math.max(0.1, Math.min(1, plot.series[0]?.barWidthScale ?? 1)),
+    );
+    const barGroupWidth =
+      plotWidths.reduce((total, width) => total + width, 0) +
+      Math.max(plots.length - 1, 0) * plotGap;
+    const plotCenterX = (plotIndex: number, index: number) => {
+      const priorWidths = plotWidths
+        .slice(0, plotIndex)
+        .reduce((total, plotWidth) => total + plotWidth, 0);
+      return x(index) - barGroupWidth / 2 + priorWidths +
+        plotIndex * plotGap + plotWidths[plotIndex] / 2;
+    };
+    const peakState: { current: DataChartPeak | null } = { current: null };
+    const considerPeak = (candidate: DataChartPeak): void => {
+      if (!Number.isFinite(candidate.value) || candidate.value === 0) return;
+      if (!peakState.current || candidate.value > peakState.current.value) {
+        peakState.current = candidate;
+      }
+    };
+    plots.forEach((barPlot, plotIndex) => {
+      if (barPlot.series.some((item) => item.variant === "secondary")) return;
+      if (!barPlot.stacked) {
+        const item = barPlot.series[0];
+        item.points.forEach((point) => {
+          const index = monthIndex(point.date);
+          if (index >= 0) considerPeak({
+            index,
+            kind: "bar",
+            palette: item.palette ?? "savings",
+            plotIndex,
+            value: Number(point.value),
+          });
+        });
+        return;
+      }
+      for (let index = 0; index < 12; index += 1) {
+        const positiveTotal = barPlot.series.reduce((total, item) => {
+          const value = Number(valueAt(item, index)?.value);
+          return Number.isFinite(value) && value > 0 ? total + value : total;
+        }, 0);
+        considerPeak({
+          index,
+          kind: "bar",
+          palette: barPlot.series[0]?.palette ?? "savings",
+          plotIndex,
+          value: positiveTotal,
+        });
+      }
+    });
+    series
+      .filter((item) => item.type === "line" && item.variant !== "secondary")
+      .forEach((item) => item.points.forEach((point) => {
+        const index = monthIndex(point.date);
+        if (index >= 0) considerPeak({
+          index,
+          kind: "line",
+          palette: item.palette ?? "income",
+          series: item,
+          value: Number(point.value),
+        });
+      }));
+    const peak = peakState.current;
 
     const grid = scale.ticks
       .map(
@@ -177,19 +304,52 @@ export class DataChart extends HTMLElement {
       )
       .join("");
 
-    const renderedBars = bars
-      .map((item, seriesIndex) => {
-        const variant = item.variant ?? "primary";
-        return item.points
-          .map((point) => {
-            const index = monthIndex(point.date);
-            if (index < 0) return "";
-            const valueY = y(point.value);
-            const top = Math.min(valueY, zeroY);
-            const barHeight = point.value === 0 ? 0 : Math.abs(valueY - zeroY);
-            const offset = (seriesIndex - (bars.length - 1) / 2) * (barWidth + 2);
-            return `<rect class="data-chart__bar is-${variant}" data-month-index="${index}" x="${x(index) - barWidth / 2 + offset}" y="${point.value === 0 ? zeroY : top}" width="${barWidth}" height="${barHeight}" />`;
-          })
+    const renderedBars = plots
+      .map((barPlot, plotIndex) => {
+        const currentBarWidth = plotWidths[plotIndex];
+        const barX = (index: number) => plotCenterX(plotIndex, index);
+        if (!barPlot.stacked) {
+          return barPlot.series
+            .map((item) => {
+              const variant = item.variant ?? "primary";
+              return item.points
+                .map((point) => {
+                  const index = monthIndex(point.date);
+                  if (index < 0) return "";
+                  const valueY = y(point.value);
+                  const top = Math.min(valueY, zeroY);
+                  const barHeight =
+                    point.value === 0 ? 0 : Math.abs(valueY - zeroY);
+                  return `<rect class="data-chart__bar is-${variant} is-palette-${item.palette ?? "savings"}" data-month-index="${index}" x="${barX(index) - currentBarWidth / 2}" y="${point.value === 0 ? zeroY : top}" width="${currentBarWidth}" height="${barHeight}" />`;
+                })
+                .join("");
+            })
+            .join("");
+        }
+
+        const offsets = Array.from({ length: 12 }, () => ({
+          positive: 0,
+          negative: 0,
+        }));
+        return barPlot.series
+          .map((item, stackLevel) =>
+            item.points
+              .map((point) => {
+                const index = monthIndex(point.date);
+                const value = Number(point.value);
+                if (index < 0 || !Number.isFinite(value)) return "";
+                const direction = value >= 0 ? "positive" : "negative";
+                const start = offsets[index][direction];
+                const end = start + value;
+                offsets[index][direction] = end;
+                const startY = y(start);
+                const endY = y(end);
+                const top = Math.min(startY, endY);
+                const barHeight = value === 0 ? 0 : Math.abs(endY - startY);
+                return `<rect class="data-chart__bar is-stacked is-stack-level-${Math.min(stackLevel, 2)} is-palette-${item.palette ?? "savings"}" data-month-index="${index}" x="${barX(index) - currentBarWidth / 2}" y="${value === 0 ? startY : top}" width="${currentBarWidth}" height="${barHeight}" />`;
+              })
+              .join(""),
+          )
           .join("");
       })
       .join("");
@@ -206,13 +366,38 @@ export class DataChart extends HTMLElement {
           ? points
               .map((point, index) => {
                 if (!point) return "";
-                return `<circle class="data-chart__point is-${variant}" data-month-index="${index}" cx="${x(index)}" cy="${y(point.value)}" r="3" />`;
+                const labeled = peak?.kind === "line" &&
+                  peak.series === item && peak.index === index;
+                return `<circle class="data-chart__point is-${variant} is-palette-${item.palette ?? "income"}${labeled ? " is-labeled" : ""}" data-month-index="${index}" cx="${x(index)}" cy="${y(point.value)}" r="${labeled ? 4 : 3}" />`;
               })
               .join("")
           : "";
-        return `<path class="data-chart__line is-${variant}" d="${path}" />${dots}`;
+        return `<path class="data-chart__line is-${variant} is-palette-${item.palette ?? "income"}" d="${path}" />${dots}`;
       })
       .join("");
+
+    const renderedMarkers = series
+      .filter((item) => item.type === "value-marker")
+      .map((item) => {
+        const markerWidth = plotWidths[0] ?? barWidth;
+        return item.points
+          .map((point) => {
+            const index = monthIndex(point.date);
+            const value = Number(point.value);
+            if (index < 0 || !Number.isFinite(value)) return "";
+            const centerX = x(index);
+            const valueY = y(value);
+            const top = Math.min(valueY, zeroY);
+            const markerHeight = value === 0 ? 0 : Math.abs(valueY - zeroY);
+            return `<rect class="data-chart__bar data-chart__value-marker is-secondary is-palette-${item.palette ?? "savings"}" data-month-index="${index}" x="${centerX - markerWidth / 2}" y="${value === 0 ? zeroY : top}" width="${markerWidth}" height="${markerHeight}" />`;
+          })
+          .join("");
+      })
+      .join("");
+
+    const renderedPeakLabel = peak
+      ? `<text class="data-chart__value-label is-palette-${peak.palette}" x="${peak.kind === "line" ? x(peak.index) : plotCenterX(peak.plotIndex ?? 0, peak.index)}" y="${Math.max(12, y(peak.value) - 9)}" text-anchor="middle">${escapeXML(formatter(peak.value))}</text>`
+      : "";
 
     const labelStep = width < 480 ? 3 : width < 680 ? 2 : 1;
     const labels = MONTHS.map((label, index) =>
@@ -221,7 +406,7 @@ export class DataChart extends HTMLElement {
         : "",
     ).join("");
     const ariaLabel = this.#data.ariaLabel ?? `Chart for ${year}`;
-    this.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXML(ariaLabel)}"><g aria-hidden="true">${grid}<line class="data-chart__zero" x1="${plot.left}" y1="${zeroY}" x2="${width - plot.right}" y2="${zeroY}" /><g class="data-chart__scrub-layer" data-scrub-layer hidden><line class="data-chart__scrub-guide" data-scrub-guide x1="${x(0)}" y1="${plot.top}" x2="${x(0)}" y2="${height - plot.bottom}" /></g>${renderedBars}${renderedLines}${labels}</g><rect class="data-chart__hitbox" data-scrub-hitbox x="${plot.left}" y="${plot.top}" width="${plotWidth}" height="${plotHeight}" fill="transparent" tabindex="0" role="slider" aria-label="Explore ${year} data by month" aria-valuemin="1" aria-valuemax="12" aria-valuenow="1" /></svg>`;
+    this.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXML(ariaLabel)}"><g aria-hidden="true">${grid}<line class="data-chart__zero" x1="${plot.left}" y1="${zeroY}" x2="${width - plot.right}" y2="${zeroY}" /><g class="data-chart__scrub-layer" data-scrub-layer hidden><line class="data-chart__scrub-guide" data-scrub-guide x1="${x(0)}" y1="${plot.top}" x2="${x(0)}" y2="${height - plot.bottom}" /></g>${renderedMarkers}${renderedBars}${renderedLines}${renderedPeakLabel}${labels}</g><rect class="data-chart__hitbox" data-scrub-hitbox x="${plot.left}" y="${plot.top}" width="${plotWidth}" height="${plotHeight}" fill="transparent" tabindex="0" role="slider" aria-label="Explore ${year} data by month" aria-valuemin="1" aria-valuemax="12" aria-valuenow="1" /></svg>`;
     this.#cleanupInteraction = this.#mountInteraction({
       formatter,
       height,
@@ -275,6 +460,12 @@ export class DataChart extends HTMLElement {
       index: number,
     ): DataChartPoint | undefined =>
       item.points.find((point) => monthIndex(point.date) === index);
+    const stackLevels = new Map<DataChartSeries, number>();
+    barPlots(series)
+      .filter((plot) => plot.stacked)
+      .forEach((plot) =>
+        plot.series.forEach((item, index) => stackLevels.set(item, index)),
+      );
 
     const tooltipContent = (index: number): HTMLDivElement => {
       const content = document.createElement("div");
@@ -285,10 +476,15 @@ export class DataChart extends HTMLElement {
       content.append(title);
       series.forEach((item) => {
         const point = valueAt(item, index);
+        if (!point || point.value === 0) return;
         const row = document.createElement("div");
         row.className = "data-chart__tooltip-row";
         const swatch = document.createElement("i");
-        swatch.className = `is-${item.type} is-${item.variant ?? "primary"}`;
+        const stackLevel = stackLevels.get(item);
+        const swatchType = item.type === "value-marker" ? "bar" : item.type;
+        swatch.className = stackLevel === undefined
+          ? `is-${swatchType} is-${item.type === "value-marker" ? "secondary" : item.variant ?? "primary"} is-palette-${item.palette ?? (item.type === "value-marker" ? "savings" : "income")}`
+          : `is-bar is-stack-level-${Math.min(stackLevel, 2)} is-palette-${item.palette ?? "savings"}`;
         swatch.setAttribute("aria-hidden", "true");
         const label = document.createElement("span");
         label.className = "data-chart__tooltip-label";
@@ -318,8 +514,11 @@ export class DataChart extends HTMLElement {
       const values = series
         .map((item) => {
           const point = valueAt(item, activeIndex);
-          return `${item.label ?? "Value"} ${point ? formatter(point.value) : "unavailable"}`;
+          return point && point.value !== 0
+            ? `${item.label ?? "Value"} ${formatter(point.value)}`
+            : null;
         })
+        .filter((value): value is string => value !== null)
         .join(", ");
       hitbox.setAttribute(
         "aria-valuetext",

@@ -40,27 +40,87 @@ data-chart {
   }
 
   .data-chart__bar {
-    fill: var(--color-chart-bars);
+    --data-chart-bar-fill: var(--color-chart-bars);
+    fill: var(--data-chart-bar-fill);
     pointer-events: none;
     transition: fill 120ms ease;
 
     &.is-secondary {
-      fill: var(--color-chart-bars-muted);
+      --data-chart-bar-fill: var(--color-chart-bars-muted);
+    }
+
+    &.is-stack-level-1 {
+      --data-chart-bar-fill: var(--color-chart-bars-muted);
+    }
+
+    &.is-stack-level-2 {
+      --data-chart-bar-fill: var(--color-chart-bars-subdued);
+    }
+
+    &.is-palette-income {
+      --data-chart-bar-fill: var(--color-chart-income);
+    }
+
+    &.is-palette-income.is-stack-level-1 {
+      --data-chart-bar-fill: var(--color-chart-income-muted);
+    }
+
+    &.is-palette-expense {
+      --data-chart-bar-fill: var(--color-chart-expense);
+    }
+
+    &.is-palette-expense.is-stack-level-1 {
+      --data-chart-bar-fill: var(--color-chart-expense-muted);
+    }
+
+    &.is-palette-expense-muted {
+      --data-chart-bar-fill: var(--color-chart-expense-muted);
+    }
+
+    &.is-palette-expense-debt {
+      --data-chart-bar-fill: var(--color-chart-expense-debt);
+    }
+
+    &.is-palette-expense-lightest {
+      --data-chart-bar-fill: var(--color-chart-expense-lightest);
+    }
+
+    &.is-palette-savings {
+      --data-chart-bar-fill: var(--color-chart-savings);
+    }
+
+    &.is-palette-savings.is-stack-level-1 {
+      --data-chart-bar-fill: var(--color-chart-savings-muted);
+    }
+
+    &.is-palette-comparison {
+      --data-chart-bar-fill: var(--color-chart-comparison);
+    }
+
+    &.is-palette-neutral {
+      --data-chart-bar-fill: var(--color-chart-bars-muted);
+    }
+
+    &.is-secondary.is-palette-income {
+      --data-chart-bar-fill: var(--color-chart-income-muted);
+    }
+
+    &.is-secondary.is-palette-expense,
+    &.is-secondary.is-palette-expense-muted,
+    &.is-secondary.is-palette-expense-debt,
+    &.is-secondary.is-palette-expense-lightest {
+      --data-chart-bar-fill: var(--color-chart-expense-muted);
+    }
+
+    &.is-secondary.is-palette-savings {
+      --data-chart-bar-fill: var(--color-chart-savings-muted);
     }
   }
 
   .data-chart__bar.is-active {
     fill: color-mix(
       in srgb,
-      var(--color-chart-bars) 72%,
-      var(--color-text)
-    );
-  }
-
-  .data-chart__bar.is-secondary.is-active {
-    fill: color-mix(
-      in srgb,
-      var(--color-chart-bars-muted) 72%,
+      var(--data-chart-bar-fill) 72%,
       var(--color-text)
     );
   }
@@ -99,6 +159,45 @@ data-chart {
       stroke: var(--color-chart-comparison);
       stroke-dasharray: 3 6;
     }
+
+    &.is-palette-income {
+      stroke: var(--color-chart-income);
+    }
+
+    &.is-palette-expense {
+      stroke: var(--color-chart-expense);
+    }
+
+    &.is-palette-expense-muted {
+      stroke: var(--color-chart-expense-muted);
+    }
+
+    &.is-palette-expense-debt {
+      stroke: var(--color-chart-expense-debt);
+    }
+
+    &.is-palette-savings {
+      stroke: var(--color-chart-savings);
+    }
+
+    &.is-palette-comparison {
+      stroke: var(--color-chart-comparison);
+    }
+
+    &.is-secondary.is-palette-income {
+      stroke: var(--color-chart-income-muted);
+    }
+
+    &.is-secondary.is-palette-expense,
+    &.is-secondary.is-palette-expense-muted,
+    &.is-secondary.is-palette-expense-debt,
+    &.is-secondary.is-palette-expense-lightest {
+      stroke: var(--color-chart-expense-muted);
+    }
+
+    &.is-secondary.is-palette-savings {
+      stroke: var(--color-chart-savings-muted);
+    }
   }
 
   .data-chart__point {
@@ -106,7 +205,92 @@ data-chart {
     pointer-events: none;
 
     &.is-secondary {
+      fill: var(--color-surface);
+      stroke: var(--color-chart-comparison);
+      stroke-width: 1.5;
+    }
+
+    &.is-palette-income {
+      fill: var(--color-chart-income);
+    }
+
+      &.is-palette-expense {
+        fill: var(--color-chart-expense);
+      }
+
+      &.is-palette-expense-muted {
+        fill: var(--color-chart-expense-muted);
+      }
+
+      &.is-palette-expense-debt {
+        fill: var(--color-chart-expense-debt);
+      }
+
+    &.is-palette-savings {
+      fill: var(--color-chart-savings);
+    }
+
+    &.is-palette-comparison {
       fill: var(--color-chart-comparison);
+    }
+
+    &.is-palette-neutral {
+      fill: var(--color-chart-bars-muted);
+    }
+
+    &.is-secondary.is-palette-income {
+      fill: var(--color-surface);
+      stroke: var(--color-chart-income-muted);
+    }
+
+    &.is-secondary.is-palette-expense,
+    &.is-secondary.is-palette-expense-muted,
+    &.is-secondary.is-palette-expense-debt,
+    &.is-secondary.is-palette-expense-lightest {
+      fill: var(--color-surface);
+      stroke: var(--color-chart-expense-muted);
+    }
+
+    &.is-secondary.is-palette-savings {
+      fill: var(--color-surface);
+      stroke: var(--color-chart-savings-muted);
+    }
+
+    &.is-secondary.is-palette-comparison {
+      fill: var(--color-surface);
+      stroke: var(--color-chart-comparison);
+    }
+
+    &.is-labeled {
+      stroke: var(--color-surface);
+      stroke-width: 2;
+    }
+  }
+
+  .data-chart__value-label {
+    fill: var(--color-text);
+    stroke: var(--color-surface);
+    stroke-width: 3px;
+    paint-order: stroke fill;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: var(--weight-medium);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+
+    &.is-palette-income {
+      fill: var(--color-chart-income);
+    }
+
+    &.is-palette-expense,
+    &.is-palette-expense-muted,
+    &.is-palette-expense-debt,
+    &.is-palette-expense-lightest {
+      fill: var(--color-chart-expense);
+    }
+
+    &.is-palette-savings {
+      fill: var(--color-chart-savings);
     }
   }
 }
@@ -132,17 +316,85 @@ tool-tip .data-chart__tooltip {
     padding-top: 4px;
 
     i {
+      --data-chart-swatch-fill: var(--color-chart-trend);
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: var(--color-chart-trend);
+      background: var(--data-chart-swatch-fill);
 
       &.is-bar {
-        background: var(--color-chart-bars);
+        --data-chart-swatch-fill: var(--color-chart-bars);
       }
 
       &.is-secondary {
-        background: var(--color-chart-comparison);
+        --data-chart-swatch-fill: var(--color-chart-comparison);
+      }
+
+      &.is-bar.is-stack-level-1 {
+        --data-chart-swatch-fill: var(--color-chart-bars-muted);
+      }
+
+      &.is-bar.is-stack-level-2 {
+        --data-chart-swatch-fill: var(--color-chart-bars-subdued);
+      }
+
+      &.is-palette-income {
+        --data-chart-swatch-fill: var(--color-chart-income);
+      }
+
+      &.is-palette-income.is-stack-level-1 {
+        --data-chart-swatch-fill: var(--color-chart-income-muted);
+      }
+
+      &.is-palette-expense {
+        --data-chart-swatch-fill: var(--color-chart-expense);
+      }
+
+      &.is-palette-expense.is-stack-level-1 {
+        --data-chart-swatch-fill: var(--color-chart-expense-muted);
+      }
+
+      &.is-palette-expense-muted {
+        --data-chart-swatch-fill: var(--color-chart-expense-muted);
+      }
+
+      &.is-palette-expense-debt {
+        --data-chart-swatch-fill: var(--color-chart-expense-debt);
+      }
+
+      &.is-palette-expense-lightest {
+        --data-chart-swatch-fill: var(--color-chart-expense-lightest);
+      }
+
+      &.is-palette-savings {
+        --data-chart-swatch-fill: var(--color-chart-savings);
+      }
+
+      &.is-palette-savings.is-stack-level-1 {
+        --data-chart-swatch-fill: var(--color-chart-savings-muted);
+      }
+
+      &.is-palette-comparison {
+        --data-chart-swatch-fill: var(--color-chart-comparison);
+      }
+
+      &.is-palette-neutral {
+        --data-chart-swatch-fill: var(--color-chart-bars-muted);
+      }
+
+      &.is-secondary.is-palette-income {
+        --data-chart-swatch-fill: var(--color-chart-income-muted);
+      }
+
+      &.is-secondary.is-palette-expense,
+      &.is-secondary.is-palette-expense-muted,
+      &.is-secondary.is-palette-expense-debt,
+      &.is-secondary.is-palette-expense-lightest {
+        --data-chart-swatch-fill: var(--color-chart-expense-muted);
+      }
+
+      &.is-secondary.is-palette-savings {
+        --data-chart-swatch-fill: var(--color-chart-savings-muted);
       }
     }
   }

@@ -1,4 +1,6 @@
+import type { Account } from "../api/account-api";
 import type { BudgetEntity, BudgetTransaction, TransactionType } from "../api/budget-api";
+import { activityEffects } from "./activity-effects";
 
 const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "long" });
 
@@ -173,17 +175,20 @@ export function buildPersonLedgerRows(
   transactions: ReadonlyArray<BudgetTransaction>,
   year: number,
   month: string | null,
+  accounts: ReadonlyArray<Account> = [],
 ): PersonLedgerRow[] {
   const aggregate = (rows: ReadonlyArray<BudgetTransaction>) => {
     const values = new Map<string, { income: number; expense: number }>();
     rows.forEach((transaction) => {
-      if (!transaction.assignmentId || (transaction.type !== "income" && transaction.type !== "expense")) return;
-      const value = values.get(transaction.assignmentId) ?? {
+      const effects = activityEffects(transaction, accounts);
+      if (!effects.budgetVisible || !effects.assignmentId) return;
+      const value = values.get(effects.assignmentId) ?? {
         income: 0,
         expense: 0,
       };
-      value[transaction.type] += Number(transaction.amount) || 0;
-      values.set(transaction.assignmentId, value);
+      value.income += effects.income;
+      value.expense += effects.expense;
+      values.set(effects.assignmentId, value);
     });
     return values;
   };

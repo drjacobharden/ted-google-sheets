@@ -13,6 +13,16 @@ export interface ActivityEffects {
   kind: "income" | "expense" | "investment" | "debt-payment" | "borrowing";
 }
 
+/** Returns the ledger vendor label, falling back to a linked account name. */
+export function ledgerVendorLabel(
+  transaction: Pick<BudgetTransaction, "vendorId" | "vendor" | "accountId" | "account">,
+): string {
+  if (!String(transaction.vendorId ?? "").trim() && transaction.accountId) {
+    return String(transaction.account ?? "").trim();
+  }
+  return String(transaction.vendor ?? "").trim();
+}
+
 /** Projects every reporting effect from one canonical stored activity row. */
 export function activityEffects(
   transaction: BudgetTransaction,
@@ -74,4 +84,21 @@ export function reportingTransactions(
     if (effects.expense) rows.push({ ...base, id:`${transaction.id}:expense`, accountId:"", type:"expense", amount:effects.expense });
     return rows;
   });
+}
+
+/** Returns deduction-sourced investment contributions for chart reporting. */
+export function deductedInvestmentSavings(
+  transactions: ReadonlyArray<BudgetTransaction>,
+  accounts: ReadonlyArray<Account>,
+  year?: number,
+): number {
+  return transactions.reduce((total, transaction) => {
+    if (transaction.source !== "deduction") return total;
+    if (year !== undefined && Number(transaction.date.slice(0, 4)) !== year)
+      return total;
+    const effects = activityEffects(transaction, accounts);
+    return effects.account?.type === "investment"
+      ? total + effects.investmentFlow
+      : total;
+  }, 0);
 }
