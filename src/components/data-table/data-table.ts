@@ -338,8 +338,12 @@ export class DataTable<
               ? [col.cellClass]
               : []
         ).join(" ");
+        const footerClasses = classes
+          .split(/\s+/)
+          .filter((className) => className && className !== "tag")
+          .join(" ");
 
-        return `<td class="${classes} ${i === 0 ? "strong" : ""}">${text}</td>`;
+        return `<td class="${footerClasses} ${i === 0 ? "strong" : ""}">${text}</td>`;
       })
       .join("");
 
