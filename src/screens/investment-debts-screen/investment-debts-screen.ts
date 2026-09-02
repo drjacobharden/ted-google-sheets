@@ -3,7 +3,7 @@ import type { AvailableFilter } from "../../components/filter-bar/filter-bar";
 import type { DataTableColumn } from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { signedPercent } from "../../utilities/entity-ledger";
-import { escapeHTML, money } from "../../utilities/view-formatters";
+import { escapeHTML, summaryMoney } from "../../utilities/view-formatters";
 import { EditorialEntityLedgerScreen } from "../editorial-entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
@@ -59,7 +59,7 @@ export class InvestmentDebtsScreen extends EditorialEntityLedgerScreen<DebtLedge
     return [
       { key: "name", title: "Name", sizing: 34, cellClass: ["primary"], formatter: (value) => escapeHTML(value), subline: (row) => escapeHTML(row.assignment) },
       { key: "interestRate", title: "Interest rate", sizing: 18, textAlign: "right", formatter: (value) => `${Number(value).toFixed(2)}%`, cellClass: ["numeric", "align-right"] },
-      { key: "balance", title: "Balance", sizing: 24, textAlign: "right", formatter: (value) => money(value), cellClass: ["strong", "align-right"] },
+      { key: "balance", title: "Balance", sizing: 24, textAlign: "right", formatter: (value) => summaryMoney(value), cellClass: ["strong", "align-right"] },
       { key: "comparison", title: `vs ${year - 1}`, sizing: 24, textAlign: "right", formatter: (value) => signedPercent(value as number | null), cellClass: ["comparison", "align-right", (row) => row.comparison === null ? "is-muted" : row.comparison <= 0 ? "is-positive" : "is-negative"], sorter: (row) => row.comparison ?? Number.NEGATIVE_INFINITY },
     ];
   }

@@ -24,7 +24,7 @@ import {
   signedPercent,
 } from "../../utilities/entity-ledger";
 import { InvestmentView } from "../../utilities/investment-view";
-import { escapeHTML, money } from "../../utilities/view-formatters";
+import { escapeHTML, summaryMoney } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -273,7 +273,7 @@ export class InvestmentDebtDetailScreen
       {
         key: "payments",
         title: "Payments",
-        formatter: (value) => money(value),
+        formatter: (value) => summaryMoney(value),
         sizing: 22,
         cellClass: ["numeric", "align-right"],
         headerClass: "align-right",
@@ -282,7 +282,7 @@ export class InvestmentDebtDetailScreen
       {
         key: "balance",
         title: "Balance",
-        formatter: (value) => money(value),
+        formatter: (value) => summaryMoney(value),
         sizing: 22,
         cellClass: ["strong", "align-right"],
         headerClass: "align-right",
@@ -387,10 +387,10 @@ export class InvestmentDebtDetailScreen
 
     this.querySelector<HTMLElement>(
       "#debt-detail-summary-payments",
-    )!.textContent = money(totalPayments);
+    )!.textContent = summaryMoney(totalPayments);
     this.querySelector<HTMLElement>(
       "#debt-detail-summary-balance",
-    )!.textContent = money(latestBalance);
+    )!.textContent = summaryMoney(latestBalance);
     this.querySelector<HTMLElement>(
       "#debt-detail-summary-change",
     )!.textContent = signedPercent(annualChange);
@@ -404,8 +404,8 @@ export class InvestmentDebtDetailScreen
       footer: {
         cells: [
           periodLabel,
-          money(totalPayments),
-          money(latestBalance),
+          summaryMoney(totalPayments),
+          summaryMoney(latestBalance),
           signedPercent(annualChange),
         ],
         ariaLabel: `${periodLabel} ${signedPercent(annualChange)}`,

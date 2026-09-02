@@ -4,7 +4,7 @@ import type { DataTableColumn } from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { InvestmentView } from "../../utilities/investment-view";
 import { signedPercent } from "../../utilities/entity-ledger";
-import { escapeHTML, money, netFlows } from "../../utilities/view-formatters";
+import { escapeHTML, netFlows, summaryMoney } from "../../utilities/view-formatters";
 import { EditorialEntityLedgerScreen } from "../editorial-entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
@@ -93,7 +93,7 @@ export class InvestmentAccountsScreen extends EditorialEntityLedgerScreen<Invest
         title: "Contributions",
         sizing: 17,
         textAlign: "right",
-        formatter: (value) => money(value),
+        formatter: (value) => summaryMoney(value),
         cellClass: ["numeric", "align-right"],
       },
       {
@@ -101,7 +101,7 @@ export class InvestmentAccountsScreen extends EditorialEntityLedgerScreen<Invest
         title: "Balance",
         sizing: 17,
         textAlign: "right",
-        formatter: (value) => money(value),
+        formatter: (value) => summaryMoney(value),
         cellClass: ["strong", "align-right"],
       },
       {

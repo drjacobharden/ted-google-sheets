@@ -27,10 +27,14 @@ function previousRange(range: YearRange): YearRange {
   return { start: `${year}-01`, end: `${year}-${range.end.slice(5, 7)}` };
 }
 
+function overviewMoney(value: number): string {
+  return money(value, Math.abs(value) < 1);
+}
+
 function comparisonText(value: number, previous: number, year: number): string {
   const delta = value - previous;
   if (Math.abs(delta) < 0.005) return `No change vs ${year - 1}`;
-  return `${delta > 0 ? "+" : "−"} ${money(Math.abs(delta))} vs ${year - 1}`;
+  return `${delta > 0 ? "+" : "−"} ${overviewMoney(Math.abs(delta))} vs ${year - 1}`;
 }
 
 function comparisonClass(value: number, inverse = false): string {
@@ -39,7 +43,7 @@ function comparisonClass(value: number, inverse = false): string {
 }
 
 function annualActivityText(value: number, year: number): string {
-  return `${value < 0 ? "−" : "+"} ${money(Math.abs(value))} in ${year}`;
+  return `${value < 0 ? "−" : "+"} ${overviewMoney(Math.abs(value))} in ${year}`;
 }
 
 function percent(value: number | null | undefined): string {
@@ -196,13 +200,13 @@ export class InvestmentOverviewScreen
       );
     const annualDebtChange = previousDebt - debt;
 
-    this.#setText("#investment-liquid-net-worth", money(values.balance - debt));
-    this.#setText("#investment-total-balance", money(values.balance));
+    this.#setText("#investment-liquid-net-worth", overviewMoney(values.balance - debt));
+    this.#setText("#investment-total-balance", overviewMoney(values.balance));
     this.#setText(
       "#investment-total-contributions",
-      money(lifetimeContributions),
+      overviewMoney(lifetimeContributions),
     );
-    this.#setText("#investment-total-debt", money(debt));
+    this.#setText("#investment-total-debt", overviewMoney(debt));
     this.#setAnnualActivity(
       "#investment-balance-comparison",
       values.balance - previous.balance,
@@ -261,12 +265,12 @@ export class InvestmentOverviewScreen
     this.#tableBody.innerHTML = rows
       .map(
         ({ account, balance, contributions, growth, roi }) => `
-      <tr tabindex="0" data-account-id="${account.id}"><th scope="row">${escapeHTML(account.name)}</th><td>${escapeHTML(InvestmentView.sourceLabel(account.source))}</td><td class="is-number">${money(contributions)}</td><td class="is-number">${money(balance)}</td><td class="is-number ${comparisonClass(growth ?? 0)}">${percent(growth)}</td><td class="is-number ${comparisonClass(roi ?? 0)}">${percent(roi)}</td></tr>`,
+      <tr tabindex="0" data-account-id="${account.id}"><th scope="row">${escapeHTML(account.name)}</th><td>${escapeHTML(InvestmentView.sourceLabel(account.source))}</td><td class="is-number">${overviewMoney(contributions)}</td><td class="is-number">${overviewMoney(balance)}</td><td class="is-number ${comparisonClass(growth ?? 0)}">${percent(growth)}</td><td class="is-number ${comparisonClass(roi ?? 0)}">${percent(roi)}</td></tr>`,
       )
       .join("");
     this.#tableFooter.innerHTML = rows.length
       ? `
-      <tr><th scope="row" colspan="2">All accounts</th><td class="is-number">${money(totalContributions)}</td><td class="is-number">${money(totalBalance)}</td><td class="is-number ${comparisonClass(totalGrowth ?? 0)}">${percent(totalGrowth)}</td><td class="is-number ${comparisonClass(totalRoi ?? 0)}">${percent(totalRoi)}</td></tr>`
+      <tr><th scope="row" colspan="2">All accounts</th><td class="is-number">${overviewMoney(totalContributions)}</td><td class="is-number">${overviewMoney(totalBalance)}</td><td class="is-number ${comparisonClass(totalGrowth ?? 0)}">${percent(totalGrowth)}</td><td class="is-number ${comparisonClass(totalRoi ?? 0)}">${percent(totalRoi)}</td></tr>`
       : "";
   }
 }

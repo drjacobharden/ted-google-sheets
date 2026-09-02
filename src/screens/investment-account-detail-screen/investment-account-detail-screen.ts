@@ -13,7 +13,7 @@ import { router } from "../../router/router";
 import { matchesLedgerFilterGroups } from "../../utilities/entity-ledger";
 import { InvestmentView } from "../../utilities/investment-view";
 import { modifiedDietz, monthEnd } from "../../utilities/investment-returns";
-import { escapeHTML, money, netFlows } from "../../utilities/view-formatters";
+import { escapeHTML, netFlows, summaryMoney } from "../../utilities/view-formatters";
 import type { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
 import type { DataChart, DataChartData } from "../../components/data-chart/data-chart";
 import type {
@@ -293,7 +293,7 @@ export class InvestmentAccountDetailScreen
       {
         key: "contributions",
         title: "Contributions",
-        formatter: (value) => money(value),
+        formatter: (value) => summaryMoney(value),
         sizing: 20,
         cellClass: ["numeric", "align-right"],
         headerClass: "align-right",
@@ -302,7 +302,7 @@ export class InvestmentAccountDetailScreen
       {
         key: "balance",
         title: "Balance",
-        formatter: (value) => money(value),
+        formatter: (value) => summaryMoney(value),
         sizing: 20,
         cellClass: ["strong", "align-right"],
         headerClass: "align-right",
@@ -435,10 +435,10 @@ export class InvestmentAccountDetailScreen
         : null;
     this.querySelector<HTMLElement>(
       "#investment-detail-summary-balance",
-    )!.textContent = money(latestBalance);
+    )!.textContent = summaryMoney(latestBalance);
     this.querySelector<HTMLElement>(
       "#investment-detail-summary-contributions",
-    )!.textContent = money(totalContributions);
+    )!.textContent = summaryMoney(totalContributions);
     this.querySelector<HTMLElement>(
       "#investment-detail-summary-growth",
     )!.textContent = signedPercent(priorYearGrowth);
@@ -453,8 +453,8 @@ export class InvestmentAccountDetailScreen
       footer: {
         cells: [
           hasFullYear ? "Annual return" : "YTD return",
-          money(totalContributions),
-          money(latestBalance),
+          summaryMoney(totalContributions),
+          summaryMoney(latestBalance),
           signedPercent(annualReturn),
           signedPercent(priorYearGrowth),
         ],
