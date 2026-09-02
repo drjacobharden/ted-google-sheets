@@ -195,6 +195,8 @@ export class NewTransactionScreen extends HTMLElement {
       : null;
 
     this.#sourceSelect.hidden = value === "income";
+    this.#sourceSelect.value =
+      value === "income" ? "manual" : this.#sourceSelect.value;
 
     this.#sourceSelect.tooltip =
       value === "expense"
