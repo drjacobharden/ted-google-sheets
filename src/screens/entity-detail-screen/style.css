@@ -51,6 +51,21 @@ entity-detail-screen {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .entity-detail__focus-primary {
+      color: inherit;
+      font-family: inherit;
+      font-size: inherit;
+      font-variant-numeric: inherit;
+      font-weight: inherit;
+      letter-spacing: inherit;
+      line-height: inherit;
+    }
+    .entity-detail__focus-cents {
+      color: var(--color-text-muted);
+      font-size: 60%;
+      letter-spacing: normal;
+      white-space: nowrap;
+    }
     dd.is-positive {
       color: var(--color-positive);
     }

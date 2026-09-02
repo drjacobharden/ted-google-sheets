@@ -18,6 +18,7 @@ import type {
   DataTableColumn,
   DataTableData,
 } from "../../components/data-table/data-table";
+import type { DataChart } from "../../components/data-chart/data-chart";
 import { router } from "../../router/router";
 import type { RouteName } from "../../router/types";
 import { appController } from "../../state/app-controller";
@@ -28,12 +29,19 @@ import {
   signedPercent,
   signedTransactionAmount,
 } from "../../utilities/entity-ledger";
-import { buildCurrencyAxisScale } from "../../utilities/currency-axis-scale";
+import { activityEffects, budgetingActivities, ledgerVendorLabel } from "../../utilities/activity-effects";
+import {
+  buildEntityChartMonths,
+  entityChartData,
+  type EntityChartDisplay,
+} from "../../utilities/entity-detail-chart";
 import { escapeHTML, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
+
+const selectedEntityCharts = new Map<string, EntityChartDisplay>();
 
 interface EntityDetailSettings {
   label: string;
@@ -82,14 +90,6 @@ const RENDER_EVENTS = [
   "budget:entity-sync-changed",
 ] as const;
 
-const monthName = new Intl.DateTimeFormat("en-US", { month: "long" });
-const axisMoney = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-
 function ledgerDate(dateId: string): string {
   const match = dateId.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match ? `${match[2]}.${match[3]}.${match[1].slice(-2)}` : dateId;
@@ -102,6 +102,33 @@ function averageCount(count: number, periods: number, period: "month" | "week"):
     maximumFractionDigits: 1,
   });
   return `${formatted} transactions per ${period}`;
+}
+
+function summaryMoney(value: number): string {
+  return money(value, Math.abs(value) < 1);
+}
+
+function preciseSummaryMoney(element: HTMLElement, value: number): void {
+  const formatted = summaryMoney(value);
+  if (Math.abs(value) >= 1) {
+    element.textContent = formatted;
+    element.removeAttribute("aria-label");
+    return;
+  }
+
+  const cents = formatted.slice(-2);
+  const dollars = formatted.slice(0, -3);
+
+  const primary = document.createElement("span");
+  primary.className = "entity-detail__focus-primary";
+  primary.textContent = dollars;
+
+  const fractional = document.createElement("span");
+  fractional.className = "entity-detail__focus-cents";
+  fractional.textContent = `.${cents}`;
+
+  element.replaceChildren(primary, fractional);
+  element.setAttribute("aria-label", formatted);
 }
 
 function elapsedPeriods(year: number): { months: number; weeks: number } {
@@ -136,7 +163,9 @@ export class EntityDetailScreen
   #comparisonLabel!: HTMLElement;
   #comparison!: HTMLElement;
   #comparisonSubline!: HTMLElement;
-  #chart!: HTMLElement;
+  #chart!: DataChart;
+  #chartMode!: DropdownMenu;
+  #chartDisplay: EntityChartDisplay = "monthly-spend";
   #table!: DataTable<BudgetTransaction>;
   #empty!: HTMLElement;
   #filterBar!: FilterBar<BudgetTransaction>;
@@ -165,6 +194,7 @@ export class EntityDetailScreen
       router.navigate("transactions", this.#scopeParams());
       return;
     }
+    this.#chartDisplay = selectedEntityCharts.get(`${this.#selected.kind}:${this.#selected.id}`) ?? "monthly-spend";
     if (this.#listening) return;
     this.#listening = true;
 
@@ -172,6 +202,7 @@ export class EntityDetailScreen
     this.addEventListener("search-changed", this);
     this.addEventListener("budgeting:header-action", this);
     this.#monthSelector.addListener(this);
+    this.#chartMode.addListener(this);
     this.#table.rowSelection.addListener(this);
     RENDER_EVENTS.forEach((name) => window.addEventListener(name, this));
     this.#unsubscribeBudgetingContext = appState.subscribe(
@@ -188,6 +219,7 @@ export class EntityDetailScreen
     this.removeEventListener("search-changed", this);
     this.removeEventListener("budgeting:header-action", this);
     this.#monthSelector.removeListener(this);
+    this.#chartMode.removeListener(this);
     this.#table.rowSelection.removeListener(this);
     RENDER_EVENTS.forEach((name) => window.removeEventListener(name, this));
     this.#unsubscribeBudgetingContext?.();
@@ -204,6 +236,12 @@ export class EntityDetailScreen
 
     if (event.type === "dropdown-selection") {
       const selection = event as DropdownSelectionEvent;
+      if (selection.currentTarget === this.#chartMode) {
+        this.#chartDisplay = selection.detail.value as EntityChartDisplay;
+        selectedEntityCharts.set(`${this.#selected?.kind}:${this.#selected?.id}`, this.#chartDisplay);
+        this.#renderChart();
+        return;
+      }
       if (selection.currentTarget !== this.#monthSelector) return;
       this.#selectedMonth = selection.detail.value === "all"
         ? null
@@ -266,6 +304,7 @@ export class EntityDetailScreen
     this.#monthSelector = this.querySelector(
       "#entity-transaction-month-selector",
     )!;
+    this.#chartMode = this.querySelector("#entity-chart-mode")!;
     this.#search = this.querySelector("#entity-transaction-search")!;
   }
 
@@ -291,7 +330,12 @@ export class EntityDetailScreen
   #transactionsForYear(year: number): BudgetTransaction[] {
     if (!this.#selected) return [];
     const settings = ENTITY_DETAIL_CONFIG[this.#selected.kind];
-    return this.#allTransactions()
+    return budgetingActivities(
+      this.#allTransactions(),
+      APIs.accounts.accounts(),
+      APIs.budget.listAllCategories(),
+      APIs.budget.listAllPeople(),
+    )
       .filter((transaction) => transaction.date.startsWith(`${year}-`))
       .filter(
         (transaction) => transaction[settings.field] === this.#selected?.id,
@@ -338,14 +382,17 @@ export class EntityDetailScreen
 
     this.#title.textContent = entity.name;
     this.#subtitle.textContent = `Viewing summary for ${year}`;
-    this.#renderFocusMetrics(current, total, year);
-    this.#comparisonLabel.textContent = `vs ${previousYear}`;
-    this.#comparison.textContent = signedPercent(comparison);
-    this.#comparison.classList.toggle("is-positive", comparison !== null && comparison >= 0);
-    this.#comparison.classList.toggle("is-negative", comparison !== null && comparison < 0);
-    this.#renderComparisonSubline(total, previousTotal, year);
+    this.#renderFocusMetrics(current, total, year, previous);
+    if (this.#selected.kind !== "assignment") {
+      this.#comparisonLabel.textContent = `vs ${previousYear}`;
+      this.#comparison.textContent = signedPercent(comparison);
+      this.#comparison.classList.toggle("is-positive", comparison !== null && comparison >= 0);
+      this.#comparison.classList.toggle("is-negative", comparison !== null && comparison < 0);
+      this.#renderComparisonSubline(total, previousTotal, year);
+    }
 
-    this.#renderChart(current, year, entity.name);
+    this.#configureChartMode(entity, year);
+    this.#renderChart();
     this.#renderLedger();
   }
 
@@ -367,7 +414,7 @@ export class EntityDetailScreen
       : monthlyDifference > 0
         ? "more"
         : "less";
-    this.#comparisonSubline.textContent = `${money(Math.abs(monthlyDifference))} ${direction} per month`;
+    this.#comparisonSubline.textContent = `${summaryMoney(Math.abs(monthlyDifference))} ${direction} per month`;
     this.#comparisonSubline.hidden = false;
   }
 
@@ -375,20 +422,45 @@ export class EntityDetailScreen
     transactions: readonly BudgetTransaction[],
     total: number,
     year: number,
+    previousTransactions: readonly BudgetTransaction[] = [],
   ): void {
     const isPeriodBreakdown = this.#selected?.kind !== "assignment";
+    if (!isPeriodBreakdown) {
+      const currentMetrics = this.#assignmentMetrics(transactions);
+      const previousMetrics = this.#assignmentMetrics(previousTransactions);
+      this.#totalLabel.textContent = "Income";
+      preciseSummaryMoney(this.#total, currentMetrics.income);
+      this.#averageLabel.textContent = "Spend";
+      preciseSummaryMoney(this.#average, currentMetrics.spend);
+      this.#countLabel.textContent = "Savings";
+      preciseSummaryMoney(this.#count, currentMetrics.income - currentMetrics.spend);
+      const currentSavings = currentMetrics.income - currentMetrics.spend;
+      const previousSavings = previousMetrics.income - previousMetrics.spend;
+      const currentBalance = currentSavings;
+      const previousBalance = previousSavings;
+      this.#comparisonLabel.textContent = `vs ${year - 1}`;
+      this.#setMetricComparison(this.#comparison, currentBalance, previousBalance);
+      this.#setMetricMonthlyValue(this.#totalSubline, currentMetrics.income, year);
+      this.#setMetricMonthlyValue(this.#averageSubline, currentMetrics.spend, year);
+      this.#setMetricMonthlyValue(this.#countSubline, currentSavings, year);
+      this.#setMetricMonthlyDifference(this.#comparisonSubline, currentBalance, previousBalance, year, "saved");
+      return;
+    }
     this.#totalLabel.textContent = "Total";
-    this.#total.textContent = money(total);
+    this.#total.textContent = summaryMoney(total);
+    this.#total.removeAttribute("aria-label");
 
     if (isPeriodBreakdown) {
       const periods = elapsedPeriods(year);
       const transactionLabel = transactions.length === 1 ? "transaction" : "transactions";
       this.#totalSubline.textContent = `${transactions.length.toLocaleString("en-US")} ${transactionLabel}`;
       this.#averageLabel.textContent = "Monthly average";
-      this.#average.textContent = money(total / periods.months);
+      this.#average.textContent = summaryMoney(total / periods.months);
+      this.#average.removeAttribute("aria-label");
       this.#averageSubline.textContent = averageCount(transactions.length, periods.months, "month");
       this.#countLabel.textContent = "Weekly average";
-      this.#count.textContent = money(total / periods.weeks);
+      this.#count.textContent = summaryMoney(total / periods.weeks);
+      this.#count.removeAttribute("aria-label");
       this.#countSubline.textContent = averageCount(transactions.length, periods.weeks, "week");
       this.#totalSubline.hidden = false;
       this.#averageSubline.hidden = false;
@@ -396,94 +468,132 @@ export class EntityDetailScreen
       return;
     }
 
-    this.#averageLabel.textContent = "Average transaction";
-    this.#average.textContent = money(transactions.length ? total / transactions.length : 0);
-    this.#countLabel.textContent = "Transaction count";
-    this.#count.textContent = transactions.length.toLocaleString("en-US");
-    this.#totalSubline.hidden = true;
-    this.#averageSubline.hidden = true;
-    this.#countSubline.hidden = true;
   }
 
-  #renderChart(
-    transactions: readonly BudgetTransaction[],
-    year: number,
-    entityName: string,
+  #assignmentMetrics(transactions: readonly BudgetTransaction[]): {
+    income: number;
+    spend: number;
+    count: number;
+  } {
+    return transactions.reduce(
+      (totals, transaction) => {
+        const effects = activityEffects(transaction, APIs.accounts.accounts());
+        totals.income += effects.income;
+        totals.spend += effects.expense;
+        totals.count += 1;
+        return totals;
+      },
+      { income: 0, spend: 0, count: 0 },
+    );
+  }
+
+  #setMetricComparison(
+    element: HTMLElement,
+    current: number,
+    previous: number,
   ): void {
-    const values = Array.from({ length: 12 }, (_, monthIndex) =>
-      this.#value(
-        transactions.filter(
-          (transaction) =>
-            Number(transaction.date.slice(5, 7)) === monthIndex + 1,
-        ),
-      ),
+    const comparison = previous === 0
+      ? null
+      : ((current - previous) / Math.abs(previous)) * 100;
+    element.textContent = comparison === null
+      ? ""
+      : signedPercent(comparison);
+    element.hidden = comparison === null;
+  }
+
+  #setMetricMonthlyDifference(
+    element: HTMLElement,
+    current: number,
+    previous: number,
+    year: number,
+    subject = "",
+  ): void {
+    if (previous === 0) {
+      element.textContent = "";
+      element.hidden = true;
+      return;
+    }
+
+    const currentMonths = elapsedPeriods(year).months;
+    const previousMonths = elapsedPeriods(year - 1).months;
+    const monthlyDifference = current / currentMonths - previous / previousMonths;
+    const direction = monthlyDifference === 0
+      ? "difference"
+      : monthlyDifference > 0
+        ? "more"
+        : "less";
+    element.textContent = `${summaryMoney(Math.abs(monthlyDifference))} ${direction}${subject ? ` ${subject}` : ""} per month`;
+    element.hidden = false;
+  }
+
+  #setMetricMonthlyValue(
+    element: HTMLElement,
+    value: number,
+    year: number,
+  ): void {
+    element.textContent = `${summaryMoney(value / elapsedPeriods(year).months)} per month`;
+    element.hidden = false;
+  }
+
+  #configureChartMode(entity: BudgetEntity, year: number): void {
+    if (!this.#selected) return;
+    const chartRows = buildEntityChartMonths(
+      this.#allTransactions(),
+      APIs.accounts.accounts(),
+      this.#selected.kind,
+      this.#selected.id,
+      year,
     );
-    const maximum = Math.max(0, ...values);
-    const minimum = Math.min(0, ...values);
-    const scale = buildCurrencyAxisScale(Math.max(maximum, Math.abs(minimum)));
-    const domainMaximum = maximum > 0 ? scale.maximum : 0;
-    const domainMinimum = minimum < 0 ? -scale.maximum : 0;
-    const range = domainMaximum - domainMinimum || 1;
-    const baseline = (domainMaximum / range) * 100;
-    const ticks = [
-      ...(minimum < 0 ? scale.ticks.slice(1).map((value) => -value).reverse() : []),
-      0,
-      ...(maximum > 0 ? scale.ticks.slice(1) : []),
-    ];
-    const plot = document.createElement("div");
-    plot.className = "entity-monthly-chart__plot";
-    plot.style.setProperty("--chart-zero", `${baseline}%`);
-    plot.setAttribute(
-      "aria-label",
-      `Monthly summary for ${entityName} in ${year}`,
+    let direction: "income" | "spend" = "spend";
+    if (this.#selected.kind === "assignment") direction = "income";
+    else if (this.#selected.kind === "category") direction = entity.type === "income" ? "income" : "spend";
+    else {
+      const income = chartRows.reduce((sum, row) => sum + row.income, 0);
+      const spend = chartRows.reduce((sum, row) => sum + row.spend, 0);
+      direction = income >= spend ? "income" : "spend";
+    }
+    const items = this.#selected.kind === "assignment"
+      ? [
+          { key: "cumulative-savings", title: "Savings", selectionLabel: "Cumulative savings", group: "Cumulative", isDefaultValue: true },
+          { key: "cumulative-income", title: "Income", selectionLabel: "Cumulative income", group: "Cumulative" },
+          { key: "cumulative-spend", title: "Spend", selectionLabel: "Cumulative spend", group: "Cumulative" },
+          { key: "cumulative-income-vs-spend", title: "Income vs Spend", selectionLabel: "Cumulative Income vs Spend", group: "Cumulative" },
+          { key: "cumulative-savings-rate", title: "Savings rate", selectionLabel: "Cumulative savings rate", group: "Cumulative" },
+          { key: "total-savings", title: "Savings", selectionLabel: "Monthly savings", group: "Monthly" },
+          { key: "monthly-income", title: "Income", selectionLabel: "Monthly income", group: "Monthly" },
+          { key: "monthly-spend", title: "Spend", selectionLabel: "Monthly spend", group: "Monthly" },
+          { key: "monthly-savings-rate", title: "Savings rate", selectionLabel: "Monthly savings rate", group: "Monthly" },
+          { key: "income-vs-expense", title: "Income vs Spend", selectionLabel: "Monthly Income vs Spend", group: "Monthly" },
+        ]
+        : direction === "income"
+        ? [
+            { key: "cumulative-income", title: "Income", selectionLabel: "Cumulative income", group: "Cumulative" },
+            { key: "monthly-income", title: "Income", selectionLabel: "Monthly income", group: "Monthly", isDefaultValue: true },
+          ]
+        : [
+            { key: "cumulative-spend", title: "Spend", selectionLabel: "Cumulative spend", group: "Cumulative" },
+            { key: "monthly-spend", title: "Spend", selectionLabel: "Monthly spend", group: "Monthly", isDefaultValue: true },
+          ];
+    const selected = items.some((item) => item.key === this.#chartDisplay)
+      ? this.#chartDisplay
+      : (items[0].key as EntityChartDisplay);
+    this.#chartMode.items = items;
+    this.#chartMode.selection = selected;
+    this.#chartDisplay = selected;
+  }
+
+  #renderChart(): void {
+    if (!this.#selected) return;
+    const year = appState.get("budgetingContext").year;
+    const accounts = APIs.accounts.accounts();
+    const currentRows = buildEntityChartMonths(
+      this.#allTransactions(), accounts, this.#selected.kind, this.#selected.id, year,
     );
-    ticks.forEach((tick) => {
-      const line = document.createElement("span");
-      line.className = `entity-monthly-chart__gridline${tick === 0 ? " is-zero" : ""}`;
-      const position = (domainMaximum - tick) / range;
-      line.style.top = `calc(${position * 100}% + ${20 - 56 * position}px)`;
-      line.setAttribute("aria-hidden", "true");
-      const label = document.createElement("span");
-      label.className = "entity-monthly-chart__axis-label";
-      label.textContent = axisMoney.format(tick);
-      line.append(label);
-      plot.append(line);
-    });
-
-    values.forEach((value, index) => {
-      const label = monthName.format(new Date(year, index, 1));
-      const slot = document.createElement("button");
-      slot.type = "button";
-      slot.className = "entity-monthly-chart__slot";
-      slot.setAttribute("aria-label", `${label} ${year}: ${money(value)}`);
-
-      const bar = document.createElement("i");
-      bar.className = `entity-monthly-chart__bar${value < 0 ? " is-negative" : ""}${value === 0 ? " is-zero" : ""}`;
-      const top = value >= 0 ? ((domainMaximum - value) / range) * 100 : baseline;
-      const height = value === 0 ? 0 : (Math.abs(value) / range) * 100;
-      bar.style.top = value === 0 ? `calc(${baseline}% - 1px)` : `${top}%`;
-      bar.style.height = value === 0 ? "2px" : `${height}%`;
-      bar.setAttribute("aria-hidden", "true");
-
-      const monthLabel = document.createElement("span");
-      monthLabel.className = "entity-monthly-chart__month";
-      monthLabel.textContent = label.slice(0, 3);
-      monthLabel.setAttribute("aria-hidden", "true");
-
-      const tooltip = document.createElement("span");
-      tooltip.className = "entity-monthly-chart__tooltip";
-      const tooltipTitle = document.createElement("strong");
-      tooltipTitle.textContent = `${label} ${year}`;
-      const tooltipValue = document.createElement("span");
-      tooltipValue.textContent = money(value);
-      tooltip.append(tooltipTitle, tooltipValue);
-      tooltip.setAttribute("aria-hidden", "true");
-
-      slot.append(bar, monthLabel, tooltip);
-      plot.append(slot);
-    });
-
-    this.#chart.replaceChildren(plot);
+    const previousRows = buildEntityChartMonths(
+      this.#allTransactions(), accounts, this.#selected.kind, this.#selected.id, year - 1,
+      new Date(year - 1, 11, 31),
+    );
+    this.#chart.data = entityChartData(currentRows, this.#chartDisplay, year, previousRows);
   }
 
   #columns(): DataTableColumn<BudgetTransaction>[] {
@@ -544,7 +654,7 @@ export class EntityDetailScreen
       title: "Vendor",
       sizing: 25,
       cellClass: ["detail"],
-      formatter: (value) => escapeHTML(value),
+      formatter: (_value, row) => escapeHTML(ledgerVendorLabel(row)),
     };
   }
 
@@ -591,7 +701,9 @@ export class EntityDetailScreen
   ): string[] {
     const values = new Map<string, string>();
     for (const transaction of this.#transactionsForYear(year)) {
-      const value = String(transaction[key] ?? "").trim();
+      const value = key === "vendor"
+        ? ledgerVendorLabel(transaction)
+        : String(transaction[key] ?? "").trim();
       if (value) values.set(value.toLocaleLowerCase("en-US"), value);
     }
     return [...values.values()].sort((left, right) => left.localeCompare(right));
