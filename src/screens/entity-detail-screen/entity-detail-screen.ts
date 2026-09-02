@@ -29,7 +29,11 @@ import {
   signedPercent,
   signedTransactionAmount,
 } from "../../utilities/entity-ledger";
-import { activityEffects, budgetingActivities, ledgerVendorLabel } from "../../utilities/activity-effects";
+import {
+  activityEffects,
+  budgetingActivities,
+  ledgerVendorLabel,
+} from "../../utilities/activity-effects";
 import {
   buildEntityChartMonths,
   entityChartData,
@@ -95,7 +99,11 @@ function ledgerDate(dateId: string): string {
   return match ? `${match[2]}.${match[3]}.${match[1].slice(-2)}` : dateId;
 }
 
-function averageCount(count: number, periods: number, period: "month" | "week"): string {
+function averageCount(
+  count: number,
+  periods: number,
+  period: "month" | "week",
+): string {
   const average = count / periods;
   const formatted = average.toLocaleString("en-US", {
     minimumFractionDigits: 1,
@@ -136,7 +144,8 @@ function elapsedPeriods(year: number): { months: number; weeks: number } {
   if (year !== today.getFullYear()) return { months: 12, weeks: 52 };
 
   const start = Date.UTC(year, 0, 1);
-  const throughToday = Date.UTC(year, today.getMonth(), today.getDate()) - start + 86_400_000;
+  const throughToday =
+    Date.UTC(year, today.getMonth(), today.getDate()) - start + 86_400_000;
   return {
     months: today.getMonth() + 1,
     weeks: Math.min(52, Math.max(1, Math.ceil(throughToday / 604_800_000))),
@@ -194,7 +203,9 @@ export class EntityDetailScreen
       router.navigate("transactions", this.#scopeParams());
       return;
     }
-    this.#chartDisplay = selectedEntityCharts.get(`${this.#selected.kind}:${this.#selected.id}`) ?? "monthly-spend";
+    this.#chartDisplay =
+      selectedEntityCharts.get(`${this.#selected.kind}:${this.#selected.id}`) ??
+      "monthly-spend";
     if (this.#listening) return;
     this.#listening = true;
 
@@ -228,7 +239,10 @@ export class EntityDetailScreen
 
   handleEvent(event: Event): void {
     if (event.type === "budgeting:header-action") {
-      if ((event as CustomEvent<{ action: string }>).detail.action === "edit-entity") {
+      if (
+        (event as CustomEvent<{ action: string }>).detail.action ===
+        "edit-entity"
+      ) {
         this.#handleEdit();
       }
       return;
@@ -238,14 +252,16 @@ export class EntityDetailScreen
       const selection = event as DropdownSelectionEvent;
       if (selection.currentTarget === this.#chartMode) {
         this.#chartDisplay = selection.detail.value as EntityChartDisplay;
-        selectedEntityCharts.set(`${this.#selected?.kind}:${this.#selected?.id}`, this.#chartDisplay);
+        selectedEntityCharts.set(
+          `${this.#selected?.kind}:${this.#selected?.id}`,
+          this.#chartDisplay,
+        );
         this.#renderChart();
         return;
       }
       if (selection.currentTarget !== this.#monthSelector) return;
-      this.#selectedMonth = selection.detail.value === "all"
-        ? null
-        : selection.detail.value;
+      this.#selectedMonth =
+        selection.detail.value === "all" ? null : selection.detail.value;
       this.#renderLedger();
       return;
     }
@@ -286,7 +302,9 @@ export class EntityDetailScreen
     this.#totalSubline = this.querySelector("#entity-detail-total-subline")!;
     this.#average = this.querySelector("#entity-detail-average")!;
     this.#averageLabel = this.querySelector("#entity-detail-average-label")!;
-    this.#averageSubline = this.querySelector("#entity-detail-average-subline")!;
+    this.#averageSubline = this.querySelector(
+      "#entity-detail-average-subline",
+    )!;
     this.#count = this.querySelector("#entity-detail-count")!;
     this.#countLabel = this.querySelector("#entity-detail-count-label")!;
     this.#countSubline = this.querySelector("#entity-detail-count-subline")!;
@@ -376,9 +394,10 @@ export class EntityDetailScreen
     const previous = this.#transactionsForYear(previousYear);
     const total = this.#value(current);
     const previousTotal = this.#value(previous);
-    const comparison = previousTotal === 0
-      ? null
-      : ((total - previousTotal) / Math.abs(previousTotal)) * 100;
+    const comparison =
+      previousTotal === 0
+        ? null
+        : ((total - previousTotal) / Math.abs(previousTotal)) * 100;
 
     this.#title.textContent = entity.name;
     this.#subtitle.textContent = `Viewing summary for ${year}`;
@@ -386,8 +405,14 @@ export class EntityDetailScreen
     if (this.#selected.kind !== "assignment") {
       this.#comparisonLabel.textContent = `vs ${previousYear}`;
       this.#comparison.textContent = signedPercent(comparison);
-      this.#comparison.classList.toggle("is-positive", comparison !== null && comparison >= 0);
-      this.#comparison.classList.toggle("is-negative", comparison !== null && comparison < 0);
+      this.#comparison.classList.toggle(
+        "is-positive",
+        comparison !== null && comparison >= 0,
+      );
+      this.#comparison.classList.toggle(
+        "is-negative",
+        comparison !== null && comparison < 0,
+      );
       this.#renderComparisonSubline(total, previousTotal, year);
     }
 
@@ -408,12 +433,14 @@ export class EntityDetailScreen
 
     const currentMonths = elapsedPeriods(year).months;
     const previousMonths = elapsedPeriods(year - 1).months;
-    const monthlyDifference = total / currentMonths - previousTotal / previousMonths;
-    const direction = monthlyDifference === 0
-      ? "difference"
-      : monthlyDifference > 0
-        ? "more"
-        : "less";
+    const monthlyDifference =
+      total / currentMonths - previousTotal / previousMonths;
+    const direction =
+      monthlyDifference === 0
+        ? "difference"
+        : monthlyDifference > 0
+          ? "more"
+          : "less";
     this.#comparisonSubline.textContent = `${summaryMoney(Math.abs(monthlyDifference))} ${direction} per month`;
     this.#comparisonSubline.hidden = false;
   }
@@ -433,17 +460,38 @@ export class EntityDetailScreen
       this.#averageLabel.textContent = "Spend";
       preciseSummaryMoney(this.#average, currentMetrics.spend);
       this.#countLabel.textContent = "Savings";
-      preciseSummaryMoney(this.#count, currentMetrics.income - currentMetrics.spend);
+      preciseSummaryMoney(
+        this.#count,
+        currentMetrics.income - currentMetrics.spend,
+      );
       const currentSavings = currentMetrics.income - currentMetrics.spend;
       const previousSavings = previousMetrics.income - previousMetrics.spend;
       const currentBalance = currentSavings;
       const previousBalance = previousSavings;
       this.#comparisonLabel.textContent = `vs ${year - 1}`;
-      this.#setMetricComparison(this.#comparison, currentBalance, previousBalance);
-      this.#setMetricMonthlyValue(this.#totalSubline, currentMetrics.income, year);
-      this.#setMetricMonthlyValue(this.#averageSubline, currentMetrics.spend, year);
+      this.#setMetricComparison(
+        this.#comparison,
+        currentBalance,
+        previousBalance,
+      );
+      this.#setMetricMonthlyValue(
+        this.#totalSubline,
+        currentMetrics.income,
+        year,
+      );
+      this.#setMetricMonthlyValue(
+        this.#averageSubline,
+        currentMetrics.spend,
+        year,
+      );
       this.#setMetricMonthlyValue(this.#countSubline, currentSavings, year);
-      this.#setMetricMonthlyDifference(this.#comparisonSubline, currentBalance, previousBalance, year, "saved");
+      this.#setMetricMonthlyDifference(
+        this.#comparisonSubline,
+        currentBalance,
+        previousBalance,
+        year,
+        "saved",
+      );
       return;
     }
     this.#totalLabel.textContent = "Total";
@@ -452,22 +500,30 @@ export class EntityDetailScreen
 
     if (isPeriodBreakdown) {
       const periods = elapsedPeriods(year);
-      const transactionLabel = transactions.length === 1 ? "transaction" : "transactions";
+      const transactionLabel =
+        transactions.length === 1 ? "transaction" : "transactions";
       this.#totalSubline.textContent = `${transactions.length.toLocaleString("en-US")} ${transactionLabel}`;
       this.#averageLabel.textContent = "Monthly average";
       this.#average.textContent = summaryMoney(total / periods.months);
       this.#average.removeAttribute("aria-label");
-      this.#averageSubline.textContent = averageCount(transactions.length, periods.months, "month");
+      this.#averageSubline.textContent = averageCount(
+        transactions.length,
+        periods.months,
+        "month",
+      );
       this.#countLabel.textContent = "Weekly average";
       this.#count.textContent = summaryMoney(total / periods.weeks);
       this.#count.removeAttribute("aria-label");
-      this.#countSubline.textContent = averageCount(transactions.length, periods.weeks, "week");
+      this.#countSubline.textContent = averageCount(
+        transactions.length,
+        periods.weeks,
+        "week",
+      );
       this.#totalSubline.hidden = false;
       this.#averageSubline.hidden = false;
       this.#countSubline.hidden = false;
       return;
     }
-
   }
 
   #assignmentMetrics(transactions: readonly BudgetTransaction[]): {
@@ -492,12 +548,9 @@ export class EntityDetailScreen
     current: number,
     previous: number,
   ): void {
-    const comparison = previous === 0
-      ? null
-      : ((current - previous) / Math.abs(previous)) * 100;
-    element.textContent = comparison === null
-      ? ""
-      : signedPercent(comparison);
+    const comparison =
+      previous === 0 ? null : ((current - previous) / Math.abs(previous)) * 100;
+    element.textContent = comparison === null ? "" : signedPercent(comparison);
     element.hidden = comparison === null;
   }
 
@@ -516,12 +569,14 @@ export class EntityDetailScreen
 
     const currentMonths = elapsedPeriods(year).months;
     const previousMonths = elapsedPeriods(year - 1).months;
-    const monthlyDifference = current / currentMonths - previous / previousMonths;
-    const direction = monthlyDifference === 0
-      ? "difference"
-      : monthlyDifference > 0
-        ? "more"
-        : "less";
+    const monthlyDifference =
+      current / currentMonths - previous / previousMonths;
+    const direction =
+      monthlyDifference === 0
+        ? "difference"
+        : monthlyDifference > 0
+          ? "more"
+          : "less";
     element.textContent = `${summaryMoney(Math.abs(monthlyDifference))} ${direction}${subject ? ` ${subject}` : ""} per month`;
     element.hidden = false;
   }
@@ -546,34 +601,109 @@ export class EntityDetailScreen
     );
     let direction: "income" | "spend" = "spend";
     if (this.#selected.kind === "assignment") direction = "income";
-    else if (this.#selected.kind === "category") direction = entity.type === "income" ? "income" : "spend";
+    else if (this.#selected.kind === "category")
+      direction = entity.type === "income" ? "income" : "spend";
     else {
       const income = chartRows.reduce((sum, row) => sum + row.income, 0);
       const spend = chartRows.reduce((sum, row) => sum + row.spend, 0);
       direction = income >= spend ? "income" : "spend";
     }
-    const items = this.#selected.kind === "assignment"
-      ? [
-          { key: "cumulative-savings", title: "Savings", selectionLabel: "Cumulative savings", group: "Cumulative", isDefaultValue: true },
-          { key: "cumulative-income", title: "Income", selectionLabel: "Cumulative income", group: "Cumulative" },
-          { key: "cumulative-spend", title: "Spend", selectionLabel: "Cumulative spend", group: "Cumulative" },
-          { key: "cumulative-income-vs-spend", title: "Income vs Spend", selectionLabel: "Cumulative Income vs Spend", group: "Cumulative" },
-          { key: "cumulative-savings-rate", title: "Savings rate", selectionLabel: "Cumulative savings rate", group: "Cumulative" },
-          { key: "total-savings", title: "Savings", selectionLabel: "Monthly savings", group: "Monthly" },
-          { key: "monthly-income", title: "Income", selectionLabel: "Monthly income", group: "Monthly" },
-          { key: "monthly-spend", title: "Spend", selectionLabel: "Monthly spend", group: "Monthly" },
-          { key: "monthly-savings-rate", title: "Savings rate", selectionLabel: "Monthly savings rate", group: "Monthly" },
-          { key: "income-vs-expense", title: "Income vs Spend", selectionLabel: "Monthly Income vs Spend", group: "Monthly" },
-        ]
-        : direction === "income"
+    const items =
+      this.#selected.kind === "assignment"
         ? [
-            { key: "cumulative-income", title: "Income", selectionLabel: "Cumulative income", group: "Cumulative" },
-            { key: "monthly-income", title: "Income", selectionLabel: "Monthly income", group: "Monthly", isDefaultValue: true },
+            {
+              key: "cumulative-savings",
+              title: "Savings",
+              selectionLabel: "Cumulative savings",
+              group: "Cumulative",
+              isDefaultValue: true,
+            },
+            {
+              key: "cumulative-income",
+              title: "Income",
+              selectionLabel: "Cumulative income",
+              group: "Cumulative",
+            },
+            {
+              key: "cumulative-spend",
+              title: "Spend",
+              selectionLabel: "Cumulative spend",
+              group: "Cumulative",
+            },
+            {
+              key: "cumulative-income-vs-spend",
+              title: "Income vs Spend",
+              selectionLabel: "Cumulative Income vs Spend",
+              group: "Cumulative",
+            },
+            {
+              key: "cumulative-savings-rate",
+              title: "Savings rate",
+              selectionLabel: "Cumulative savings rate",
+              group: "Cumulative",
+            },
+            {
+              key: "total-savings",
+              title: "Savings",
+              selectionLabel: "Monthly savings",
+              group: "Monthly",
+            },
+            {
+              key: "monthly-income",
+              title: "Income",
+              selectionLabel: "Monthly income",
+              group: "Monthly",
+            },
+            {
+              key: "monthly-spend",
+              title: "Spend",
+              selectionLabel: "Monthly spend",
+              group: "Monthly",
+            },
+            {
+              key: "monthly-savings-rate",
+              title: "Savings rate",
+              selectionLabel: "Monthly savings rate",
+              group: "Monthly",
+            },
+            {
+              key: "income-vs-expense",
+              title: "Income vs Spend",
+              selectionLabel: "Monthly Income vs Spend",
+              group: "Monthly",
+            },
           ]
-        : [
-            { key: "cumulative-spend", title: "Spend", selectionLabel: "Cumulative spend", group: "Cumulative" },
-            { key: "monthly-spend", title: "Spend", selectionLabel: "Monthly spend", group: "Monthly", isDefaultValue: true },
-          ];
+        : direction === "income"
+          ? [
+              {
+                key: "cumulative-income",
+                title: "Income",
+                selectionLabel: "Cumulative income",
+                group: "Cumulative",
+              },
+              {
+                key: "monthly-income",
+                title: "Income",
+                selectionLabel: "Monthly income",
+                group: "Monthly",
+                isDefaultValue: true,
+              },
+            ]
+          : [
+              {
+                key: "cumulative-spend",
+                title: "Spend",
+                selectionLabel: "Cumulative spend",
+                group: "Cumulative",
+              },
+              {
+                key: "monthly-spend",
+                title: "Spend",
+                selectionLabel: "Monthly spend",
+                group: "Monthly",
+                isDefaultValue: true,
+              },
+            ];
     const selected = items.some((item) => item.key === this.#chartDisplay)
       ? this.#chartDisplay
       : (items[0].key as EntityChartDisplay);
@@ -587,13 +717,26 @@ export class EntityDetailScreen
     const year = appState.get("budgetingContext").year;
     const accounts = APIs.accounts.accounts();
     const currentRows = buildEntityChartMonths(
-      this.#allTransactions(), accounts, this.#selected.kind, this.#selected.id, year,
+      this.#allTransactions(),
+      accounts,
+      this.#selected.kind,
+      this.#selected.id,
+      year,
     );
     const previousRows = buildEntityChartMonths(
-      this.#allTransactions(), accounts, this.#selected.kind, this.#selected.id, year - 1,
+      this.#allTransactions(),
+      accounts,
+      this.#selected.kind,
+      this.#selected.id,
+      year - 1,
       new Date(year - 1, 11, 31),
     );
-    this.#chart.data = entityChartData(currentRows, this.#chartDisplay, year, previousRows);
+    this.#chart.data = entityChartData(
+      currentRows,
+      this.#chartDisplay,
+      year,
+      previousRows,
+    );
   }
 
   #columns(): DataTableColumn<BudgetTransaction>[] {
@@ -615,13 +758,16 @@ export class EntityDetailScreen
       {
         key: "notes",
         title: "Description",
-        formatter: (value, row) => escapeHTML(
-          String(value ?? "").trim() || row.category || "Uncategorized",
-        ),
+        formatter: (value, row) =>
+          escapeHTML(
+            String(value ?? "").trim() || row.category || "Uncategorized",
+          ),
         subline: (row) =>
-          escapeHTML(this.#selected?.kind === "vendor"
-            ? row.assignment || "Shared"
-            : row.vendor || "No vendor"),
+          escapeHTML(
+            this.#selected?.kind === "vendor"
+              ? row.assignment || "Shared"
+              : row.vendor || "No vendor",
+          ),
         sizing: 35,
         cellClass: ["primary"],
       },
@@ -689,7 +835,8 @@ export class EntityDetailScreen
     return this.#columns().some((column) => {
       const rawValue = row[column.key];
       const value = column.sorter?.(row) ?? rawValue;
-      if (typeof value === "number") return String(value).startsWith(this.#query);
+      if (typeof value === "number")
+        return String(value).startsWith(this.#query);
       const text = column.formatter?.(rawValue, row) ?? String(value ?? "");
       return text.toLowerCase().includes(this.#query);
     });
@@ -701,17 +848,22 @@ export class EntityDetailScreen
   ): string[] {
     const values = new Map<string, string>();
     for (const transaction of this.#transactionsForYear(year)) {
-      const value = key === "vendor"
-        ? ledgerVendorLabel(transaction)
-        : String(transaction[key] ?? "").trim();
+      const value =
+        key === "vendor"
+          ? ledgerVendorLabel(transaction)
+          : String(transaction[key] ?? "").trim();
       if (value) values.set(value.toLocaleLowerCase("en-US"), value);
     }
-    return [...values.values()].sort((left, right) => left.localeCompare(right));
+    return [...values.values()].sort((left, right) =>
+      left.localeCompare(right),
+    );
   }
 
   #configureFilters(year: number): void {
     if (!this.#selected) return;
-    const filters = [] as NonNullable<FilterBar<BudgetTransaction>["availableFilters"]>;
+    const filters = [] as NonNullable<
+      FilterBar<BudgetTransaction>["availableFilters"]
+    >;
     if (this.#selected.kind !== "category") {
       filters.push({
         key: "category",
@@ -765,7 +917,7 @@ export class EntityDetailScreen
       interactiveRows: true,
       rowKey: (row) => row.id,
       footer: {
-        cells: [null, "Visible total", null, null, money(visibleTotal)],
+        cells: [null, "Total", null, null, money(visibleTotal)],
         ariaLabel: `Visible transaction total ${money(visibleTotal)}`,
       },
     };
