@@ -39,7 +39,7 @@ budget-overview-screen {
 
   .overview-hero__metrics {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin: 0;
 
     > div {
@@ -429,16 +429,11 @@ budget-overview-screen {
 
     .donut-legend__item {
       min-width: 0;
-      padding-inline: clamp(24px, 3vw, 44px);
+      padding-inline: var(--space-lg);
       border-left: var(--rule-thin) solid var(--color-rule);
 
       &:first-child {
-        padding-left: 0;
         border-left: 0;
-      }
-
-      &:last-child {
-        padding-right: 0;
       }
 
       p span {
@@ -451,12 +446,15 @@ budget-overview-screen {
       grid-template-columns: 8px minmax(0, 1fr);
       gap: 10px;
       align-items: center;
-      color: var(--color-text-muted);
-      font-family: var(--font-body);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-medium);
-      letter-spacing: var(--tracking-wider);
-      text-transform: uppercase;
+
+      span {
+        color: var(--color-text-muted);
+        font-family: var(--font-body);
+        font-size: var(--text-xs);
+        font-weight: var(--weight-medium);
+        letter-spacing: var(--tracking-wider);
+        text-transform: uppercase;
+      }
     }
 
     header > i {
@@ -793,7 +791,6 @@ tool-tip {
         font-size: var(--text-xl);
       }
 
-
       small {
         grid-column: 2;
         margin-top: calc(-1 * var(--space-sm));
@@ -916,7 +913,6 @@ tool-tip {
           padding-right: 0;
           text-align: right;
         }
-
       }
     }
 

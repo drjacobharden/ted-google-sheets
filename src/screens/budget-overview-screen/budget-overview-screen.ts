@@ -11,9 +11,16 @@ import type {
   DataTableCellClasses,
   DataTableData,
 } from "../../components/data-table/data-table";
-import { type SpendTrendPeriod } from "../../utilities/spend-trend";
+import type { SpendTrendPeriod } from "../../utilities/spend-trend";
 import { appState } from "../../state/app-state";
 import { appController } from "../../state/app-controller";
+import { APIs } from "../../api/api";
+import type { DataChart } from "../../components/data-chart/data-chart";
+import {
+  budgetOverviewChartData,
+  buildBudgetOverviewChartMonths,
+  type BudgetOverviewChartDisplay,
+} from "../../utilities/budget-overview-chart";
 import { escapeHTML, money } from "../../utilities/view-formatters";
 import type { MonthlyTransactionSummaryRow } from "../../utilities/monthly-transaction-summary";
 import type {
@@ -35,6 +42,7 @@ import {
   activeMonthAverage,
   savingsRateBreakdown,
 } from "../../utilities/savings-rate-breakdown";
+import { deductedInvestmentSavings } from "../../utilities/activity-effects";
 import templateString from "./template.html" with { type: "text" };
 
 import { DateUtils } from "../../utilities/date-utilities";
@@ -42,11 +50,12 @@ import { DateUtils } from "../../utilities/date-utilities";
 const template = document.createElement("template");
 template.innerHTML = templateString;
 
+let selectedBudgetOverviewChart: BudgetOverviewChartDisplay = "cumulative-savings";
+
 interface MonthlySummaryTableRow {
   month: string;
   income: string;
   spend: string;
-  deductions: string;
   amount: string;
   comparison: string;
   amountValue: number;
@@ -183,7 +192,7 @@ const ANNUAL_CARD_HELP: Record<AnnualSummaryMetricKey, string> = {
   income: "The total amount you earned during the year",
   paycheckDeductions: "Savings deducted directly from your paycheck",
   totalSavings:
-    "The total amount saved. Calculated as your paycheck deductions plus the difference between income and spend",
+    "The total amount saved. Calculated as total income minus total spend",
 };
 
 function signedMoney(value: number): string {
@@ -712,17 +721,18 @@ export class BudgetOverviewScreen
 {
   #selectedYear = new Date().getFullYear();
 
+  // Retained only for the legacy helper methods below; the active chart is monthly-only.
   #periodControl!: SegmentedControl;
-  #chart!: HTMLElement;
+  #period: SpendTrendPeriod = "monthly";
+  #chart!: DataChart;
+  #chartMode!: DropdownMenu;
   #metrics!: HTMLElement;
   #totalBalance!: HTMLElement;
   #totalBalanceCaption!: HTMLElement;
   #totalSpend!: HTMLElement;
   #totalIncome!: HTMLElement;
-  #totalDeductions!: HTMLElement;
   #totalSpendComparison!: HTMLElement;
   #totalIncomeComparison!: HTMLElement;
-  #totalDeductionsComparison!: HTMLElement;
   #range!: HTMLElement;
   #rangeTrack!: HTMLElement;
   #rangeSelection!: HTMLElement;
@@ -768,7 +778,7 @@ export class BudgetOverviewScreen
   #annualSummaryCards!: HTMLElement;
 
   #overlayManager!: OverlayManager;
-  #period: SpendTrendPeriod = "weekly";
+  #chartDisplay: BudgetOverviewChartDisplay = selectedBudgetOverviewChart;
 
   #rangeStart = 0;
   #rangeEnd = -1;
@@ -794,13 +804,8 @@ export class BudgetOverviewScreen
     }
     if (this.#listening) return;
     this.#listening = true;
-    this.#periodControl.addListener(this);
     this.#monthlySummaryAssignmentSelector.addListener(this);
-    this.#range.addEventListener("pointerdown", this);
-    this.#range.addEventListener("pointermove", this);
-    this.#range.addEventListener("pointerup", this);
-    this.#range.addEventListener("pointercancel", this);
-    this.#range.addEventListener("keydown", this);
+    this.#chartMode.addEventListener("dropdown-selection", this);
 
     this.#annualSummaryCards.addEventListener("pointerover", this);
     this.#annualSummaryCards.addEventListener("pointerout", this);
@@ -822,8 +827,6 @@ export class BudgetOverviewScreen
       (context) => {
         if (this.#selectedYear === context.year) return;
         this.#selectedYear = context.year;
-        this.#rangeStart = 0;
-        this.#rangeEnd = -1;
         this.#renderOverview();
       },
     );
@@ -833,13 +836,8 @@ export class BudgetOverviewScreen
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    this.#periodControl.removeListener(this);
     this.#monthlySummaryAssignmentSelector.removeListener(this);
-    this.#range.removeEventListener("pointerdown", this);
-    this.#range.removeEventListener("pointermove", this);
-    this.#range.removeEventListener("pointerup", this);
-    this.#range.removeEventListener("pointercancel", this);
-    this.#range.removeEventListener("keydown", this);
+    this.#chartMode.removeEventListener("dropdown-selection", this);
 
     this.#annualSummaryCards.removeEventListener("pointerover", this);
     this.#annualSummaryCards.removeEventListener("pointerout", this);
@@ -871,9 +869,30 @@ export class BudgetOverviewScreen
       this.#renderMonthlySummary();
       return;
     }
-    if (event.currentTarget === this.#range) {
-      if (event instanceof PointerEvent) this.#handleRangePointer(event);
-      else if (event instanceof KeyboardEvent) this.#handleRangeKeydown(event);
+    if (
+      event.type === "dropdown-selection" &&
+      event.target === this.#chartMode
+    ) {
+      const value = (event as DropdownSelectionEvent).detail
+        .value as BudgetOverviewChartDisplay;
+      if (
+        [
+          "total-savings",
+          "income-vs-expense",
+          "monthly-income",
+          "monthly-spend",
+          "monthly-savings-rate",
+          "cumulative-income",
+          "cumulative-spend",
+          "cumulative-income-vs-spend",
+          "cumulative-savings-rate",
+          "cumulative-savings",
+        ].includes(value)
+      ) {
+        this.#chartDisplay = value;
+        selectedBudgetOverviewChart = value;
+        this.#renderTrend();
+      }
       return;
     }
     if (
@@ -959,28 +978,31 @@ export class BudgetOverviewScreen
       if (leaving && !nextAnchor) this.#overlayManager.hideTooltip();
       return;
     }
-    if (
-      event.type === "segmented-control-selection" &&
-      event.target === this.#periodControl
-    ) {
-      const value = (event as SegmentedControlSelectionEvent).detail.value;
-      if (value === "weekly" || value === "monthly") this.#period = value;
-      this.#rangeStart = 0;
-      this.#rangeEnd = -1;
-      this.#renderTrend();
-      return;
-    }
   }
 
   #captureElements(): void {
-    this.#periodControl = this.querySelector<SegmentedControl>(
-      "#spend-trend-period",
+    this.#chart = this.querySelector<DataChart>("#weekly-spend-chart")!;
+    this.#chartMode = this.querySelector<DropdownMenu>(
+      "#spend-trend-chart-mode",
     )!;
-    this.#periodControl.items = [
-      { key: "weekly", title: "Weekly", isDefaultValue: true },
-      { key: "monthly", title: "Monthly" },
+    this.#chartMode.items = [
+      {
+        key: "cumulative-savings",
+        title: "Savings",
+        selectionLabel: "Cumulative savings",
+        group: "Cumulative",
+        isDefaultValue: true,
+      },
+      { key: "cumulative-income", title: "Income", selectionLabel: "Cumulative income", group: "Cumulative" },
+      { key: "cumulative-spend", title: "Spend", selectionLabel: "Cumulative spend", group: "Cumulative" },
+      { key: "cumulative-income-vs-spend", title: "Income vs Spend", selectionLabel: "Cumulative Income vs Spend", group: "Cumulative" },
+      { key: "cumulative-savings-rate", title: "Savings rate", selectionLabel: "Cumulative savings rate", group: "Cumulative" },
+      { key: "total-savings", title: "Savings", selectionLabel: "Monthly savings", group: "Monthly" },
+      { key: "monthly-income", title: "Income", selectionLabel: "Monthly income", group: "Monthly" },
+      { key: "monthly-spend", title: "Spend", selectionLabel: "Monthly spend", group: "Monthly" },
+      { key: "monthly-savings-rate", title: "Savings rate", selectionLabel: "Monthly savings rate", group: "Monthly" },
+      { key: "income-vs-expense", title: "Income vs Spend", selectionLabel: "Monthly Income vs Spend", group: "Monthly" },
     ];
-    this.#chart = this.querySelector<HTMLElement>("#weekly-spend-chart")!;
     this.#metrics = this.querySelector<HTMLElement>("#spend-trend-metrics")!;
     this.#totalBalance = this.querySelector<HTMLElement>(
       "#overview-total-balance",
@@ -994,39 +1016,11 @@ export class BudgetOverviewScreen
     this.#totalIncome = this.querySelector<HTMLElement>(
       "#overview-total-income",
     )!;
-    this.#totalDeductions = this.querySelector<HTMLElement>(
-      "#overview-total-deductions",
-    )!;
     this.#totalSpendComparison = this.querySelector<HTMLElement>(
       "#overview-total-spend-comparison",
     )!;
     this.#totalIncomeComparison = this.querySelector<HTMLElement>(
       "#overview-total-income-comparison",
-    )!;
-    this.#totalDeductionsComparison = this.querySelector<HTMLElement>(
-      "#overview-total-deductions-comparison",
-    )!;
-    this.#range = this.querySelector<HTMLElement>("#spend-trend-range")!;
-    this.#rangeTrack = this.querySelector<HTMLElement>(
-      "#spend-trend-range-track",
-    )!;
-    this.#rangeSelection = this.querySelector<HTMLElement>(
-      "#spend-trend-range-selection",
-    )!;
-    this.#rangeStartHandle = this.querySelector<HTMLButtonElement>(
-      '[data-range-action="start"]',
-    )!;
-    this.#rangeMoveHandle = this.querySelector<HTMLButtonElement>(
-      '[data-range-action="move"]',
-    )!;
-    this.#rangeEndHandle = this.querySelector<HTMLButtonElement>(
-      '[data-range-action="end"]',
-    )!;
-    this.#rangeStartTooltip = this.querySelector<HTMLOutputElement>(
-      "#spend-trend-range-start-tooltip",
-    )!;
-    this.#rangeEndTooltip = this.querySelector<HTMLOutputElement>(
-      "#spend-trend-range-end-tooltip",
     )!;
     this.#empty = this.querySelector<HTMLElement>("#weekly-spend-empty")!;
     this.#emptyTitle = this.querySelector<HTMLElement>(
@@ -1035,14 +1029,6 @@ export class BudgetOverviewScreen
     this.#emptyCopy = this.querySelector<HTMLElement>(
       "#weekly-spend-empty-copy",
     )!;
-    this.#legend = this.querySelector<HTMLElement>("#weekly-spend-legend")!;
-    this.#legendTotal = this.querySelector<HTMLElement>(
-      "#spend-trend-legend-total",
-    )!;
-    this.#previousLegend = this.querySelector<HTMLElement>(
-      "#spend-trend-previous-legend",
-    )!;
-
     this.#monthlySummaryTable = this.querySelector<
       DataTable<MonthlySummaryTableRow>
     >("#monthly-summary-table")!;
@@ -1201,424 +1187,6 @@ export class BudgetOverviewScreen
       .forEach((button) => button.append(getIcon("info")!));
   }
 
-  #renderPeriodControl(): void {
-    this.#periodControl.selection = this.#period;
-  }
-
-  #rangeSeries(): AnnualSpendTrendSeries | undefined {
-    return appState.get("budgetOverview").annualSpendTrendsByYear[
-      this.#selectedYear
-    ]?.[this.#period];
-  }
-
-  #rangeUnitFromPointer(event: PointerEvent): number {
-    const bounds = this.#rangeTrack.getBoundingClientRect();
-    const progress = bounds.width
-      ? (event.clientX - bounds.left) / bounds.width
-      : 0;
-    return Math.max(
-      0,
-      Math.min(this.#rangePointCount, progress * this.#rangePointCount),
-    );
-  }
-
-  #updateRangeFromPointer(event: PointerEvent): void {
-    const drag = this.#rangeDrag;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const pointerUnit = this.#rangeUnitFromPointer(event);
-    if (drag.action === "start") {
-      this.#rangeVisualStart = Math.max(
-        0,
-        Math.min(
-          drag.endBoundary - 1,
-          drag.startBoundary + pointerUnit - drag.pointerUnit,
-        ),
-      );
-      this.#rangeVisualEnd = drag.endBoundary;
-    } else if (drag.action === "end") {
-      this.#rangeVisualStart = drag.startBoundary;
-      this.#rangeVisualEnd = Math.min(
-        this.#rangePointCount,
-        Math.max(
-          drag.startBoundary + 1,
-          drag.endBoundary + pointerUnit - drag.pointerUnit,
-        ),
-      );
-    } else {
-      const length = drag.endBoundary - drag.startBoundary;
-      const requestedDelta = pointerUnit - drag.pointerUnit;
-      const delta = Math.max(
-        -drag.startBoundary,
-        Math.min(this.#rangePointCount - drag.endBoundary, requestedDelta),
-      );
-      this.#rangeVisualStart = drag.startBoundary + delta;
-      this.#rangeVisualEnd = this.#rangeVisualStart + length;
-    }
-    const series = this.#rangeSeries();
-    if (series) {
-      this.#renderRangeSelector(series);
-      this.#renderRangeBarSelection(
-        this.#rangeVisualStart,
-        this.#rangeVisualEnd,
-      );
-    }
-  }
-
-  #handleRangePointer(event: PointerEvent): void {
-    if (event.type === "pointerdown") {
-      const control = (event.target as Element | null)?.closest<HTMLElement>(
-        "[data-range-action]",
-      );
-      if (!control || !this.#range.contains(control)) return;
-      const action = control.dataset.rangeAction as ChartRangeAction;
-      event.preventDefault();
-      this.#rangeDrag = {
-        action,
-        pointerId: event.pointerId,
-        pointerUnit: this.#rangeUnitFromPointer(event),
-        startBoundary: this.#rangeStart,
-        endBoundary: this.#rangeEnd + 1,
-      };
-      this.#rangeVisualStart = this.#rangeStart;
-      this.#rangeVisualEnd = this.#rangeEnd + 1;
-      this.#range.classList.add("is-dragging");
-      this.#range.setPointerCapture?.(event.pointerId);
-      return;
-    }
-    if (!this.#rangeDrag || this.#rangeDrag.pointerId !== event.pointerId)
-      return;
-    if (event.type === "pointermove") {
-      this.#updateRangeFromPointer(event);
-      return;
-    }
-    if (event.type === "pointercancel") {
-      const series = this.#rangeSeries();
-      this.#rangeDrag = null;
-      this.#rangeVisualStart = this.#rangeStart;
-      this.#rangeVisualEnd = this.#rangeEnd + 1;
-      this.#range.classList.remove("is-dragging");
-      if (series) {
-        this.#renderRangeSelector(series);
-        this.#renderRangeBarSelection(
-          this.#rangeVisualStart,
-          this.#rangeVisualEnd,
-        );
-      }
-      return;
-    }
-    if (event.type === "pointerup") {
-      this.#updateRangeFromPointer(event);
-      this.#range.releasePointerCapture?.(event.pointerId);
-      const drag = this.#rangeDrag;
-      this.#rangeDrag = null;
-      if (drag?.action === "move") {
-        const length = drag.endBoundary - drag.startBoundary;
-        this.#rangeStart = Math.max(
-          0,
-          Math.min(
-            this.#rangePointCount - length,
-            Math.round(this.#rangeVisualStart),
-          ),
-        );
-        this.#rangeEnd = this.#rangeStart + length - 1;
-      } else {
-        this.#rangeStart = Math.max(
-          0,
-          Math.min(
-            this.#rangePointCount - 1,
-            Math.round(this.#rangeVisualStart),
-          ),
-        );
-        const endExclusive = Math.max(
-          this.#rangeStart + 1,
-          Math.min(this.#rangePointCount, Math.round(this.#rangeVisualEnd)),
-        );
-        this.#rangeEnd = endExclusive - 1;
-      }
-      this.#rangeVisualStart = this.#rangeStart;
-      this.#rangeVisualEnd = this.#rangeEnd + 1;
-      this.#range.classList.remove("is-dragging");
-      const series = this.#rangeSeries();
-      if (series) {
-        this.#renderRangeSelector(series);
-        this.#renderRangeBarSelection(
-          this.#rangeVisualStart,
-          this.#rangeVisualEnd,
-        );
-        this.#renderSelectedRangeTotals(series);
-      }
-    }
-  }
-
-  #handleRangeKeydown(event: KeyboardEvent): void {
-    const control = (event.target as Element | null)?.closest<HTMLElement>(
-      "[data-range-action]",
-    );
-    if (!control || !this.#range.contains(control)) return;
-    const action = control.dataset.rangeAction as ChartRangeAction;
-    const direction =
-      event.key === "ArrowLeft" || event.key === "ArrowDown"
-        ? -1
-        : event.key === "ArrowRight" || event.key === "ArrowUp"
-          ? 1
-          : 0;
-    if (!direction && event.key !== "Home" && event.key !== "End") return;
-    event.preventDefault();
-    if (action === "start") {
-      this.#rangeStart =
-        event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? this.#rangeEnd
-            : Math.max(
-                0,
-                Math.min(this.#rangeEnd, this.#rangeStart + direction),
-              );
-    } else if (action === "end") {
-      this.#rangeEnd =
-        event.key === "Home"
-          ? this.#rangeStart
-          : event.key === "End"
-            ? this.#rangePointCount - 1
-            : Math.max(
-                this.#rangeStart,
-                Math.min(this.#rangePointCount - 1, this.#rangeEnd + direction),
-              );
-    } else {
-      const length = this.#rangeEnd - this.#rangeStart;
-      const maximumStart = this.#rangePointCount - 1 - length;
-      const nextStart =
-        event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? maximumStart
-            : Math.max(0, Math.min(maximumStart, this.#rangeStart + direction));
-      this.#rangeStart = nextStart;
-      this.#rangeEnd = nextStart + length;
-    }
-    const series = this.#rangeSeries();
-    if (!series) return;
-    this.#rangeVisualStart = this.#rangeStart;
-    this.#rangeVisualEnd = this.#rangeEnd + 1;
-    this.#renderRangeSelector(series);
-    this.#renderRangeBarSelection(this.#rangeVisualStart, this.#rangeVisualEnd);
-    this.#renderSelectedRangeTotals(series);
-  }
-
-  #rangeDates(
-    series: AnnualSpendTrendSeries,
-    startIndex: number,
-    endIndex: number,
-  ): { start: string; end: string } {
-    const first = series.points[startIndex];
-    const last = series.points[endIndex];
-    const yearStart = `${series.year}-01-01`;
-    const yearEnd = `${series.year}-12-31`;
-    return {
-      start: first
-        ? first.periodStart < yearStart
-          ? yearStart
-          : first.periodStart
-        : yearStart,
-      end: last
-        ? last.periodEnd > yearEnd
-          ? yearEnd
-          : last.periodEnd
-        : yearEnd,
-    };
-  }
-
-  #selectedRangeDates(series: AnnualSpendTrendSeries): {
-    start: string;
-    end: string;
-  } {
-    return this.#rangeDates(series, this.#rangeStart, this.#rangeEnd);
-  }
-
-  #renderRangeSelector(series: AnnualSpendTrendSeries): void {
-    const count = series.points.length;
-    if (!count) return;
-    const left = (this.#rangeVisualStart / count) * 100;
-    const width =
-      ((this.#rangeVisualEnd - this.#rangeVisualStart) / count) * 100;
-    this.#rangeSelection.style.left = `${left}%`;
-    this.#rangeSelection.style.width = `${width}%`;
-    const visualStartIndex = Math.max(
-      0,
-      Math.min(count - 1, Math.round(this.#rangeVisualStart)),
-    );
-    const visualEndIndex = Math.max(
-      visualStartIndex,
-      Math.min(count - 1, Math.round(this.#rangeVisualEnd) - 1),
-    );
-    const { start, end } = this.#rangeDates(
-      series,
-      visualStartIndex,
-      visualEndIndex,
-    );
-    const startLabel = shortDate.format(new Date(`${start}T00:00:00Z`));
-    const endLabel = shortDate.format(new Date(`${end}T00:00:00Z`));
-    this.#rangeStartTooltip.textContent = startLabel;
-    this.#rangeEndTooltip.textContent = endLabel;
-    this.#rangeStartTooltip.style.left = `calc(${left}% + 7px)`;
-    this.#rangeEndTooltip.style.left = `calc(${left + width}% - 7px)`;
-    [this.#rangeStartHandle, this.#rangeEndHandle].forEach((handle) => {
-      handle.setAttribute("aria-valuemin", "1");
-      handle.setAttribute("aria-valuemax", String(count));
-      handle.setAttribute("aria-orientation", "horizontal");
-    });
-    this.#rangeStartHandle.setAttribute(
-      "aria-valuenow",
-      String(visualStartIndex + 1),
-    );
-    this.#rangeStartHandle.setAttribute("aria-valuetext", startLabel);
-    this.#rangeEndHandle.setAttribute(
-      "aria-valuenow",
-      String(visualEndIndex + 1),
-    );
-    this.#rangeEndHandle.setAttribute("aria-valuetext", endLabel);
-    this.#rangeMoveHandle.setAttribute(
-      "aria-label",
-      `Move selected range, ${startLabel} through ${endLabel}`,
-    );
-  }
-
-  #renderRangeBarSelection(start: number, end: number): void {
-    const selectedStart = Math.max(
-      0,
-      Math.min(this.#rangePointCount - 1, Math.round(start)),
-    );
-    const selectedEnd = Math.max(
-      selectedStart + 1,
-      Math.min(this.#rangePointCount, Math.round(end)),
-    );
-    this.#chart
-      .querySelectorAll<SVGRectElement>("[data-period-index]")
-      .forEach((bar) => {
-        const index = Number(bar.dataset.periodIndex);
-        const selected = index >= selectedStart && index < selectedEnd;
-        bar.classList.toggle("is-outside-range", !selected);
-      });
-  }
-
-  #renderSelectedRangeTotals(series: AnnualSpendTrendSeries): void {
-    const overview = appState.get("budgetOverview");
-    const summary = overview.annualSummaryCards[this.#selectedYear];
-    const { start, end } = this.#selectedRangeDates(series);
-    const today = DateUtils.today;
-    const todayId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const dataEnd = end > todayId ? todayId : end;
-    const transactions = appController
-      .getTransactions()
-      .filter(
-        (transaction) =>
-          transaction.date >= start && transaction.date <= dataEnd,
-      );
-    const spend = transactions.reduce(
-      (total, transaction) =>
-        transaction.type === "expense"
-          ? total + Number(transaction.amount || 0)
-          : total,
-      0,
-    );
-    const income = transactions.reduce(
-      (total, transaction) =>
-        transaction.type === "income"
-          ? total + Number(transaction.amount || 0)
-          : total,
-      0,
-    );
-    const startMonth = start.slice(0, 7);
-    const endMonth = end.slice(0, 7);
-    const deductions =
-      summary?.metrics.paycheckDeductions.months.reduce(
-        (total, month) =>
-          month.monthId >= startMonth && month.monthId <= endMonth
-            ? total + (month.value ?? 0)
-            : total,
-        0,
-      ) ?? 0;
-    const previousYear = this.#selectedYear - 1;
-    const previousStart = `${previousYear}${start.slice(4)}`;
-    const previousEnd = `${previousYear}${dataEnd.slice(4)}`;
-    const previousTransactions = appController
-      .getTransactions()
-      .filter(
-        (transaction) =>
-          transaction.date >= previousStart && transaction.date <= previousEnd,
-      );
-    const previousSpend = previousTransactions.reduce(
-      (total, transaction) =>
-        transaction.type === "expense"
-          ? total + Number(transaction.amount || 0)
-          : total,
-      0,
-    );
-    const previousIncome = previousTransactions.reduce(
-      (total, transaction) =>
-        transaction.type === "income"
-          ? total + Number(transaction.amount || 0)
-          : total,
-      0,
-    );
-    const previousSummary = overview.annualSummaryCards[previousYear];
-    const previousStartMonth = previousStart.slice(0, 7);
-    const previousEndMonth = previousEnd.slice(0, 7);
-    const previousDeductionMonths =
-      previousSummary?.metrics.paycheckDeductions.months.filter(
-        (month) =>
-          month.monthId >= previousStartMonth &&
-          month.monthId <= previousEndMonth,
-      ) ?? [];
-    const previousDeductions = previousDeductionMonths.reduce(
-      (total, month) => total + (month.value ?? 0),
-      0,
-    );
-    const hasPreviousData =
-      previousTransactions.length > 0 ||
-      previousDeductionMonths.some((month) => month.hasData);
-    const balance = income - spend + deductions;
-    const isFullYear =
-      this.#rangeStart === 0 && this.#rangeEnd === series.points.length - 1;
-    const startLabel = shortDate.format(new Date(`${start}T00:00:00Z`));
-    const endLabel = shortDate.format(new Date(`${end}T00:00:00Z`));
-    this.#totalBalance.textContent = money(balance, false);
-    this.#totalBalanceCaption.textContent = isFullYear
-      ? `Total balance in ${this.#selectedYear}`
-      : `Total balance · ${startLabel}–${endLabel}`;
-    this.#totalSpend.textContent = money(spend, false);
-    this.#totalIncome.textContent = money(income, false);
-    this.#totalDeductions.textContent = money(deductions, false);
-    this.#renderHeroComparison(
-      this.#totalSpendComparison,
-      spend,
-      previousSpend,
-      hasPreviousData,
-      true,
-      previousYear,
-    );
-    this.#renderHeroComparison(
-      this.#totalIncomeComparison,
-      income,
-      previousIncome,
-      hasPreviousData,
-      false,
-      previousYear,
-    );
-    this.#renderHeroComparison(
-      this.#totalDeductionsComparison,
-      deductions,
-      previousDeductions,
-      hasPreviousData,
-      false,
-      previousYear,
-    );
-    this.#metrics.setAttribute(
-      "aria-label",
-      `Financial totals from ${startLabel} through ${endLabel}`,
-    );
-  }
-
   #renderHeroComparison(
     element: HTMLElement,
     current: number,
@@ -1637,71 +1205,75 @@ export class BudgetOverviewScreen
   }
 
   #renderTrend(): void {
-    const monthly = this.#period === "monthly";
-    const periodNoun = monthly ? "month" : "week";
-    const periodAdjective = monthly ? "monthly" : "weekly";
-    const overview = appState.get("budgetOverview");
-    const series =
-      overview.annualSpendTrendsByYear[this.#selectedYear]?.[this.#period];
-    this.#renderPeriodControl();
-
-    if (!series) {
-      this.#totalBalance.textContent = "—";
-      this.#totalBalanceCaption.textContent = `Total balance in ${this.#selectedYear}`;
-      this.#totalSpend.textContent = "—";
-      this.#totalIncome.textContent = "—";
-      this.#totalDeductions.textContent = "—";
-      this.#totalSpendComparison.textContent = "—";
-      this.#totalIncomeComparison.textContent = "—";
-      this.#totalDeductionsComparison.textContent = "—";
-      this.#cleanupChart?.();
-      this.#cleanupChart = null;
-      this.#chart.replaceChildren();
-      this.#chart.hidden = true;
-      this.#range.hidden = true;
-      this.#legend.hidden = true;
+    const transactions = appController.getTransactions();
+    const accounts = APIs.accounts.accounts();
+    const rows = buildBudgetOverviewChartMonths(
+      transactions,
+      accounts,
+      this.#selectedYear,
+      DateUtils.today,
+    );
+    const previousRows = buildBudgetOverviewChartMonths(
+      transactions,
+      accounts,
+      this.#selectedYear - 1,
+      new Date(this.#selectedYear, 11, 31),
+    );
+    const hasData = rows.some((row) => row.hasData);
+    const totals = rows.reduce(
+      (total, row) => ({
+        income: total.income + (row.hasData ? row.income : 0),
+        spend: total.spend + (row.hasData ? row.spend : 0),
+        savings: total.savings + (row.hasData ? row.totalSavings : 0),
+      }),
+      { income: 0, spend: 0, savings: 0 },
+    );
+    const previousTotals = previousRows.reduce(
+      (total, row) => ({
+        income: total.income + (row.hasData ? row.income : 0),
+        spend: total.spend + (row.hasData ? row.spend : 0),
+        savings: total.savings + (row.hasData ? row.totalSavings : 0),
+      }),
+      { income: 0, spend: 0, savings: 0 },
+    );
+    const hasPreviousData = previousRows.some((row) => row.hasData);
+    this.#totalBalance.textContent = hasData
+      ? money(totals.savings, false)
+      : "—";
+    this.#totalBalanceCaption.textContent = `Total balance in ${this.#selectedYear}`;
+    this.#totalSpend.textContent = hasData ? money(totals.spend, false) : "—";
+    this.#totalIncome.textContent = hasData ? money(totals.income, false) : "—";
+    this.#renderHeroComparison(
+      this.#totalSpendComparison,
+      totals.spend,
+      previousTotals.spend,
+      hasData && hasPreviousData,
+      true,
+      this.#selectedYear - 1,
+    );
+    this.#renderHeroComparison(
+      this.#totalIncomeComparison,
+      totals.income,
+      previousTotals.income,
+      hasData && hasPreviousData,
+      false,
+      this.#selectedYear - 1,
+    );
+    this.#empty.hidden = hasData;
+    this.#chart.hidden = !hasData;
+    if (!hasData) {
+      this.#emptyTitle.textContent = "No financial history yet";
+      this.#emptyCopy.textContent =
+        "Monthly activity will appear here after you add transactions.";
+      this.#chart.data = { year: this.#selectedYear, series: [] };
       return;
     }
-
-    this.#legendTotal.textContent = `${monthly ? "Monthly" : "Weekly"} spend`;
-    this.#previousLegend.hidden = !series.hasPriorYearTrend;
-    this.#cleanupChart?.();
-    this.#cleanupChart = null;
-    const empty = !series.hasExpenseHistory || series.latestTrend === null;
-    this.#emptyTitle.textContent = series.hasExpenseHistory
-      ? `First ${periodNoun} in progress`
-      : "No spending history yet";
-    this.#emptyCopy.textContent = series.hasExpenseHistory
-      ? `Your first ${periodAdjective} point will appear after the current ${periodNoun} ends.`
-      : `Completed ${periodNoun}s will appear here after you add expenses.`;
-    this.#empty.hidden = !empty;
-    this.#chart.hidden = empty;
-    this.#legend.hidden = empty;
-    this.#range.hidden = empty;
-    this.#rangePointCount = series.points.length;
-    if (
-      this.#rangeEnd < 0 ||
-      this.#rangeEnd >= this.#rangePointCount ||
-      this.#rangeStart > this.#rangeEnd
-    ) {
-      this.#rangeStart = 0;
-      this.#rangeEnd = Math.max(0, this.#rangePointCount - 1);
-    }
-    this.#rangeVisualStart = this.#rangeStart;
-    this.#rangeVisualEnd = this.#rangeEnd + 1;
-    this.#renderRangeSelector(series);
-    this.#renderSelectedRangeTotals(series);
-    if (!empty) {
-      this.#cleanupChart = mountChart(
-        this.#chart,
-        series,
-        this.#overlayManager,
-        () => ({
-          start: this.#rangeVisualStart,
-          end: this.#rangeVisualEnd,
-        }),
-      );
-    } else this.#chart.replaceChildren();
+    this.#chart.data = budgetOverviewChartData(
+      rows,
+      this.#chartDisplay,
+      this.#selectedYear,
+      previousRows,
+    );
   }
 
   #renderMonthlySummary(): void {
@@ -1767,17 +1339,10 @@ export class BudgetOverviewScreen
             hasData: false,
           }) satisfies MonthlyTransactionSummaryRow,
       );
-    const deductionMonths =
-      ledger.annualSummaryCards[this.#selectedYear]?.metrics.paycheckDeductions
-        .months ?? [];
     const previousRows = summaries[this.#selectedYear - 1] ?? [];
-    const previousDeductionMonths =
-      ledger.annualSummaryCards[this.#selectedYear - 1]?.metrics
-        .paycheckDeductions.months ?? [];
     const totals = {
       income: 0,
       spend: 0,
-      deductions: 0,
       net: 0,
       previousNet: 0,
       hasPreviousData: false,
@@ -1789,26 +1354,18 @@ export class BudgetOverviewScreen
         new Date(`${row.monthId}-01T00:00:00Z`),
       )}${isCurrentMonth ? " · In progress" : ""}`;
 
-      const deductionMonth = deductionMonths[index];
-      const deductions = deductionMonth?.value ?? 0;
-      const hasData = row.hasData || Boolean(deductionMonth?.hasData);
+      const hasData = row.hasData;
       const income = row.income ?? 0;
       const spend = row.spend ?? 0;
-      const net = income - spend + deductions;
+      const net = income - spend;
       const previousRow = previousRows[index];
-      const previousDeductionMonth = previousDeductionMonths[index];
-      const previousHasData =
-        Boolean(previousRow?.hasData) ||
-        Boolean(previousDeductionMonth?.hasData);
+      const previousHasData = Boolean(previousRow?.hasData);
       const previousNet =
-        (previousRow?.income ?? 0) -
-        (previousRow?.spend ?? 0) +
-        (previousDeductionMonth?.value ?? 0);
+        (previousRow?.income ?? 0) - (previousRow?.spend ?? 0);
       const difference = hasData && previousHasData ? net - previousNet : null;
       if (hasData) {
         totals.income += income;
         totals.spend += spend;
-        totals.deductions += deductions;
         totals.net += net;
       }
       if (previousHasData) {
@@ -1819,7 +1376,6 @@ export class BudgetOverviewScreen
         month: monthLabel,
         income: hasData ? money(income) : "—",
         spend: hasData ? money(spend) : "—",
-        deductions: hasData ? money(deductions) : "—",
         amount: hasData ? money(net) : "—",
         comparison: difference === null ? "—" : signedMoney(difference),
         amountValue: net,
@@ -1846,11 +1402,6 @@ export class BudgetOverviewScreen
           cellClass: ["numeric", "align-right"],
         },
         { key: "spend", title: "Spend", cellClass: ["numeric", "align-right"] },
-        {
-          key: "deductions",
-          title: "Deductions",
-          cellClass: ["numeric", "align-right"],
-        },
         {
           key: "amount",
           title: "Net",
@@ -1881,7 +1432,6 @@ export class BudgetOverviewScreen
           "Year total",
           money(totals.income),
           money(totals.spend),
-          money(totals.deductions),
           money(totals.net),
           yearDifference === null ? "—" : signedMoney(yearDifference),
         ],
@@ -1945,12 +1495,15 @@ export class BudgetOverviewScreen
     const budgetOverviewState = appState.get("budgetOverview");
     const summary = budgetOverviewState.annualSummaryCards[this.#selectedYear];
     const income = overview?.totalIncome ?? 0;
-    const budgetSavings = overview?.netBalance ?? 0;
-    const paycheckDeductions = summary?.metrics.paycheckDeductions.total ?? 0;
+    const deductedSavings = deductedInvestmentSavings(
+      appController.getTransactions(),
+      APIs.accounts.accounts(),
+      this.#selectedYear,
+    );
     const breakdown = savingsRateBreakdown({
-      income: income - paycheckDeductions,
+      income,
       spend: overview?.totalSpend ?? 0,
-      deductions: paycheckDeductions,
+      deductions: deductedSavings,
     });
     const segments: Array<[SVGPathElement, number]> = [
       [this.#savingsRateBudgetRing, breakdown.savingsPercent],
@@ -2028,7 +1581,7 @@ export class BudgetOverviewScreen
       this.#savingsLegendAmount,
       this.#savingsLegendAverage,
       this.#savingsLegendFill,
-      budgetSavings,
+      breakdown.amountSaved,
       breakdown.savingsPercent,
     );
     updateLegend(
@@ -2036,7 +1589,7 @@ export class BudgetOverviewScreen
       this.#deductionsLegendAmount,
       this.#deductionsLegendAverage,
       this.#deductionsLegendFill,
-      paycheckDeductions,
+      deductedSavings,
       breakdown.deductionsPercent,
     );
     updateLegend(
@@ -2053,7 +1606,7 @@ export class BudgetOverviewScreen
     this.#savingsRateDescription.textContent =
       breakdown.rate === null
         ? `No income data for ${this.#selectedYear}.`
-        : `${percentage.format(breakdown.rate)} percent of income saved in ${this.#selectedYear}. Savings ${legendPercentage.format(breakdown.savingsPercent)} percent, deductions ${legendPercentage.format(breakdown.deductionsPercent)} percent, and spend ${legendPercentage.format(breakdown.spendPercent)} percent. Monthly averages use ${activeMonthCount} ${activeMonthCount === 1 ? "month" : "months"} with data.`;
+        : `${percentage.format(breakdown.rate)} percent of income saved in ${this.#selectedYear}. Budget savings ${legendPercentage.format(breakdown.savingsPercent)} percent, deducted savings ${legendPercentage.format(breakdown.deductionsPercent)} percent, and spend ${legendPercentage.format(breakdown.spendPercent)} percent. Monthly averages use ${activeMonthCount} ${activeMonthCount === 1 ? "month" : "months"} with data.`;
   }
 }
 

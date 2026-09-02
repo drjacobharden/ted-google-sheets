@@ -30,11 +30,6 @@
         <dd id="overview-total-income">—</dd>
         <small id="overview-total-income-comparison">—</small>
       </div>
-      <div>
-        <dt>Deductions</dt>
-        <dd id="overview-total-deductions">—</dd>
-        <small id="overview-total-deductions-comparison">—</small>
-      </div>
     </dl>
   </section>
 
@@ -45,80 +40,22 @@
     <header class="editorial-section-header trend-card__header">
       <div>
         <h2 id="weekly-spend-title" class="type-section-title">
-          Spending trend <span class="type-meta">— fig. 01</span>
+          Trends <span class="type-meta">— fig. 01</span>
         </h2>
       </div>
-      <div class="trend-card__accessories">
-        <div
-          id="weekly-spend-legend"
-          class="editorial-legend"
-          aria-label="Chart legend"
-        >
-          <span class="editorial-legend-item">
-            <i class="editorial-swatch is-trend" aria-hidden="true"></i>
-            <span>Trend</span>
-          </span>
-          <span class="editorial-legend-item">
-            <i
-              class="editorial-swatch editorial-swatch--bar is-spend"
-              aria-hidden="true"
-            ></i>
-            <span id="spend-trend-legend-total">Weekly spend</span>
-          </span>
-          <span id="spend-trend-previous-legend" class="editorial-legend-item">
-            <i
-              class="editorial-swatch editorial-swatch--dashed is-previous"
-              aria-hidden="true"
-            ></i>
-            <span>Previous year</span>
-          </span>
-        </div>
-        <segmented-control
-          id="spend-trend-period"
-          variant="text"
-          aria-label="Spending trend period"
-        ></segmented-control>
-      </div>
+      <dropdown-menu
+        id="spend-trend-chart-mode"
+        variant="ghost"
+        label="Cumulative savings"
+        aria-label="Spending trend chart presentation"
+      ></dropdown-menu>
     </header>
 
     <div class="trend-card__frame editorial-surface">
-      <div id="weekly-spend-chart" class="chart"></div>
-      <div id="spend-trend-range" class="chart-range" hidden>
-        <div id="spend-trend-range-track" class="chart-range-track">
-          <div id="spend-trend-range-selection" class="chart-range-selection">
-            <button
-              class="chart-range-handle is-start"
-              type="button"
-              data-range-action="start"
-              role="slider"
-              aria-label="Adjust the start of the selected chart range"
-            ></button>
-            <button
-              class="chart-range-window"
-              type="button"
-              data-range-action="move"
-              aria-label="Move the selected chart range"
-            ></button>
-            <button
-              class="chart-range-handle is-end"
-              type="button"
-              data-range-action="end"
-              role="slider"
-              aria-label="Adjust the end of the selected chart range"
-            ></button>
-          </div>
-        </div>
-        <output
-          id="spend-trend-range-start-tooltip"
-          class="chart-range-tooltip is-start"
-          aria-hidden="true"
-        ></output>
-        <output
-          id="spend-trend-range-end-tooltip"
-          class="chart-range-tooltip is-end"
-          aria-hidden="true"
-        ></output>
-      </div>
+      <data-chart
+        id="weekly-spend-chart"
+        aria-label="Monthly budget overview chart"
+      ></data-chart>
 
       <div id="weekly-spend-empty" class="empty-state" hidden>
         <h3 id="weekly-spend-empty-title" class="type-section-title">
@@ -186,7 +123,9 @@
 
         <div class="donut-legend" aria-label="Savings rate chart legend">
           <article class="donut-legend__item is-budget">
-            <header><i aria-hidden="true"></i><span>Savings</span></header>
+            <header>
+              <i aria-hidden="true"></i><span>Budget savings</span>
+            </header>
             <strong id="savings-legend-rate">0%</strong>
             <p>
               <span id="savings-legend-average">—</span>
@@ -196,7 +135,9 @@
             </div>
           </article>
           <article class="donut-legend__item is-paycheck">
-            <header><i aria-hidden="true"></i><span>Deductions</span></header>
+            <header>
+              <i aria-hidden="true"></i><span>Deducted savings</span>
+            </header>
             <strong id="deductions-legend-rate">0%</strong>
             <p>
               <span id="deductions-legend-average">—</span>
@@ -284,10 +225,4 @@
       ></data-table>
     </div>
   </section>
-
-  <footer class="overview-colophon type-meta">
-    <span>TED financial ledger</span>
-    <span>Annual budgeting overview</span>
-    <span>Page 01</span>
-  </footer>
 </div>
