@@ -51,7 +51,13 @@ export class PeopleScreen extends EditorialEntityLedgerScreen<PersonLedgerRow> {
   }
 
   protected sourceRows(year: number): PersonLedgerRow[] {
-    return buildPersonLedgerRows(APIs.budget.listAllPeople(), appController.getTransactions(), year, this.selectedMonth);
+    return buildPersonLedgerRows(
+      APIs.budget.listAllPeople(),
+      appController.getTransactions(),
+      year,
+      this.selectedMonth,
+      APIs.accounts.accounts(),
+    );
   }
 
   protected subtitle(year: number): string {
