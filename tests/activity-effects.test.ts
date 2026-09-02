@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { activityEffects, budgetingActivities, reportingTransactions } from "../src/utilities/activity-effects";
+import { activityEffects, budgetingActivities, deductedInvestmentSavings, ledgerVendorLabel, reportingTransactions } from "../src/utilities/activity-effects";
 import type { Account } from "../src/api/account-api";
 
 const accounts: Account[]=[
@@ -25,5 +25,19 @@ describe("unified activity effects",()=>{
     const rows=[row({id:"manual",accountId:"brokerage",amount:500}),row({id:"deduction",type:"expense",categoryId:"health",source:"deduction",amount:300})];
     expect(budgetingActivities(rows,accounts).map(item=>item.id)).toEqual(["deduction"]);
     expect(reportingTransactions(rows,accounts).map(item=>[item.type,item.amount])).toEqual([["income",300],["expense",300]]);
+  });
+  test("counts only selected-year deduction investment contributions as deducted savings",()=>{
+    const rows=[
+      row({id:"investment-deduction",accountId:"brokerage",source:"deduction",amount:500,date:"2026-01-15"}),
+      row({id:"investment-deduction-prior",accountId:"brokerage",source:"deduction",amount:300,date:"2025-01-15"}),
+      row({id:"debt-deduction",accountId:"mortgage",source:"deduction",amount:200,date:"2026-01-15"}),
+    ];
+    expect(deductedInvestmentSavings(rows,accounts,2026)).toBe(500);
+  });
+  test("uses a linked account name as the vendor label when vendor is absent",()=>{
+    const [investment] = budgetingActivities([
+      row({ accountId:"brokerage", source:"deduction", amount:500, vendorId:"" }),
+    ], accounts);
+    expect(ledgerVendorLabel(investment)).toBe("Brokerage");
   });
 });

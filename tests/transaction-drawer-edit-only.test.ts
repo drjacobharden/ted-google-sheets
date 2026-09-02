@@ -82,7 +82,7 @@ describe("edit-only transaction drawer", () => {
 
   test("updates existing transactions without retaining a creation mode", () => {
     expect(drawerSource).toContain("queueTransactionUpdate");
-    expect(drawerSource).toContain("Math.abs(signedAmount)");
+    expect(drawerSource).toContain("Math.abs(signedAmount).toFixed(2)");
     expect(drawerSource).toContain("paymentTypeElement.signedAmount(");
     expect(drawerSource).not.toContain("openCreate");
     expect(drawerSource).not.toContain("resetForBatchEntry");

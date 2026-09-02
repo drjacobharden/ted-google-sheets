@@ -132,15 +132,15 @@ describe("savings rate chart breakdown", () => {
     ).toBeNull();
   });
 
-  test("partitions gross income into savings, deductions, and spend", () => {
+  test("partitions gross income into budget savings, deducted savings, and spend", () => {
     const breakdown = savingsRateBreakdown({
-      income: 800,
+      income: 1_000,
       spend: 500,
       deductions: 200,
     });
 
     expect(breakdown).toEqual({
-      amountSaved: 500,
+      amountSaved: 300,
       totalIncome: 1_000,
       rate: 50,
       savingsPercent: 30,
@@ -149,25 +149,28 @@ describe("savings rate chart breakdown", () => {
     });
   });
 
-  test("uses spend as the full bar when spending exceeds gross income", () => {
+  test("calculates spend against total income even when it exceeds 100%", () => {
     expect(
-      savingsRateBreakdown({ income: 800, spend: 1_100, deductions: 200 }),
+      savingsRateBreakdown({ income: 1_000, spend: 1_100, deductions: 200 }),
     ).toMatchObject({
-      rate: -10,
+      rate: 20,
       savingsPercent: 0,
-      deductionsPercent: 0,
-      spendPercent: 100,
+      deductionsPercent: 20,
     });
+    expect(
+      savingsRateBreakdown({ income: 1_000, spend: 1_100, deductions: 200 })
+        .spendPercent,
+    ).toBeCloseTo(110, 10);
   });
 
   test("returns a signed savings-rate change only with prior income", () => {
     const current = savingsRateBreakdown({
-      income: 800,
+      income: 1_000,
       spend: 500,
       deductions: 200,
     });
     const previous = savingsRateBreakdown({
-      income: 800,
+      income: 1_000,
       spend: 600,
       deductions: 200,
     });
@@ -177,7 +180,7 @@ describe("savings rate chart breakdown", () => {
     expect(
       savingsRateChange(
         current,
-        savingsRateBreakdown({ income: 0, spend: 0, deductions: 0 }),
+      savingsRateBreakdown({ income: 0, spend: 0, deductions: 0 }),
       ),
     ).toBeNull();
   });

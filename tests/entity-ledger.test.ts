@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { Account } from "../src/api/account-api";
 import type { BudgetEntity, BudgetTransaction } from "../src/api/budget-api";
 import {
   buildEntityLedgerRows,
@@ -48,6 +49,24 @@ describe("editorial entity ledgers", () => {
     const result = buildPersonLedgerRows([entity("alex", "Alex")], rows, 2025, "01");
     expect(result[0]).toMatchObject({ income: 1000, expense: 150, balance: 850 });
     expect(result[0].comparison).toBeCloseTo(21.43, 1);
+  });
+
+  test("uses derived account assignments and effects for people totals", () => {
+    const accounts: Account[] = [
+      { id: "investment", name: "401k", type: "investment", assignmentId: "alex", active: true, source: "manual", createdAt: "2025-01-01", updatedAt: "2025-01-01" },
+      { id: "debt", name: "Loan", type: "debt", assignmentId: "alex", categoryId: "category", active: true, source: "manual", createdAt: "2025-01-01", updatedAt: "2025-01-01" },
+    ];
+    const result = buildPersonLedgerRows(
+      [entity("alex", "Alex")],
+      [
+        { ...transaction("deducted-investment", "2025-01-05", 200, "expense", "", "", ""), accountId: "investment", source: "deduction" },
+        { ...transaction("deducted-debt", "2025-01-06", 100, "expense", "", "", ""), accountId: "debt", source: "deduction" },
+      ],
+      2025,
+      null,
+      accounts,
+    );
+    expect(result[0]).toMatchObject({ income: 300, expense: 100, balance: 200 });
   });
 
   test("uses the displayed transaction sign for ledger amounts", () => {
