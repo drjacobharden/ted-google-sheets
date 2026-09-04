@@ -178,21 +178,18 @@ export class OverlayManager extends HTMLElement {
   }
   #handleRefreshRetrying() {
     if (this.#splash && !this.#splash.hidden) {
-      this.#splash.state = "retrying";
-    } else if (this.#refreshIndicator) {
+      this.#splash.state = "idle";
+    }
+    if (this.#refreshIndicator) {
       this.#refreshIndicator.state = "retrying";
     }
   }
   #handleRefreshFailed(event: CustomEvent) {
-    if (!event.detail.connected) return;
-
     if (this.#splash && !this.#splash.hidden) {
-      if (!event.detail.showingCachedData) {
-        this.#splash.state = "failed";
-      } else {
-        this.#splash.state = "idle";
-      }
+      this.#splash.state = "idle";
     }
+
+    if (!event.detail.connected) return;
 
     if (this.#refreshIndicator) {
       this.#refreshIndicator.state = "failed";
