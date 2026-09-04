@@ -4,10 +4,19 @@ const code = await Bun.file(new URL("../apps-script/Code.gs", import.meta.url)).
 
 describe("unified ledger Apps Script schema",()=>{
   test("versions and canonical fields are upgraded",()=>{
-    expect(code).toContain('setupVersion: "12"');
-    expect(code).toContain("apiVersion: 14");
+    expect(code).toContain('setupVersion: "13"');
+    expect(code).toContain("apiVersion: 15");
     expect(code).toContain('"Account ID",\n      "Source",\n      "Legacy Activity ID"');
     expect(code).toContain('debtPaymentCategoryId: "00000000-0000-4000-8000-000000000002"');
+  });
+  test("learned import payees support vendors or accounts without rewriting old rows",()=>{
+    const mappingSchema = code.slice(
+      code.indexOf("importVendorMappings: {"),
+      code.indexOf("importPersonMappings: {"),
+    );
+    expect(mappingSchema).toContain('"Vendor ID",\n      "Account ID"');
+    expect(code).toContain("migrateImportPayeeMappingHeaders_");
+    expect(code).toContain('throw new Error("Choose exactly one vendor or account.")');
   });
   test("migration records origins, midpoint dates, borrowing signs, and explicit sources",()=>{
     expect(code).toContain("imported.has(activity.id)");
