@@ -12,7 +12,7 @@ const categorySelectTemplate = () => `
     <input class="id-input" name="categoryId" type="hidden" />
     <dropdown-menu class="category-select-menu" variant="editorial"
       label="Select a category" icon="label" searchable search-action
-      search-action-label="Add" search-placeholder="Search or add category" align-center>
+      search-action-label="Add" search-placeholder="Search or add category" align-start>
     </dropdown-menu>
   </div>
 `;
@@ -147,6 +147,9 @@ export class CategorySelect extends HTMLElement {
     this.#hiddenInput = this.querySelector(".id-input");
     this.#info = this.querySelector("info-hover");
 
+    const triggerLabel = this.getAttribute("trigger-label");
+    if (triggerLabel) this.#dropdown.label = triggerLabel;
+
     if (this.dataset.info) {
       this.#info.message = this.dataset.info;
     }
@@ -227,9 +230,16 @@ export class CategorySelect extends HTMLElement {
     ) {
       options.push(this.#fallbackSelection);
     }
-    this.#dropdown.items = options.map((item) => ({
+    this.#dropdown.items = options
+      .sort((left, right) => {
+        const leftOrder = left.type === "expense" ? 0 : 1;
+        const rightOrder = right.type === "expense" ? 0 : 1;
+        return leftOrder - rightOrder || left.name.localeCompare(right.name, "en-US", { numeric: true, sensitivity: "base" });
+      })
+      .map((item) => ({
       key: String(item.id),
       title: `${item.name}${item.archived ? " (archived)" : ""}`,
+      group: item.type === "income" ? "Income" : "Expenses",
       isDefaultValue: String(item.id) === String(preferredValue || ""),
     }));
     this.#setValue(preferredValue);

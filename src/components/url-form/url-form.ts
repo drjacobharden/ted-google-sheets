@@ -1,48 +1,36 @@
 // @ts-nocheck
 import { APIs } from "../../api/api";
-import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
-import { DateUtils } from "../../utilities/date-utilities";
-import { SelectCreateController } from "../select-create-controller/select-create-controller";
-import { showToast } from "../toast-stack/toast-service";
-const urlFormTemplate = () =>
-  `
-  <form class="settings-card connection-form">
-    <table-title
-      title="Google Apps Script"
-      subtitle="Copy the production Web app URL from your Apps Script deployment, then paste it here."
-    >
-      <span class="mode-badge" data-connection-label>
-        Local mode
-      </span>
-    </table-title>
 
-    <label class="form-field">
-      <span>Web app URL</span>
-      <input
-        name="endpoint"
-        type="url"
-        placeholder="https://script.google.com/macros/s/…/exec"
-      />
-      <small>
-        Keep this URL private. Leave it blank to use browser storage while
-        developing.
-      </small>
-    </label>
-
-    <p class="settings-message" aria-live="polite"></p>
-
-    <div class="form-actions left-aligned">
-      <button class="secondary-button copy-connection" type="button" disabled>
-        Copy connection URL
-      </button>
-      <button class="secondary-button test-connection" type="button">
-        Test connection
-      </button>
-      <button class="primary-button" type="submit">
-        Save settings
-      </button>
+const urlFormTemplate = () => `
+  <form class="settings-form connection-form">
+    <div class="settings-form__fields settings-form__fields--single">
+      <label class="form-field">
+        <span>Apps Script web app URL</span>
+        <input
+          name="endpoint"
+          type="url"
+          inputmode="url"
+          autocomplete="url"
+          placeholder="https://script.google.com/macros/s/…/exec"
+        />
+        <small>
+          Use the production web app URL from your Apps Script deployment.
+          Leave it blank to store data in this browser.
+        </small>
+      </label>
     </div>
+
+    <footer class="settings-form__footer">
+      <p
+        class="settings-form__message settings-message"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <button class="settings-form__submit save-connection" type="submit">
+        Save sheet link
+      </button>
+    </footer>
   </form>
 `;
 
@@ -50,28 +38,19 @@ const urlFormTemplate = () =>
   class URLForm extends HTMLElement {
     #form = null;
     #message = null;
-    #modeBadge = null;
-    #copyButton = null;
-    #testButton = null;
     #saveButton = null;
 
     connectedCallback() {
       this.innerHTML = urlFormTemplate();
 
       this.#form = this.querySelector(".connection-form");
-      this.#modeBadge = this.querySelector(".mode-badge");
       this.#message = this.querySelector(".settings-message");
-      this.#copyButton = this.querySelector(".copy-connection");
-      this.#testButton = this.querySelector(".test-connection");
-      this.#saveButton = this.querySelector(".primary-button");
+      this.#saveButton = this.querySelector(".save-connection");
 
       this.#form.addEventListener("submit", this);
-      this.#testButton.addEventListener("click", this);
-      this.#copyButton.addEventListener("click", this);
       window.addEventListener("budget:connection-changed", this);
 
       this.#loadSettings();
-      this.#updateConnectionUI();
     }
 
     handleEvent(event) {
@@ -80,16 +59,10 @@ const urlFormTemplate = () =>
           this.#handleSubmit(event);
           break;
 
-        case "click":
-          if (event.currentTarget === this.#testButton) {
-            this.#handleTestConnection(event);
-          } else if (event.currentTarget === this.#copyButton) {
-            this.#handleCopyUrl(event);
-          }
-          break;
-
         case "budget:connection-changed":
-          this.#updateConnectionUI();
+          if (event.detail?.endpoint !== undefined) {
+            this.#form.elements.endpoint.value = event.detail.endpoint;
+          }
           break;
 
         default:
@@ -101,118 +74,54 @@ const urlFormTemplate = () =>
       event.preventDefault();
       const endpoint = this.#form.elements.endpoint.value.trim();
 
+      this.#message.className = "settings-form__message settings-message";
+      this.#message.textContent = "";
+
       if (endpoint && !endpoint.startsWith("https://script.google.com/")) {
-        this.#message.className = "settings-message error";
+        this.#message.className =
+          "settings-form__message settings-message error";
         this.#message.textContent =
           "Use the HTTPS web app URL provided by Google Apps Script.";
         return;
       }
 
       this.#saveButton.disabled = true;
-      this.#saveButton.textContent = "Getting connection...";
+      this.#saveButton.textContent = "Saving…";
       let settingsSaved = false;
 
       try {
         APIs.budget.saveConfig({ endpoint });
         settingsSaved = true;
-        this.#updateConnectionUI();
         await appController.initializeData({ refresh: true });
         window.dispatchEvent(
           new CustomEvent("budget:connection-changed", {
             detail: { endpoint },
           }),
         );
-        this.#message.className = "settings-message success";
+        this.#message.className =
+          "settings-form__message settings-message success";
         this.#message.textContent = endpoint
-          ? "Settings saved. New requests will use your sheet."
-          : "Settings saved. Using local mode.";
+          ? "Sheet link saved."
+          : "Local browser storage enabled.";
       } catch (error) {
-        this.#message.className = "settings-message error";
+        this.#message.className =
+          "settings-form__message settings-message error";
         this.#message.textContent = settingsSaved
-          ? `Settings saved, but data refresh failed: ${error.message}`
+          ? `Sheet link saved, but the data refresh failed: ${error.message}`
           : error.message;
       } finally {
         this.#saveButton.disabled = false;
-        this.#saveButton.textContent = "Save settings";
+        this.#saveButton.textContent = "Save sheet link";
       }
-    }
-
-    async #handleTestConnection(event) {
-      const endpoint = this.#form.elements.endpoint.value.trim();
-      if (!endpoint) {
-        this.#message.className = "settings-message error";
-        this.#message.textContent = "Paste a web app URL before testing.";
-        return;
-      }
-      const button = event.currentTarget;
-      button.disabled = true;
-      button.textContent = "Testing…";
-      this.#message.textContent = "";
-      try {
-        await APIs.budget.testConnection(endpoint);
-        this.#message.className = "settings-message success";
-        this.#message.textContent = "Connection successful.";
-      } catch (error) {
-        this.#message.className = "settings-message error";
-        this.#message.textContent = `Connection failed: ${error.message}`;
-      } finally {
-        button.disabled = false;
-        button.textContent = "Test connection";
-      }
-    }
-
-    async #handleCopyUrl() {
-      const endpoint = APIs.budget.getConfig().endpoint;
-
-      if (!endpoint) {
-        this.#message.className = "settings-message error";
-        this.#message.textContent = "Save a connection URL before copying it.";
-        return;
-      }
-
-      try {
-        await navigator.clipboard.writeText(endpoint);
-        this.#message.className = "settings-message success";
-        this.#message.textContent =
-          "Connection URL copied. Share it only with trusted household members.";
-      } catch (error) {
-        this.#form.elements.endpoint.value = endpoint;
-        this.#form.elements.endpoint.focus();
-        this.#form.elements.endpoint.select();
-        try {
-          if (document.execCommand("copy")) {
-            this.#message.className = "settings-message success";
-            this.#message.textContent =
-              "Connection URL copied. Share it only with trusted household members.";
-          } else {
-            this.#message.textContent =
-              "The URL is selected. Press Ctrl+C or Command+C to copy it.";
-          }
-        } catch (fallbackError) {
-          this.#message.textContent =
-            "The URL is selected. Press Ctrl+C or Command+C to copy it.";
-        }
-      }
-    }
-
-    #updateConnectionUI() {
-      const connected = Boolean(APIs.budget.getConfig().endpoint);
-      this.#copyButton.disabled = !connected;
-      this.#modeBadge.textContent = connected
-        ? "Sheet connected"
-        : "Local mode";
     }
 
     disconnectedCallback() {
       this.#form.removeEventListener("submit", this);
-      this.#testButton.removeEventListener("click", this);
-      this.#copyButton.removeEventListener("click", this);
       window.removeEventListener("budget:connection-changed", this);
     }
 
     #loadSettings() {
-      this.#form.elements.endpoint.value =
-        APIs.budget.getConfig().endpoint;
+      this.#form.elements.endpoint.value = APIs.budget.getConfig().endpoint;
       this.#message.textContent = "";
     }
   }

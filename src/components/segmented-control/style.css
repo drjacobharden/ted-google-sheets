@@ -37,6 +37,11 @@ segmented-control {
     opacity: 1;
   }
 
+  .segmented-control__item:disabled {
+    cursor: default;
+    opacity: 0.3;
+  }
+
   .segmented-control__item:focus-visible {
     outline: 2px solid var(--primary-button);
     outline-offset: -2px;
@@ -139,6 +144,10 @@ segmented-control {
     .segmented-control__item:hover,
     .segmented-control__item.is-selected {
       color: var(--color-text);
+    }
+
+    .segmented-control__item:disabled {
+      color: var(--color-text-subtle);
     }
 
     .segmented-control__item:focus-visible {

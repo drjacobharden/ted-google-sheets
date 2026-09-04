@@ -67,7 +67,7 @@ export class AccountSelect extends HTMLElement {
           variant="editorial" 
           label="Choose an account" 
           icon="box" 
-          align-center
+          align-start
           searchable 
           search-action 
           search-action-label="Add" 

@@ -14,7 +14,7 @@ const peopleSelectTemplate = () => `
       searchable search-action
       search-action-label="Add" 
       search-placeholder="Search or add person"
-      align-center
+      align-start
     >
     </dropdown-menu>
   </div>
@@ -116,6 +116,8 @@ export class PeopleSelect extends HTMLElement {
     this.innerHTML = peopleSelectTemplate();
     this.#form = this.closest("form");
     this.#dropdown = this.querySelector("dropdown-menu");
+    const triggerLabel = this.getAttribute("trigger-label");
+    if (triggerLabel) this.#dropdown.label = triggerLabel;
     this.#dropdown.setAttribute("aria-label", "Select an assignment");
     this.#dropdown.addEventListener("dropdown-selection", this);
     this.#dropdown.addEventListener("search-action-pressed", this);

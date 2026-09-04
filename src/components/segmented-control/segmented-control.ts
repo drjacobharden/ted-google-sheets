@@ -4,6 +4,7 @@ export interface SegmentedControlItem {
   key: string;
   title: string;
   isDefaultValue?: boolean;
+  disabled?: boolean;
 }
 
 export interface SegmentedControlSelectionEvent extends CustomEvent {
@@ -88,31 +89,46 @@ export class SegmentedControl
   }
 
   set items(items: SegmentedControlItem[]) {
-    this.#items = items.map(({ key, title, isDefaultValue }) => ({
+    this.#items = items.map(({ key, title, isDefaultValue, disabled }) => ({
       key,
       title,
       isDefaultValue,
+      disabled,
     }));
 
-    const defaultItem = this.#items.find((item) => item.isDefaultValue);
+    const defaultItem = this.#items.find(
+      (item) => item.isDefaultValue && !item.disabled,
+    );
 
-    if (!this.#items.some((item) => item.key === this.#selection)) {
-      this.#selection = defaultItem?.key ?? this.#items[0]?.key ?? null;
+    if (
+      !this.#items.some(
+        (item) => item.key === this.#selection && !item.disabled,
+      )
+    ) {
+      this.#selection =
+        defaultItem?.key ??
+        this.#items.find((item) => !item.disabled)?.key ??
+        null;
     }
 
     if (this.isConnected) this.#renderItems();
   }
 
   get items(): SegmentedControlItem[] {
-    return this.#items.map(({ key, title, isDefaultValue }) => ({
+    return this.#items.map(({ key, title, isDefaultValue, disabled }) => ({
       key,
       title,
       isDefaultValue,
+      disabled,
     }));
   }
 
   set selection(key: string | null) {
-    if (key !== null && !this.#items.some((item) => item.key === key)) return;
+    if (
+      key !== null &&
+      !this.#items.some((item) => item.key === key && !item.disabled)
+    )
+      return;
     if (this.#selection === key) return;
 
     this.#selection = key;
@@ -131,6 +147,8 @@ export class SegmentedControl
       button.dataset.segmentKey = item.key;
       button.textContent = item.title;
       button.setAttribute("role", "radio");
+      button.disabled = item.disabled === true;
+      if (item.disabled) button.setAttribute("aria-disabled", "true");
       return button;
     });
 
@@ -148,7 +166,10 @@ export class SegmentedControl
       button.tabIndex = selected ? 0 : -1;
     });
 
-    if (this.#selection === null && buttons[0]) buttons[0].tabIndex = 0;
+    if (this.#selection === null) {
+      const firstEnabled = buttons.find((button) => !button.disabled);
+      if (firstEnabled) firstEnabled.tabIndex = 0;
+    }
     this.#scheduleIndicatorUpdate();
   }
 
@@ -188,7 +209,7 @@ export class SegmentedControl
       return;
     }
 
-    const buttons = this.#buttons();
+    const buttons = this.#buttons().filter((button) => !button.disabled);
     if (buttons.length === 0) return;
 
     event.preventDefault();
@@ -214,7 +235,9 @@ export class SegmentedControl
   }
 
   #select(key: string | null, emit: boolean): void {
-    const item = this.#items.find((candidate) => candidate.key === key);
+    const item = this.#items.find(
+      (candidate) => candidate.key === key && !candidate.disabled,
+    );
     if (!item || item.key === this.#selection) return;
 
     this.#selection = item.key;

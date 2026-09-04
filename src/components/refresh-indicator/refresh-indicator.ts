@@ -24,21 +24,21 @@ export class RefreshIndicator extends HTMLElement {
       this.#refreshIndicator.hidden = false;
       this.#spinner!.hidden = false;
       this.#button!.hidden = true;
-      this.#label!.textContent = "Refreshing data…";
+      this.#label!.textContent = "Refreshing data";
     }
 
     if (value === "retrying") {
       this.#refreshIndicator.hidden = false;
       this.#spinner!.hidden = false;
       this.#button!.hidden = true;
-      this.#label!.textContent = "Google didn’t return the data. Retrying…";
+      this.#label!.textContent = "Refresh failed. Trying again.";
     }
 
     if (value === "failed") {
       this.#refreshIndicator.hidden = false;
       this.#spinner!.hidden = true;
       this.#button!.hidden = false;
-      this.#label!.textContent = "Refresh failed. Showing saved data.";
+      this.#label!.textContent = "Google failed to refresh your data";
     }
   }
 

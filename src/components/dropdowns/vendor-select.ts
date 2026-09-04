@@ -14,7 +14,7 @@ const vendorSelectTemplate = () => `
       search-action
       search-action-label="Add" 
       search-placeholder="Search or add vendor"
-      align-center 
+      align-start 
     ></dropdown-menu>
   </div>
 `;

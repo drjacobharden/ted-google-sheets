@@ -45,7 +45,7 @@ export class SourceSelect extends HTMLElement {
           class="source-select-menu"
           variant="editorial"
           label="Select a source"
-          align-center
+          align-start
         ></dropdown-menu>
       </div>
     `;

@@ -366,6 +366,7 @@ export class DropdownMenu extends HTMLElement {
 
   set label(text: string) {
     this.setAttribute("label", text);
+    this.#defaultLabel = text;
 
     if (this.#trigger) {
       this.#trigger.label = text;
@@ -410,9 +411,9 @@ export class DropdownMenu extends HTMLElement {
       side: "bottom",
       align: this.hasAttribute("align-start")
         ? "start"
-        : this.hasAttribute("align-center")
-          ? "center"
-          : "end",
+        : this.hasAttribute("align-end")
+          ? "end"
+          : "start",
       gap: 4,
     });
     this.toggleAttribute("is-open", true);
