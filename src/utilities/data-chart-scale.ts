@@ -20,10 +20,11 @@ export function buildDataChartScale(values: readonly number[]): DataChartScale {
   const naturalStep =
     (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) *
     magnitude;
-  // Keep sub-200k currency charts readable; 50k intervals begin only above 200k.
+  // Keep smaller currency charts readable; larger charts use the natural scale
+  // so high totals do not get crowded with unnecessarily small intervals.
   const step = maximum <= 200_000
     ? Math.min(naturalStep, 25_000)
-    : Math.min(naturalStep, 50_000);
+    : naturalStep;
   const min = Math.floor(minimum / step) * step;
   const max = Math.ceil(maximum / step) * step;
   const ticks: number[] = [];
