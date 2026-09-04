@@ -35,6 +35,7 @@ import dollarSignIcon from "./dollar-sign.html" with { type: "text" };
 import noteIcon from "./note.html" with { type: "text" };
 import downloadIcon from "./download.html" with { type: "text" };
 import menuIcon from "./menu.html" with { type: "text" };
+import arrowRight from "./arrow-right.html" with { type: "text" };
 
 export type IconKeys = keyof typeof iconStrings;
 
@@ -76,6 +77,7 @@ const iconStrings = {
   note: noteIcon,
   download: downloadIcon,
   menu: menuIcon,
+  arrowRight,
 };
 
 const iconTemplateCache = new Map();
