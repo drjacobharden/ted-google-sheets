@@ -8,7 +8,7 @@ import {
 } from "../utilities/data-utilities";
 import { ImportUtils } from "../utilities/import-utilities";
 
-export type ImportTarget = "budget" | "investment";
+export type ImportTarget = "transaction" | "budget" | "investment";
 export type AmountMode = "unified" | "debitCredit" | "monthly";
 export type ImportColumnMappingValue =
   | string
@@ -45,6 +45,7 @@ export interface ImportMapping {
   sourceDescription: string;
   normalizedSourceDescription?: string;
   vendorId?: string;
+  accountId?: string;
   assignmentId?: string;
   active?: boolean;
   createdAt?: string;
@@ -69,6 +70,10 @@ export interface ImportMappingResult {
 
 export interface ImportBootstrapData {
   importProfiles: ImportProfile[];
+  importMappings?: {
+    vendorMappings?: ImportMapping[];
+    personMappings?: ImportMapping[];
+  };
 }
 
 export interface ImportAPIContract {
@@ -100,7 +105,12 @@ function parseProfile(value: unknown): ImportProfile | null {
     {
       id: value.id,
       name: typeof value.name === "string" ? value.name : "",
-      target: value.target === "investment" ? "investment" : "budget",
+      target:
+        value.target === "investment"
+          ? "investment"
+          : value.target === "transaction"
+            ? "transaction"
+            : "budget",
       investmentAccountId:
         typeof value.investmentAccountId === "string"
           ? value.investmentAccountId
@@ -165,6 +175,7 @@ function parseMapping(value: unknown): ImportMapping | null {
       ? { normalizedSourceDescription: value.normalizedSourceDescription }
       : {}),
     ...(typeof value.vendorId === "string" ? { vendorId: value.vendorId } : {}),
+    ...(typeof value.accountId === "string" ? { accountId: value.accountId } : {}),
     ...(typeof value.assignmentId === "string"
       ? { assignmentId: value.assignmentId }
       : {}),
@@ -256,6 +267,16 @@ export function ImportAPI(budget: import("./budget-api").BudgetAPIContract): Imp
     }
     const profiles = requireProfiles(data.importProfiles);
     writeStorageArray(KEYS.profiles, profiles);
+    if (isRecord(data.importMappings)) {
+      writeStorageArray(
+        KEYS.vendorMappings,
+        requireMappings(data.importMappings.vendorMappings),
+      );
+      writeStorageArray(
+        KEYS.personMappings,
+        requireMappings(data.importMappings.personMappings),
+      );
+    }
     window.dispatchEvent(new CustomEvent("budget:import-profiles-changed"));
     return profiles;
   }
@@ -357,14 +378,17 @@ export function ImportAPI(budget: import("./budget-api").BudgetAPIContract): Imp
   /** Deduplicates mappings by their normalized source description. */
   function dedupeMappings(
     items: ImportMapping[],
-    idField: "vendorId" | "assignmentId",
+    idField: "payee" | "assignmentId",
   ): ImportMapping[] {
     const unique = new Map<string, ImportMapping>();
     items.forEach((item) => {
       const sourceDescription = String(item.sourceDescription || "");
       const normalizedSourceDescription =
         ImportUtils.normalizeDescription(sourceDescription);
-      if (!normalizedSourceDescription || !item[idField]) return;
+      if (!normalizedSourceDescription) return;
+      if (idField === "payee" && Boolean(item.vendorId) === Boolean(item.accountId))
+        throw new Error("Choose exactly one vendor or account.");
+      if (idField === "assignmentId" && !item.assignmentId) return;
       unique.set(normalizedSourceDescription, {
         ...item,
         sourceDescription,
@@ -379,7 +403,7 @@ export function ImportAPI(budget: import("./budget-api").BudgetAPIContract): Imp
     profileId: string,
     changes: ImportMappingChanges,
   ): Promise<ImportMappingResult> {
-    const vendors = dedupeMappings(changes.vendorMappings ?? [], "vendorId");
+    const vendors = dedupeMappings(changes.vendorMappings ?? [], "payee");
     const people = dedupeMappings(
       changes.personMappings ?? [],
       "assignmentId",
@@ -404,7 +428,7 @@ export function ImportAPI(budget: import("./budget-api").BudgetAPIContract): Imp
           KEYS.vendorMappings,
           profileId,
           vendors,
-          "vendorId",
+          "payee",
         ),
         personMappings: localUpsert(
           KEYS.personMappings,
@@ -437,7 +461,7 @@ export function ImportAPI(budget: import("./budget-api").BudgetAPIContract): Imp
     key: string,
     profileId: string,
     changes: ImportMapping[],
-    idField: "vendorId" | "assignmentId",
+    idField: "payee" | "assignmentId",
   ): ImportMapping[] {
     const all = readMappings(key);
     const timestamp = now();
@@ -449,14 +473,16 @@ export function ImportAPI(budget: import("./budget-api").BudgetAPIContract): Imp
             change.normalizedSourceDescription,
       );
       const previous = index >= 0 ? all[index] : undefined;
-      const idValue = change[idField];
+      const idValue = idField === "payee" ? change.vendorId || change.accountId : change.assignmentId;
       if (!idValue) return;
       const record: ImportMapping = {
         ...previous,
         ...change,
         id: previous?.id ?? uuid(),
         importProfileId: profileId,
-        [idField]: idValue,
+        ...(idField === "payee"
+          ? { vendorId: change.vendorId || "", accountId: change.accountId || "" }
+          : { assignmentId: idValue }),
         active: true,
         createdAt: previous?.createdAt ?? timestamp,
         updatedAt: timestamp,
@@ -500,7 +526,11 @@ function normalizeProfile(
 ): ImportProfile {
   const timestamp = now();
   const target: ImportTarget =
-    input.target === "investment" ? "investment" : "budget";
+    input.target === "investment"
+      ? "investment"
+      : input.target === "budget"
+        ? "budget"
+        : "transaction";
   const name = String(input.name || "").trim();
   if (!name) throw new Error("Enter a profile name.");
   if (target === "investment" && !input.investmentAccountId) {
@@ -518,9 +548,9 @@ function normalizeProfile(
       input.dateFormat || (target === "investment" ? "YYYY-MM" : "YYYY-MM-DD"),
     ),
     amountMode:
-      target === "budget" && input.amountMode === "debitCredit"
+      target !== "investment" && input.amountMode === "debitCredit"
         ? "debitCredit"
-        : target === "budget"
+        : target !== "investment"
           ? "unified"
           : "monthly",
     amountMultiplier: Number(input.amountMultiplier) === -1 ? -1 : 1,

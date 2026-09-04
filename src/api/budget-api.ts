@@ -108,6 +108,10 @@ export interface BudgetBootstrapData {
   assignments: BudgetEntity[];
   transactions: BudgetTransaction[];
   importProfiles?: unknown[];
+  importMappings?: {
+    vendorMappings?: unknown[];
+    personMappings?: unknown[];
+  };
   investmentAccounts?: unknown[];
   investmentBalances?: unknown[];
   investmentContributions?: unknown[];
