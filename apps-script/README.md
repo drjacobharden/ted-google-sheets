@@ -13,7 +13,7 @@ plain values rather than formulas.
 - `Users`: app users referenced by each transaction's `createdBy` UUID.
 - `InvestmentAccounts`: UUID-backed accounts with a `paycheck` or `manual` contribution source.
 - `ImportProfiles`: reusable budget or investment CSV header and column mappings.
-- `ImportVendorMappings`: exact, profile-specific source-description to Vendor UUID mappings.
+- `ImportVendorMappings`: exact, profile-specific source-description mappings to either a Vendor UUID or Account UUID.
 - `ImportPersonMappings`: exact, profile-specific source-description to Assignment UUID mappings.
 - `InvestmentBalances`: one ending balance per account and reporting month.
 - `InvestmentContributions`: itemized signed investment flows; contributions are positive and withdrawals are negative.

@@ -3,8 +3,8 @@
 const APP = Object.freeze({
   spreadsheetIdProperty: "SPREADSHEET_ID",
   setupVersionProperty: "SETUP_VERSION",
-  setupVersion: "12",
-  apiVersion: 14,
+  setupVersion: "13",
+  apiVersion: 15,
   ledgerDirtyProperty: "LEDGER_DIRTY",
   incomeCategoryId: "00000000-0000-4000-8000-000000000001",
   debtPaymentCategoryId: "00000000-0000-4000-8000-000000000002",
@@ -203,6 +203,7 @@ const TABLES = Object.freeze({
       "Source Description",
       "Normalized Source Description",
       "Vendor ID",
+      "Account ID",
       "Active",
       "Created At",
       "Updated At",
@@ -213,6 +214,7 @@ const TABLES = Object.freeze({
       "sourceDescription",
       "normalizedSourceDescription",
       "vendorId",
+      "accountId",
       "active",
       "createdAt",
       "updatedAt",
@@ -651,6 +653,8 @@ function bootstrapSpecs_() {
     TABLES.accounts,
     TABLES.accountBalances,
     TABLES.importProfiles,
+    TABLES.importVendorMappings,
+    TABLES.importPersonMappings,
   ];
 }
 
@@ -739,6 +743,17 @@ function buildBootstrapPayload_(recordsBySheet) {
       return record.active !== false;
     });
   }
+  const importProfiles = active(recordsBySheet[TABLES.importProfiles.name]);
+  const importProfileIds = new Set(
+    importProfiles.map(function (profile) {
+      return profile.id;
+    }),
+  );
+  function mappingsForActiveProfiles(records) {
+    return records.filter(function (mapping) {
+      return importProfileIds.has(mapping.importProfileId);
+    });
+  }
   return {
     transactions: transactions.map(function (transaction) {
       return hydrateTransaction_(transaction, references);
@@ -749,9 +764,15 @@ function buildBootstrapPayload_(recordsBySheet) {
     vendors: vendors,
     assignments: assignments,
     users: active(users),
-    importProfiles: active(recordsBySheet[TABLES.importProfiles.name]).map(
-      publicImportProfile_,
-    ),
+    importProfiles: importProfiles.map(publicImportProfile_),
+    importMappings: {
+      vendorMappings: mappingsForActiveProfiles(
+        recordsBySheet[TABLES.importVendorMappings.name],
+      ),
+      personMappings: mappingsForActiveProfiles(
+        recordsBySheet[TABLES.importPersonMappings.name],
+      ),
+    },
     accounts: recordsBySheet[TABLES.accounts.name],
     accountBalances: recordsBySheet[TABLES.accountBalances.name],
   };
@@ -2129,8 +2150,8 @@ function normalizeImportProfile_(input, existing) {
     throw new Error("An import profile is required.");
   const timestamp = new Date().toISOString();
   const target = String(input.target || "").toLowerCase();
-  if (target !== "budget" && target !== "investment")
-    throw new Error("Import target must be budget or investment.");
+  if (target !== "transaction" && target !== "budget" && target !== "investment")
+    throw new Error("Import target must be transaction, budget, or investment.");
   const signature = parseImportJson_(
     input.headerSignature || "[]",
     "Header signature",
@@ -2270,7 +2291,7 @@ function plainImportText_(value, maxLength) {
   return /^[=+\-@]/.test(text) ? "'" + text : text;
 }
 
-function validateImportMappingInputs_(inputs, idField, references) {
+function validateImportMappingInputs_(inputs, idField, references, accountReferences) {
   if (!Array.isArray(inputs))
     throw new Error("Import mappings must be an array.");
   if (inputs.length > 500)
@@ -2290,15 +2311,22 @@ function validateImportMappingInputs_(inputs, idField, references) {
       );
     seen.add(normalized);
     if (input && input.id) requireUuid_(input.id, "Import mapping ID");
+    const isPayee = idField === "vendorId";
+    const hasVendor = Boolean(input && input.vendorId);
+    const hasAccount = Boolean(input && input.accountId);
+    if (isPayee && hasVendor === hasAccount)
+      throw new Error("Choose exactly one vendor or account.");
     const referenceId = requireUuid_(
-      input && input[idField],
-      idField === "vendorId" ? "Vendor ID" : "Assignment ID",
+      input && (isPayee ? input.vendorId || input.accountId : input[idField]),
+      isPayee ? (hasAccount ? "Account ID" : "Vendor ID") : "Assignment ID",
     );
-    const reference = references.get(referenceId);
+    const reference = isPayee && hasAccount
+      ? accountReferences.get(referenceId)
+      : references.get(referenceId);
     if (!reference || reference.active === false)
       throw new Error(
         "Choose an active " +
-          (idField === "vendorId" ? "vendor." : "assignment."),
+          (isPayee ? (hasAccount ? "account." : "vendor.") : "assignment."),
       );
   });
 }
@@ -2309,6 +2337,7 @@ function upsertImportMappingKind_(
   inputs,
   idField,
   references,
+  accountReferences,
 ) {
   if (!Array.isArray(inputs))
     throw new Error("Import mappings must be an array.");
@@ -2343,15 +2372,19 @@ function upsertImportMappingKind_(
         "A source description can only appear once in a mapping batch.",
       );
     seen.add(key);
+    const isPayee = idField === "vendorId";
+    const hasAccount = Boolean(input && input.accountId);
     const referenceId = requireUuid_(
-      input && input[idField],
-      idField === "vendorId" ? "Vendor ID" : "Assignment ID",
+      input && (isPayee ? input.vendorId || input.accountId : input[idField]),
+      isPayee ? (hasAccount ? "Account ID" : "Vendor ID") : "Assignment ID",
     );
-    const reference = references.get(referenceId);
+    const reference = isPayee && hasAccount
+      ? accountReferences.get(referenceId)
+      : references.get(referenceId);
     if (!reference || reference.active === false)
       throw new Error(
         "Choose an active " +
-          (idField === "vendorId" ? "vendor." : "assignment."),
+          (isPayee ? (hasAccount ? "account." : "vendor.") : "assignment."),
       );
     const existing = byKey.get(key);
     const record = {
@@ -2365,7 +2398,10 @@ function upsertImportMappingKind_(
       createdAt: existing ? existing.item.createdAt : timestamp,
       updatedAt: timestamp,
     };
-    record[idField] = referenceId;
+    if (isPayee) {
+      record.vendorId = hasAccount ? "" : referenceId;
+      record.accountId = hasAccount ? referenceId : "";
+    } else record[idField] = referenceId;
     if (existing) records[existing.index] = record;
     else {
       byKey.set(key, { item: record, index: records.length });
@@ -2401,7 +2437,12 @@ function upsertImportMappings_(profileId, vendorInputs, personInputs) {
         return [item.id, item];
       }),
     );
-    validateImportMappingInputs_(vendorInputs || [], "vendorId", vendors);
+    const accounts = new Map(
+      readRecords_(TABLES.accounts, true).map(function (item) {
+        return [item.id, item];
+      }),
+    );
+    validateImportMappingInputs_(vendorInputs || [], "vendorId", vendors, accounts);
     validateImportMappingInputs_(
       personInputs || [],
       "assignmentId",
@@ -2414,6 +2455,7 @@ function upsertImportMappings_(profileId, vendorInputs, personInputs) {
         vendorInputs || [],
         "vendorId",
         vendors,
+        accounts,
       ),
       personMappings: upsertImportMappingKind_(
         TABLES.importPersonMappings,
@@ -2421,6 +2463,7 @@ function upsertImportMappings_(profileId, vendorInputs, personInputs) {
         personInputs || [],
         "assignmentId",
         assignments,
+        accounts,
       ),
     };
   } finally {
@@ -2946,9 +2989,41 @@ function getTableSheet_(spec) {
   if (spec === TABLES.accounts)
     migrateLegacyInvestmentHeaders_(sheet, spec);
   if (spec === TABLES.accounts) migrateV11AccountHeaders_(sheet);
+  if (spec === TABLES.importVendorMappings)
+    migrateImportPayeeMappingHeaders_(sheet, spec);
   ensureSheetHeaders_(sheet, spec.headers, spec.name);
   sheet.setFrozenRows(1);
   return sheet;
+}
+
+function migrateImportPayeeMappingHeaders_(sheet, spec) {
+  const previousHeaders = [
+    "ID",
+    "Import Profile ID",
+    "Source Description",
+    "Normalized Source Description",
+    "Vendor ID",
+    "Active",
+    "Created At",
+    "Updated At",
+  ];
+  const current = sheet
+    .getRange(1, 1, 1, previousHeaders.length)
+    .getValues()[0];
+  if (!headersMatch_(current, previousHeaders)) return;
+  const lastRow = sheet.getLastRow();
+  const rows = lastRow < 2
+    ? []
+    : sheet.getRange(2, 1, lastRow - 1, previousHeaders.length).getValues();
+  sheet.getRange(1, 1, Math.max(lastRow, 1), spec.headers.length).clearContent();
+  sheet.getRange(1, 1, 1, spec.headers.length).setValues([spec.headers]);
+  if (rows.length) {
+    sheet.getRange(2, 1, rows.length, spec.headers.length).setValues(
+      rows.map(function (row) {
+        return row.slice(0, 5).concat([""], row.slice(5));
+      }),
+    );
+  }
 }
 function migrateLegacyInvestmentHeaders_(sheet, spec) {
   const accountHeaders = [
