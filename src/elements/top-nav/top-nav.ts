@@ -6,13 +6,10 @@ import TopNavBarTempString from "./template.html" with { type: "text" };
 import { CustomButton } from "../../components/button/button";
 import { appState } from "../../state/app-state";
 import type {
-  DropdownMenu,
-  DropdownSelectionEvent,
-} from "../../components/dropdown-menu/dropdown-menu";
-import {
-  BUDGETING_CONTENT_ROUTES,
-  getBudgetingRouteDefinition,
-} from "../../screens/budgeting/route-definitions";
+  SegmentedControl,
+  SegmentedControlSelectionEvent,
+} from "../../components/segmented-control/segmented-control";
+import { getBudgetingRouteDefinition } from "../../screens/budgeting/route-definitions";
 
 const TopNavBarTemp = document.createElement("template");
 TopNavBarTemp.innerHTML = TopNavBarTempString;
@@ -21,7 +18,7 @@ TopNavBarTemp.innerHTML = TopNavBarTempString;
 const NAVIGATION_BUTTONS = [
   { title: "Budgeting", icon: "transactions", tab: "budgeting" },
   { title: "Investments", icon: "chart", tab: "investment-overview" },
-  { title: "Goals", icon: "target", tab: "dashboard" },
+  { title: "Settings", icon: "settings", tab: "settings" },
 ];
 
 class TopNavBar extends HTMLElement {
@@ -33,7 +30,7 @@ class TopNavBar extends HTMLElement {
   #nav: HTMLElement | null = null;
   #tooltipButtons: NodeListOf<HTMLElement> | null = null;
   #routeOutlet: HTMLElement | null = null;
-  #budgetingMenu!: DropdownMenu;
+  #primaryNavigation!: SegmentedControl;
   #mobileToggle!: HTMLElement;
   #mobilePanel!: HTMLElement;
 
@@ -42,17 +39,22 @@ class TopNavBar extends HTMLElement {
 
     this.append(clone);
 
-    this.#budgetingMenu = this.querySelector<DropdownMenu>(
-      "#top-budgeting-menu",
+    this.#primaryNavigation = this.querySelector<SegmentedControl>(
+      "#top-primary-navigation",
     )!;
-    this.#renderBudgetingMenu();
-    this.#budgetingMenu.addListener(this);
+    this.#primaryNavigation.items = NAVIGATION_BUTTONS.map(({ title, tab }) => ({
+      key: tab,
+      title,
+      isDefaultValue: tab === "budgeting",
+    }));
+    this.#renderPrimaryNavigation();
     this.#mobileToggle = this.querySelector("#top-mobile-menu-toggle")!;
     this.#mobilePanel = this.querySelector("#top-mobile-navigation")!;
     this.#mobilePanel.inert = true;
     this.#renderMobileNavigation();
 
     this.addEventListener("click", this);
+    this.addEventListener("segmented-control-selection", this);
     document.addEventListener("keydown", this);
     window.addEventListener("app:route-changed", this);
     if (document.readyState === "loading") {
@@ -172,7 +174,7 @@ class TopNavBar extends HTMLElement {
       case "app:route-changed":
         this.classList.remove("is-scrolled");
         this.#closeMobileNavigation();
-        this.#renderBudgetingMenu(
+        this.#renderPrimaryNavigation(
           (
             event as CustomEvent<
               import("../../router/types").RouteChangedEventDetail
@@ -204,8 +206,10 @@ class TopNavBar extends HTMLElement {
         }
         break;
 
-      case "dropdown-selection":
-        this.#handleBudgetingSelection(event as DropdownSelectionEvent);
+      case "segmented-control-selection":
+        this.#handlePrimaryNavigationSelection(
+          event as SegmentedControlSelectionEvent,
+        );
         break;
 
       case "DOMContentLoaded":
@@ -260,7 +264,7 @@ class TopNavBar extends HTMLElement {
       return;
     }
 
-    if (target.closest("#top-budgeting-menu")) return;
+    if (target.closest("#top-primary-navigation")) return;
 
     const newTransaction = target.closest('[data-action="new-transaction"]');
     if (newTransaction) {
@@ -273,16 +277,15 @@ class TopNavBar extends HTMLElement {
     this.handleNavigationClick(target);
   }
 
-  #renderBudgetingMenu(activeRoute = router.currentRoute()): void {
-    const activeDefinition = router.isBudgetingRoute(activeRoute)
-      ? getBudgetingRouteDefinition(activeRoute, router.currentParams())
-      : null;
-    this.#budgetingMenu.items = BUDGETING_CONTENT_ROUTES.map((item) => ({
-      key: item.route,
-      title: item.title,
-      icon: item.icon,
-      isDefaultValue: item.contentKey === activeDefinition?.contentKey,
-    }));
+  #renderPrimaryNavigation(activeRoute = router.currentRoute()): void {
+    const selection = router.isBudgetingRoute(activeRoute) || activeRoute === "new-transaction"
+      ? "budgeting"
+      : activeRoute.startsWith("investment-")
+        ? "investment-overview"
+        : activeRoute === "settings"
+          ? "settings"
+          : null;
+    this.#primaryNavigation.selection = selection;
   }
 
   #renderMobileNavigation(activeRoute = router.currentRoute()): void {
@@ -365,13 +368,15 @@ class TopNavBar extends HTMLElement {
     }
   }
 
-  #handleBudgetingSelection(event: DropdownSelectionEvent): void {
-    const route = event.detail
-      .value as import("../../router/types").BudgetingRouteName;
-    const context = appState.get("budgetingContext");
-    router.navigate(route, {
-      year: String(context.year),
-    });
+  #handlePrimaryNavigationSelection(
+    event: SegmentedControlSelectionEvent,
+  ): void {
+    if (event.detail.value === "budgeting") {
+      const context = appState.get("budgetingContext");
+      router.navigate(context.lastRoute, context.lastParams);
+      return;
+    }
+    router.navigate(event.detail.value as import("../../router/types").RouteName);
   }
 
   private handleNavigationClick(target: HTMLElement) {
@@ -418,8 +423,8 @@ class TopNavBar extends HTMLElement {
 
   disconnectedCallback() {
     this.removeEventListener("click", this);
+    this.removeEventListener("segmented-control-selection", this);
     document.removeEventListener("keydown", this);
-    this.#budgetingMenu?.removeListener(this);
     document.removeEventListener("DOMContentLoaded", this);
     this.#routeOutlet?.removeEventListener("scroll", this, true);
     window.removeEventListener("app:route-changed", this);

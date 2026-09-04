@@ -4,38 +4,24 @@
   </div>
 
   <nav
-    id="top-primary-navigation"
+    id="top-primary-navigation-wrapper"
     class="top-nav__navigation"
     aria-label="Primary navigation"
   >
-    <dropdown-menu
-      id="top-budgeting-menu"
-      class="top-nav__menu"
-      data-tab="budgeting"
-      label="Budgeting"
-      variant="ghost"
-      preserve-label
-      open-on-hover
-      align-start
-    ></dropdown-menu>
-    <custom-button
-      class="top-nav__link ghost-button"
-      data-tab="investment-overview"
-      label="Investments"
-    ></custom-button>
-    <custom-button
-      class="top-nav__link ghost-button"
-      data-tab="dashboard"
-      label="Goals"
-    ></custom-button>
+    <segmented-control
+      id="top-primary-navigation"
+      variant="section-tabs"
+      aria-label="Primary navigation"
+    ></segmented-control>
   </nav>
 
   <div class="top-nav__actions">
     <custom-button
-      class="top-nav__icon-button tertiary square"
-      leading-icon="settings"
-      data-tab="settings"
-      aria-label="Settings"
+      class="top-nav__icon-button primary-button"
+      leading-icon="plus"
+      data-action="new-transaction"
+      aria-label="Add transaction"
+      label="New entry"
     ></custom-button>
     <custom-button
       id="top-mobile-menu-toggle"
@@ -46,12 +32,6 @@
       aria-controls="top-mobile-navigation"
       aria-expanded="false"
       tabindex="0"
-    ></custom-button>
-    <custom-button
-      class="top-nav__icon-button primary-button square"
-      leading-icon="plus"
-      data-action="new-transaction"
-      aria-label="Add transaction"
     ></custom-button>
   </div>
 </div>
@@ -84,17 +64,51 @@
   <nav class="top-nav__mobile-navigation" aria-label="Mobile navigation">
     <section class="top-nav__mobile-section" data-mobile-section="budgeting">
       <h2>Budgeting</h2>
-      <button type="button" data-mobile-route="budget-overview" data-content-key="overview">Overview</button>
-      <button type="button" data-mobile-route="transactions" data-content-key="transactions">Transactions</button>
-      <button type="button" data-mobile-route="categories" data-content-key="categories">Categories</button>
-      <button type="button" data-mobile-route="vendors" data-content-key="vendors">Vendors</button>
-      <button type="button" data-mobile-route="people" data-content-key="people">Assignments</button>
+      <button
+        type="button"
+        data-mobile-route="budget-overview"
+        data-content-key="overview"
+      >
+        Overview
+      </button>
+      <button
+        type="button"
+        data-mobile-route="transactions"
+        data-content-key="transactions"
+      >
+        Transactions
+      </button>
+      <button
+        type="button"
+        data-mobile-route="categories"
+        data-content-key="categories"
+      >
+        Categories
+      </button>
+      <button
+        type="button"
+        data-mobile-route="vendors"
+        data-content-key="vendors"
+      >
+        Vendors
+      </button>
+      <button
+        type="button"
+        data-mobile-route="people"
+        data-content-key="people"
+      >
+        Assignments
+      </button>
     </section>
 
     <section class="top-nav__mobile-section" data-mobile-section="investments">
       <h2>Investments</h2>
-      <button type="button" data-mobile-route="investment-overview">Overview</button>
-      <button type="button" data-mobile-route="investment-accounts">Accounts</button>
+      <button type="button" data-mobile-route="investment-overview">
+        Overview
+      </button>
+      <button type="button" data-mobile-route="investment-accounts">
+        Accounts
+      </button>
     </section>
 
     <section class="top-nav__mobile-section" data-mobile-section="goals">
