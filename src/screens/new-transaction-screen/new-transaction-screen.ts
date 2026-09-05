@@ -93,6 +93,10 @@ export class NewTransactionScreen extends HTMLElement {
         this.#handleAccountSelected(event as CustomEvent);
         break;
 
+      case "payment-type-change":
+        this.#syncSourceVisibility();
+        break;
+
       default:
         break;
     }
@@ -120,6 +124,7 @@ export class NewTransactionScreen extends HTMLElement {
     ).forEach((dropdown) => {
       dropdown.removeAttribute("align-start");
       dropdown.removeAttribute("align-center");
+      dropdown.setAttribute("align-end", "");
     });
   }
 
@@ -129,6 +134,7 @@ export class NewTransactionScreen extends HTMLElement {
     this.#inlineDatePicker.addEventListener("date-change", this);
     this.#compactDatePicker.addEventListener("date-change", this);
     this.#accountSelect.addEventListener("account-selected", this);
+    this.#paymentType.addEventListener("payment-type-change", this);
     addListener("budget:account-created", window, this);
   }
 
@@ -138,6 +144,7 @@ export class NewTransactionScreen extends HTMLElement {
     this.#inlineDatePicker.removeEventListener("date-change", this);
     this.#compactDatePicker.removeEventListener("date-change", this);
     this.#accountSelect.removeEventListener("account-selected", this);
+    this.#paymentType.removeEventListener("payment-type-change", this);
     removeListener("budget:account-created", window, this);
   }
 
@@ -194,9 +201,9 @@ export class NewTransactionScreen extends HTMLElement {
       ? this.#selectedAccountType
       : null;
 
-    this.#sourceSelect.hidden = value === "income";
     this.#sourceSelect.value =
       value === "income" ? "manual" : this.#sourceSelect.value;
+    this.#syncSourceVisibility();
 
     this.#sourceSelect.tooltip =
       value === "expense"
@@ -204,6 +211,14 @@ export class NewTransactionScreen extends HTMLElement {
         : value === "account"
           ? "Investments and debt payments paid through paycheck deductions are counted as both income and an account transfer."
           : "";
+  }
+
+  #syncSourceVisibility(): void {
+    const isIncome = this.#formController.kind === "income";
+    const isBalance =
+      this.#formController.kind === "account" &&
+      this.#paymentType.value === "balance";
+    this.#sourceSelect.hidden = isIncome || isBalance;
   }
 
   #handleAccountSelected = (event: CustomEvent): void => {
@@ -279,7 +294,7 @@ export class NewTransactionScreen extends HTMLElement {
     return true;
   }
 
-  #handleSubmit = (event: SubmitEvent): void => {
+  #handleSubmit = async (event: SubmitEvent): Promise<void> => {
     event.preventDefault();
     this.#message.textContent = "";
     this.#message.className = "form-message";
@@ -294,6 +309,30 @@ export class NewTransactionScreen extends HTMLElement {
 
     const values = new FormData(this.#form);
     try {
+      if (kind === "account" && this.#paymentType.value === "balance") {
+        const accountId = this.#accountSelect.value;
+        const date = this.#dateValue;
+        const month = date.slice(0, 7);
+        const current = APIs.accounts.monthData(accountId, month);
+        if (current?.balance?.asOfDate && current.balance.asOfDate >= date) {
+          this.#message.className = "form-message error";
+          this.#message.textContent =
+            "A later balance already exists for this month.";
+          return;
+        }
+        await APIs.accounts.saveMonth({
+          accountId,
+          month,
+          balance: values.get("amount") as string,
+          asOfDate: date,
+          balanceId: current?.balance?.id,
+          existingActivity: current?.activity || [],
+          activity: current?.activity || [],
+        });
+        showToast("Balance added. Syncing…");
+        this.#reset(date, true);
+        return;
+      }
       APIs.budget.queueTransaction(
         this.#formController.buildDraft({
           kind,

@@ -199,10 +199,8 @@ export class InvestmentDebtDetailScreen
       const row = this.#rows.find((item) => item.id === id);
       if (row) {
         router.updateParams({
-          drawer: "investment-month",
-          investmentAccountId: this.#accountId,
-          investmentMonth: row.month,
-          investmentLedgerSource: "debt",
+          drawer: "edit",
+          transactionId: row.id,
         });
       }
       return;
@@ -243,7 +241,7 @@ export class InvestmentDebtDetailScreen
         const currentBalance = Number(balance.balance || 0);
         const previousBalance = Number(previous?.balance ?? 0);
         return {
-          id: balance.month,
+          id: balance.id,
           month: balance.month,
           payments: payments
             .filter((item) => item.month === balance.month)

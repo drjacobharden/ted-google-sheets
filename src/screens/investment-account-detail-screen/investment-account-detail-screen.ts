@@ -203,10 +203,8 @@ export class InvestmentAccountDetailScreen
       const row = this.#rows.find((item) => item.id === id);
       if (row) {
         router.updateParams({
-          drawer: "investment-month",
-          investmentAccountId: this.#accountId,
-          investmentMonth: row.month,
-          investmentLedgerSource: "investment",
+          drawer: "edit",
+          transactionId: row.id,
         });
       }
       return;
@@ -264,7 +262,7 @@ export class InvestmentAccountDetailScreen
             )
           : null;
         return {
-          id: balance.month,
+          id: balance.id,
           month: balance.month,
           contributions: netFlows(
             flows.filter((item) => item.month === balance.month),

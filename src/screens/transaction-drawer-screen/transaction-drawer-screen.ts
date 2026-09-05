@@ -62,9 +62,11 @@ document.addEventListener("DOMContentLoaded", () => {
     .forEach((dropdown) => {
       dropdown.removeAttribute("align-start");
       dropdown.removeAttribute("align-center");
+      dropdown.setAttribute("align-end", "");
     });
 
   let transactionId = "";
+  let balanceRecord = null;
   let openedBase = null;
   let drawerDirty = false;
   let trackDrawerChanges = false;
@@ -81,8 +83,9 @@ document.addEventListener("DOMContentLoaded", () => {
     drawerDirty = false;
     const displayed = appController.getTransaction(id);
     const queued = APIs.budget.getTransactionOutboxItem(id);
+    const balance = APIs.accounts.balances().find((item) => item.id === id);
 
-    if (!displayed && !queued) {
+    if (!displayed && !queued && !balance) {
       showToast("That transaction is no longer available.", {
         type: "error",
       });
@@ -91,10 +94,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     transactionId = id;
+    balanceRecord = balance;
     returnFocus = document.activeElement;
 
-    const record =
-      options.review && queued
+    const record = balance ||
+      (options.review && queued
         ? {
             ...queued.record,
             ...APIs.budget
@@ -102,19 +106,29 @@ document.addEventListener("DOMContentLoaded", () => {
               .find((item) => item.source === "transaction" && item.id === id)
               ?.record,
           }
-        : displayed || queued.record;
+        : displayed || queued?.record);
 
-    openedBase =
-      options.review && queued?.currentRecord
+    openedBase = balanceRecord ||
+      (options.review && queued?.currentRecord
         ? queued.currentRecord
-        : queued?.baseRecord || displayed || queued.record;
+        : queued?.baseRecord || displayed || queued.record);
 
     message.textContent = "";
     message.className = "form-message";
 
-    populateFormFromRecord(record);
+    populateFormFromRecord(
+      balanceRecord
+        ? {
+            ...balanceRecord,
+            amount: balanceRecord.balance,
+            date: balanceRecord.asOfDate,
+            notes: balanceRecord.notes,
+          }
+        : record,
+    );
 
     transactionIdElement.textContent = record.id;
+    deleteButton.label = balanceRecord ? "Delete balance" : "Delete transaction";
 
     const createdAt = new Date(record.createdAt);
     const createdWhen = Number.isNaN(createdAt.getTime())
@@ -214,6 +228,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     updateTypeFields();
+    if (balanceRecord) {
+      paymentTypeElement.value = "balance";
+      setPaymentTypeDisabled(true);
+    } else {
+      setPaymentTypeDisabled(false);
+    }
     populateFormOptions({
       categoryId: record.categoryId || "",
       category: record.category || "",
@@ -225,6 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
     accountSelect.value = record.accountId || "";
     sourceSelect.value = record.source || "manual";
     updatePresentation();
+    if (balanceRecord) header.title = "Edit Balance";
   }
 
   function updateTypeFields() {
@@ -239,6 +260,17 @@ document.addEventListener("DOMContentLoaded", () => {
     amountControl.min = 0.01;
     paymentTypeElement.kind = transactionKind;
     paymentTypeElement.accountType = account ? selectedAccountType : null;
+    const isBalance = Boolean(balanceRecord);
+    paymentTypeElement.closest(".transaction-payment-type").hidden = isBalance;
+    sourceSelect.hidden = isBalance;
+    setPaymentTypeDisabled(Boolean(balanceRecord));
+  }
+
+  function setPaymentTypeDisabled(disabled) {
+    paymentTypeElement
+      .querySelector(".dropdown-trigger")
+      ?.toggleAttribute("disabled", disabled);
+    paymentTypeElement.toggleAttribute("aria-disabled", disabled);
   }
 
   function updatePresentation() {
@@ -274,6 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
     openedBase = null;
     transactionKind = "expense";
     selectedAccountType = null;
+    balanceRecord = null;
     (returnFocus && document.contains(returnFocus)
       ? returnFocus
       : document.querySelector('[data-tab="budgeting"]')
@@ -346,7 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return true;
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     message.textContent = "";
@@ -361,6 +394,39 @@ document.addEventListener("DOMContentLoaded", () => {
       form.reportValidity();
       message.className = "form-message error";
       message.textContent = "Complete the required fields before saving.";
+      return;
+    }
+
+    if (balanceRecord) {
+      const date = datePickerElement.value;
+      const accountId = accountSelect.value;
+      const month = date.slice(0, 7);
+      const current = APIs.accounts.monthData(accountId, month);
+      const sameBalance = current?.balance?.id === balanceRecord.id;
+      if (current?.balance && !sameBalance) {
+        message.className = "form-message error";
+        message.textContent =
+          "That account already has a balance for this month.";
+        return;
+      }
+      try {
+        await APIs.accounts.saveMonth({
+          accountId,
+          month,
+          balance: values.get("amount"),
+          notes: values.get("notes"),
+          asOfDate: date,
+          balanceId: sameBalance ? balanceRecord.id : undefined,
+          existingActivity: current?.activity || [],
+          activity: current?.activity || [],
+        });
+        if (!sameBalance) await APIs.accounts.deleteBalance(balanceRecord.id);
+        showToast("Balance updated. Syncing…");
+        close(true);
+      } catch (error) {
+        message.className = "form-message error";
+        message.textContent = error.message;
+      }
       return;
     }
 
@@ -405,7 +471,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     deleteButton.setAttribute("disabled", "");
     try {
-      await APIs.budget.deleteTransaction(transactionId, openedBase);
+      if (balanceRecord) await APIs.accounts.deleteBalance(balanceRecord.id);
+      else await APIs.budget.deleteTransaction(transactionId, openedBase);
       drawerDirty = false;
       showToast("Transaction deleted.");
       close(true);

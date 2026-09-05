@@ -14,7 +14,7 @@ export interface TransactionEditPresentation {
   title: "Edit Expense" | "Edit Income" | "Edit Account Activity";
   paymentType: string;
   paymentTypeKey: PaymentTypeKey;
-  paymentTypeOptions: readonly [string, string];
+  paymentTypeOptions: readonly string[];
 }
 
 /** Derives the fixed edit context and signed activity label shown in the drawer. */

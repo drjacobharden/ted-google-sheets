@@ -123,9 +123,8 @@ export class InvestmentLedgerScreen
           const row = this.#visibleRows.find((item) => item.id === id);
           if (!row) return;
           router.updateParams({
-            drawer: "investment-ledger-entry",
-            investmentLedgerId: row.id,
-            investmentLedgerSource: row.source,
+            drawer: "edit",
+            transactionId: row.id,
           });
         });
         break;
