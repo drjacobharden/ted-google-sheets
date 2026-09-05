@@ -57,6 +57,35 @@ top-nav {
     border-radius: var(--radius-subtle);
   }
 
+  .top-nav__user-button {
+    height: auto;
+    min-width: 120px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    padding: 6px 8px 6px 8px;
+    margin-right: -8px;
+    text-align: right;
+
+    .top-nav__user-label,
+    .top-nav__user-name {
+      line-height: var(--leading-tight);
+    }
+
+    .top-nav__user-label {
+      color: var(--color-text-subtle);
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+    }
+
+    .top-nav__user-name {
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+    }
+  }
+
   .top-nav__mobile-toggle,
   .top-nav__mobile-scrim,
   .top-nav__mobile-panel {
@@ -91,7 +120,8 @@ top-nav.is-scrolled {
       grid-column: 2;
     }
 
-    .top-nav__actions > :first-child {
+    .top-nav__actions > :first-child,
+    .top-nav__user-button {
       display: none;
     }
 

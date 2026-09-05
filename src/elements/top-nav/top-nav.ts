@@ -18,7 +18,7 @@ TopNavBarTemp.innerHTML = TopNavBarTempString;
 const NAVIGATION_BUTTONS = [
   { title: "Budgeting", icon: "transactions", tab: "budgeting" },
   { title: "Investments", icon: "chart", tab: "investment-overview" },
-  { title: "Settings", icon: "settings", tab: "settings" },
+  { title: "New entry", icon: "plus", tab: "new-transaction" },
 ];
 
 class TopNavBar extends HTMLElement {
@@ -51,12 +51,14 @@ class TopNavBar extends HTMLElement {
     this.#mobileToggle = this.querySelector("#top-mobile-menu-toggle")!;
     this.#mobilePanel = this.querySelector("#top-mobile-navigation")!;
     this.#mobilePanel.inert = true;
+    this.#renderCurrentUser();
     this.#renderMobileNavigation();
 
     this.addEventListener("click", this);
     this.addEventListener("segmented-control-selection", this);
     document.addEventListener("keydown", this);
     window.addEventListener("app:route-changed", this);
+    window.addEventListener("budget:active-user-changed", this);
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", this, { once: true });
     } else {
@@ -190,6 +192,10 @@ class TopNavBar extends HTMLElement {
         );
         break;
 
+      case "budget:active-user-changed":
+        this.#renderCurrentUser();
+        break;
+
       case "keydown":
         if (
           ["Enter", " "].includes((event as KeyboardEvent).key) &&
@@ -266,10 +272,18 @@ class TopNavBar extends HTMLElement {
 
     if (target.closest("#top-primary-navigation")) return;
 
-    const newTransaction = target.closest('[data-action="new-transaction"]');
+    const newTransaction = target.closest(
+      '[data-action="new-entry"], [data-action="new-transaction"]',
+    );
     if (newTransaction) {
       event.preventDefault();
       router.navigate("new-transaction");
+      return;
+    }
+
+    if (target.closest('[data-action="current-user"]')) {
+      event.preventDefault();
+      router.navigate("settings");
       return;
     }
 
@@ -278,14 +292,23 @@ class TopNavBar extends HTMLElement {
   }
 
   #renderPrimaryNavigation(activeRoute = router.currentRoute()): void {
-    const selection = router.isBudgetingRoute(activeRoute) || activeRoute === "new-transaction"
-      ? "budgeting"
+    const selection = activeRoute === "new-transaction"
+      ? "new-transaction"
+      : router.isBudgetingRoute(activeRoute)
+        ? "budgeting"
       : activeRoute.startsWith("investment-")
         ? "investment-overview"
-        : activeRoute === "settings"
-          ? "settings"
-          : null;
+        : null;
     this.#primaryNavigation.selection = selection;
+  }
+
+  #renderCurrentUser(): void {
+    const name = this.querySelector<HTMLElement>("#top-current-user-name");
+    if (!name) return;
+    const user = APIs.budget.getActiveUser();
+    name.textContent = user
+      ? `${user.firstName} ${user.lastName}`.trim()
+      : "Choose a user";
   }
 
   #renderMobileNavigation(activeRoute = router.currentRoute()): void {
@@ -428,6 +451,7 @@ class TopNavBar extends HTMLElement {
     document.removeEventListener("DOMContentLoaded", this);
     this.#routeOutlet?.removeEventListener("scroll", this, true);
     window.removeEventListener("app:route-changed", this);
+    window.removeEventListener("budget:active-user-changed", this);
     this.#wrapper?.removeEventListener("click", this);
     window.removeEventListener("budget:sync-changed", this);
     window.removeEventListener("online", this);

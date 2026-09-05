@@ -17,12 +17,13 @@
 
   <div class="top-nav__actions">
     <custom-button
-      class="top-nav__icon-button primary-button"
-      leading-icon="plus"
-      data-action="new-transaction"
-      aria-label="Add transaction"
-      label="New entry"
-    ></custom-button>
+      class="top-nav__user-button ghost-button"
+      data-action="current-user"
+      aria-label="Open settings"
+    >
+      <span class="top-nav__user-label">Current user</span>
+      <span class="top-nav__user-name" id="top-current-user-name">—</span>
+    </custom-button>
     <custom-button
       id="top-mobile-menu-toggle"
       class="top-nav__mobile-toggle tertiary square"

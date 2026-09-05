@@ -52,11 +52,11 @@ custom-button {
     color: var(--text);
 
     &:hover {
-      background-color: var(--secondary-button-hover);
+      background-color: var(--color-surface-raised);
     }
 
     &:active {
-      background-color: var(--secondary-button-active);
+      background-color: var(--color-surface-raised);
       opacity: 0.6;
     }
   }
