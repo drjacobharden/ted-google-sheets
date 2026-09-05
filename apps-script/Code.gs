@@ -422,6 +422,8 @@ function handleRequest_(request) {
         return success_(saveAccountMonths_(request.months));
       case "deleteAccountActivity":
         return success_(deleteAccountActivity_(request.id));
+      case "deleteAccountBalance":
+        return success_(withScriptLock_(function () { return deleteAccountBalance_(request); }));
       // Deprecated adapters for the staged UI migration. They all delegate to
       // the unified sheets and never recreate legacy persistence.
       case "listInvestmentAccounts":
@@ -1588,6 +1590,19 @@ function accountTypeById_(id) { const account = getRecordById_(TABLES.accounts, 
 function legacyDebtBalance_(record) { return { ...record, debtAccountId: record.accountId }; }
 function legacyDebtActivity_(record) { return { ...record, debtAccountId: record.accountId, kind: record.activityType }; }
 function deleteAccountActivity_(id) { return deleteDebtPayment_(id); }
+function deleteAccountBalance_(input) {
+  const id = requireUuid_(input && input.id, "Account balance ID");
+  const sheet = getTableSheet_(TABLES.accountBalances);
+  const records = readRecords_(TABLES.accountBalances, true);
+  const index = records.findIndex(function (item) { return item.id === id; });
+  if (index < 0) throw new Error("That account balance could not be found.");
+  const existing = records[index];
+  if (input.base && !investmentRecordMatches_(existing, input.base, ["accountId", "month", "balance", "notes", "asOfDate"], ["balance"]))
+    throw new Error("This account balance changed in the Sheet after you opened it.");
+  records.splice(index, 1);
+  writeInvestmentRecords_(sheet, TABLES.accountBalances, records, Math.max(0, sheet.getLastRow() - 1));
+  return { id: id, deleted: true };
+}
 function saveAccount_(input) { return input && input.type === "debt" ? saveDebtAccount_(input) : saveInvestmentAccount_(input); }
 function saveInvestmentAccount_(input) { const row = findRowById_(getTableSheet_(TABLES.accounts), input && input.id); return row ? updateInvestmentAccount_(input) : addInvestmentAccounts_([input]).saved[0]; }
 
