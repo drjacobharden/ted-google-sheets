@@ -1,6 +1,7 @@
 import type { BudgetEntity, TransactionType } from "../api/budget-api";
 import type { ImportProfile, ImportProfileBundle } from "../api/import-api";
-import type { InvestmentAccount, InvestmentMonth } from "../api/investment-types";
+import type { Account } from "../api/account-api";
+import type { InvestmentMonth } from "../api/investment-types";
 
 export type ImportColumnReference = number | string | { index: number } | null | undefined;
 export type ImportColumnKey =
@@ -15,7 +16,7 @@ export interface ImportReferences {
   categories: BudgetEntity[];
   vendors: BudgetEntity[];
   people: BudgetEntity[];
-  accounts: InvestmentAccount[];
+  accounts: Account[];
   sharedAssignmentId: string;
 }
 
@@ -40,7 +41,10 @@ export interface StagedImportRow {
   amount?: number | string | null;
   sourceAmount?: number | null;
   sourceDirection?: "unified" | "debit" | "credit";
-  amountSignConvention?: "expensesNegative" | "expensesPositive";
+  amountSignConvention?:
+    | "expensesNegative"
+    | "expensesPositive"
+    | "allPositiveRefundsNegative";
   amountEdited?: boolean;
   amountLayoutError?: string;
   vendorDescription?: string;
@@ -50,6 +54,7 @@ export interface StagedImportRow {
   personDescription?: string;
   normalizedPersonDescription?: string;
   vendorId?: string;
+  payeeKind?: "vendor" | "account" | "";
   vendorResolution?: "saved" | "unresolved" | "pending" | "custom";
   personId?: string;
   personResolution?: "saved" | "unresolved" | "pending" | "default" | "custom";
@@ -57,6 +62,8 @@ export interface StagedImportRow {
   type?: TransactionType | "";
   notes?: string;
   accountId?: string;
+  accountType?: "investment" | "debt";
+  source?: "manual" | "deduction";
   month?: string | null;
   balance?: number | string | null;
   balanceOrigin?: "" | "csv" | "existing" | "manual";

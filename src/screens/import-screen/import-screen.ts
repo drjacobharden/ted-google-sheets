@@ -1,8 +1,7 @@
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
-import { InvestmentView } from "../../utilities/investment-view";
-import { midpoint, monthEnd } from "../../utilities/investment-returns";
 import { createTransactionRow } from "../../utilities/transaction-row";
+import { DateUtils } from "../../utilities/date-utilities";
 import {
   dateRangeDetail,
   eventTargetElement,
@@ -33,16 +32,34 @@ import {
   type StagedImportRow,
 } from "../../utilities/import-runtime";
 import {
+  applyGroupSelection,
+  BudgetImportSummary,
+  groupBudgetRows,
+  groupHasBlockingErrors,
+  groupSelectionState,
+  summarizeBudgetImport,
+  transactionBalanceEffect,
+  vendorGroupProgress,
+  type VendorReviewGroup,
+} from "../../utilities/import-review-groups";
+import {
+  parsePayeeKey,
+  payeeKey,
+} from "../../components/dropdowns/payee-select-options";
+import {
   escapeHTML,
   messageFromError,
   money,
 } from "../../utilities/view-formatters";
+import { showToast } from "../../components/toast-stack/toast-service";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
 let cleanup: (() => void) | null = null;
 const PAGE_SIZE = 50;
+const WORKFLOW_STEPS = ["upload", "mapping", "review", "summary"] as const;
+type WorkflowStep = (typeof WORKFLOW_STEPS)[number];
 
 type ImportFilter =
   | "all"
@@ -66,7 +83,10 @@ interface WizardMapping {
   month: ImportColumnReference;
   balance: ImportColumnReference;
   contributions: number[];
-  amountSignConvention: "expensesNegative" | "expensesPositive";
+  amountSignConvention:
+    | "expensesNegative"
+    | "expensesPositive"
+    | "allPositiveRefundsNegative";
 }
 
 interface MappingWizard {
@@ -97,11 +117,17 @@ interface ImportRoot extends HTMLElement {
 
 interface ImportSelectControl extends HTMLElement {
   value: string;
-  configureOptions(options: {
-    getOptions: () => BudgetEntity[];
-    createOption: (name: string) => BudgetEntity;
-    onCreate: () => void;
-  }): void;
+  configureOptions(options: any): void;
+}
+
+interface ImportSegmentedControl extends HTMLElement {
+  items: Array<{ key: string; title: string; disabled?: boolean }>;
+  selection: string | null;
+}
+
+interface ImportMappingSelect extends HTMLElement {
+  value: string;
+  configureOptions(getOptions: () => ImportProfile[]): void;
 }
 
 interface ImportCommitStep {
@@ -137,11 +163,17 @@ interface ImportState {
   expandedInvestmentMonths: Set<string>;
   commit: ImportCommit;
   visibleLimit: number;
+  workflowStep: WorkflowStep;
+  maxWorkflowStep: number;
+  vendorGroups: VendorReviewGroup[];
+  activeVendorGroupIndex: number;
+  completedVendorGroups: Set<string>;
+  reviewDirty: boolean;
 }
 
 interface ImportProfileControls extends HTMLFormControlsCollection {
   profileId: HTMLSelectElement;
-  target: HTMLSelectElement;
+  target: HTMLInputElement | HTMLSelectElement;
   name: HTMLInputElement;
   investmentAccountId: HTMLSelectElement;
 }
@@ -198,7 +230,7 @@ function mount(root: ImportRoot): void {
     pendingVendors: new Map(),
     pendingPeople: new Map(),
     filter: "all",
-    target: "budget",
+    target: "transaction",
     mappingWizard: null as unknown as MappingWizard,
     draftEntities: {
       vendor: new Map(),
@@ -209,15 +241,90 @@ function mount(root: ImportRoot): void {
     expandedInvestmentMonths: new Set(),
     commit: null as unknown as ImportCommit,
     visibleLimit: PAGE_SIZE,
+    workflowStep: "upload",
+    maxWorkflowStep: 0,
+    vendorGroups: [],
+    activeVendorGroupIndex: 0,
+    completedVendorGroups: new Set(),
+    reviewDirty: false,
   };
   root.append(template.content.cloneNode(true));
 
+  const html = {
+    upload: "",
+    map: "",
+    input: "",
+    review: (p: {
+      summary: BudgetImportSummary;
+      invalidIncluded: boolean;
+      disabled: boolean;
+      connected: boolean;
+      online: boolean;
+      sign: string;
+    }) => `
+      <header class="import-pane-heading">
+        <p class="type-label">Import summary</p>
+        <h2>Ready to import</h2>
+        <p>Review the totals below before writing these transactions to Google Sheets.</p>
+      </header>
+      <div class="editorial-surface import-surface">
+        <dl class="import-summary-grid">
+          <div>
+            <dt>Ready transactions</dt>
+            <dd>${p.summary.readyCount}</dd>
+          </div>
+          <div>
+            <dt>Vendor groups</dt>
+            <dd>${p.summary.groupCount}</dd>
+          </div>
+          <div>
+            <dt>Excluded</dt>
+            <dd>${p.summary.excludedCount}</dd>
+          </div>
+          <div>
+            <dt>Net balance</dt>
+            <dd class="${p.summary.netBalance < 0 ? "negative" : "positive"}">${p.sign}${money(Math.abs(p.summary.netBalance))}</dd>
+          </div>
+        </dl>
+        ${p.invalidIncluded ? '<p class="import-summary-note error">Some included transactions still need attention.</p>' : ""}
+        <div class="import-actions">
+          <button class="secondary-button" type="button" data-import-action="summary-back">← Back to review</button>
+          <button class="primary-button" type="button" data-import-action="commit"${p.disabled ? " disabled" : ""}${!p.connected ? ' title="Connect a Google Sheet in Settings before importing."' : !p.online ? ' title="Reconnect to the internet before importing."' : ""}>Import ${p.summary.readyCount} transaction${p.summary.readyCount === 1 ? "" : "s"} →</button>
+        </div>
+      </div>
+    `,
+  };
+
   const fileInput = root.querySelector<HTMLInputElement>("#import-file")!;
+  const fileControl = root.querySelector<HTMLElement>(".import-file-control")!;
+  const uploadSurface = root.querySelector<HTMLElement>(
+    "#import-upload-surface",
+  )!;
+  const fileButton = root.querySelector<HTMLElement>(
+    "#import-upload-surface custom-button",
+  )!;
+  const mappingSelect = root.querySelector<ImportMappingSelect>(
+    "#import-profile-select",
+  )!;
+  const useProfileButton = root.querySelector<HTMLElement>(
+    '[data-import-action="use-profile"]',
+  )!;
   const profileStep = root.querySelector<HTMLElement>("#import-profile-step")!;
   const mappingStep = root.querySelector<HTMLElement>("#import-mapping-step")!;
   const reviewStep = root.querySelector<HTMLElement>("#import-review-step")!;
   const progressStep = root.querySelector<HTMLElement>(
     "#import-progress-step",
+  )!;
+  const summaryStep = root.querySelector<HTMLElement>("#import-summary-step")!;
+  const summaryContent = root.querySelector<HTMLElement>(
+    "#import-summary-content",
+  )!;
+  const groupReview = root.querySelector<HTMLElement>(
+    "#import-budget-group-review",
+  )!;
+  const groupFooter = root.querySelector<HTMLElement>("#import-group-footer")!;
+  const workflowStepper = root.querySelector<ImportSegmentedControl>(
+    "#import-workflow-stepper",
   )!;
   const profileForm = root.querySelector<ImportProfileForm>(
     "#import-profile-form",
@@ -225,18 +332,55 @@ function mount(root: ImportRoot): void {
   const mappingForm = root.querySelector<ImportMappingForm>(
     "#import-mapping-form",
   )!;
-  const profileMessage = root.querySelector<HTMLElement>(
-    "#import-profile-message",
-  )!;
   const mappingMessage = root.querySelector<HTMLElement>(
     "#import-mapping-message",
-  )!;
-  const reviewMessage = root.querySelector<HTMLElement>(
-    "#import-review-message",
   )!;
   const loadMoreButton = root.querySelector<HTMLButtonElement>(
     '[data-import-action="load-more"]',
   )!;
+
+  /** Keeps the upload control's label and action in sync with import state. */
+  function renderFileControl(): void {
+    const hasFile = Boolean(state.parsed);
+    fileInput.disabled = hasFile;
+    fileControl.classList.toggle("has-file", hasFile);
+    fileButton.removeAttribute("data-import-action");
+    fileButton.setAttribute("aria-hidden", hasFile ? "false" : "true");
+    (fileButton as HTMLElement & { label: string }).label = hasFile
+      ? "Clear import"
+      : "Choose a file";
+    if (hasFile) fileButton.dataset.importAction = "clear";
+  }
+
+  /** Shows the profile fetch state inside the primary card action. */
+  function renderProfileFetchState(fetching: boolean): void {
+    const arrow = useProfileButton.querySelector<HTMLElement>(
+      ".custom-button-icon",
+    );
+    let spinner = useProfileButton.querySelector<HTMLElement>(
+      ".import-profile-spinner",
+    );
+    if (fetching) {
+      useProfileButton.setAttribute("disabled", "");
+      useProfileButton.setAttribute("aria-busy", "true");
+      (useProfileButton as HTMLElement & { label: string }).label =
+        "Fetching profile";
+      arrow?.setAttribute("hidden", "");
+      if (!spinner) {
+        spinner = document.createElement("span");
+        spinner.className = "import-profile-spinner";
+        spinner.setAttribute("aria-hidden", "true");
+        useProfileButton.prepend(spinner);
+      }
+      return;
+    }
+    useProfileButton.removeAttribute("disabled");
+    useProfileButton.removeAttribute("aria-busy");
+    (useProfileButton as HTMLElement & { label: string }).label =
+      "Use this profile";
+    arrow?.removeAttribute("hidden");
+    spinner?.remove();
+  }
 
   /** Displays a status message with an optional visual state. */
   const message = (element: HTMLElement, text: string, kind = ""): void => {
@@ -244,20 +388,96 @@ function mount(root: ImportRoot): void {
     element.className = `import-message${kind ? ` ${kind}` : ""}`;
   };
 
+  /** Synchronizes the shared tab control with reachable workflow panes. */
+  function renderWorkflowStepper(): void {
+    const labels: Record<WorkflowStep, string> = {
+      upload: "1  Upload & Profile",
+      mapping: "2  Map columns",
+      review: "3  Review vendors",
+      summary: "4  Summary",
+    };
+    workflowStepper.items = WORKFLOW_STEPS.map((key, index) => ({
+      key,
+      title: labels[key],
+      disabled: index > state.maxWorkflowStep,
+    }));
+    workflowStepper.selection = state.workflowStep;
+  }
+
+  /** Shows one importer pane while retaining prior steps for revisiting. */
+  function showWorkflowStep(step: WorkflowStep, maxStep?: number): void {
+    state.workflowStep = step;
+    if (maxStep !== undefined)
+      state.maxWorkflowStep = Math.max(state.maxWorkflowStep, maxStep);
+    root
+      .querySelectorAll<HTMLElement>("[data-workflow-step]")
+      .forEach((pane) => {
+        pane.hidden = pane.dataset.workflowStep !== step;
+      });
+    renderWorkflowStepper();
+  }
+
   /** Renders the saved import profiles in the profile selector. */
+  function availableProfiles(): ImportProfile[] {
+    return state.profiles;
+  }
+
+  function renderProfileCard(): void {
+    const profiles = availableProfiles();
+    const card = root.querySelector<HTMLElement>("#import-saved-profile-card")!;
+    const title = root.querySelector<HTMLElement>(
+      "#import-profile-card-title",
+    )!;
+    const description = root.querySelector<HTMLElement>(
+      "#import-profile-card-description",
+    )!;
+    const actions = root.querySelector<HTMLElement>(
+      "#import-profile-card-actions",
+    )!;
+    const selected = profiles.find(
+      (profile) => profile.id === profileForm.elements.profileId.value,
+    );
+    card.hidden = profiles.length === 0;
+    if (!profiles.length) return;
+
+    if (!selected) {
+      title.textContent = "Choose a profile";
+      description.textContent =
+        "Select an existing import profile to get started";
+      actions.hidden = true;
+      mappingSelect.hidden = false;
+      mappingSelect.value = "";
+      return;
+    }
+
+    title.textContent = selected.name;
+    description.textContent = profileMappingIsUsable(selected)
+      ? "Matched to this profile"
+      : "Needs re-mapping to match current CSV";
+    actions.hidden = false;
+    mappingSelect.hidden = true;
+    mappingSelect.value = selected.id;
+  }
+
   function profileOptions(): void {
     const select = profileForm.elements.profileId;
     const current = select.value;
+    mappingSelect.configureOptions(availableProfiles);
     select.innerHTML =
       '<option value="">Create a new profile</option>' +
-      state.profiles
+      availableProfiles()
         .map(
           (profile) =>
-            `<option value="${escapeHTML(profile.id)}">${escapeHTML(profile.name)} · ${profile.target === "investment" ? "Investments" : "Budget"}</option>`,
+            `<option value="${escapeHTML(profile.id)}">${escapeHTML(profile.name)}</option>`,
         )
         .join("");
-    if (state.profiles.some((item) => item.id === current))
+    if (
+      state.profiles.some(
+        (item) => item.id === current,
+      )
+    )
       select.value = current;
+    renderProfileCard();
   }
 
   /** Renders active investment accounts in the target-account selector. */
@@ -277,44 +497,57 @@ function mount(root: ImportRoot): void {
 
   /** Updates target-specific profile fields and validation. */
   function updateTargetFields(): void {
-    const investment = profileForm.elements.target.value === "investment";
-    root.querySelector("[data-investment-account-field]").hidden = !investment;
-    profileForm.elements.investmentAccountId.required = investment;
-    state.target = investment ? "investment" : "budget";
+    root.querySelector("[data-investment-account-field]").hidden = true;
+    profileForm.elements.investmentAccountId.required = false;
+    state.target = "transaction";
   }
 
   /** Applies the selected profile's values to the profile form. */
   function chooseProfileCandidate(): void {
     const id = profileForm.elements.profileId.value;
     const profile = state.profiles.find((item) => item.id === id);
-    root.querySelector('[data-import-action="archive-profile"]').hidden =
-      !profile;
     if (!profile) {
       profileForm.elements.name.value = "";
       updateTargetFields();
+      renderProfileCard();
       return;
     }
     profileForm.elements.name.value = profile.name;
-    profileForm.elements.target.value = profile.target;
+    profileForm.elements.target.value = "transaction";
     profileForm.elements.investmentAccountId.value =
       profile.investmentAccountId || "";
     updateTargetFields();
+    renderProfileCard();
   }
 
   /** Renders a short preview of the uploaded CSV. */
   function renderSourcePreview(): void {
-    const preview = root.querySelector("#import-source-preview");
+    const preview = root.querySelector<HTMLElement>("#import-source-preview")!;
+    preview.hidden = !state.parsed;
     if (!state.parsed) {
       preview.innerHTML = "";
       return;
     }
-    preview.innerHTML = `<table><thead><tr>${state.parsed.headers.map((header) => `<th>${escapeHTML(header.label)}</th>`).join("")}</tr></thead><tbody>${state.parsed.rows
-      .slice(0, 3)
-      .map(
-        (row) =>
-          `<tr>${row.values.map((value) => `<td>${escapeHTML(value)}</td>`).join("")}</tr>`,
-      )
-      .join("")}</tbody></table>`;
+    preview.innerHTML = `
+      <div class="import-section-rule">
+        <span class="type-label">CSV preview</span>
+        <small>${state.parsed.rows.length} rows · ${state.parsed.headers.length} columns</small>
+      </div>
+      <div class="import-preview-scroll">
+        <table>
+          <thead>
+            <tr>${state.parsed.headers.map((header) => `<th>${escapeHTML(header.label)}</th>`).join("")}</tr>
+          </thead>
+          <tbody>${state.parsed.rows
+            .slice(0, 3)
+            .map(
+              (row) =>
+                `<tr>${row.values.map((value) => `<td>${escapeHTML(value)}</td>`).join("")}</tr>`,
+            )
+            .join("")}
+          </tbody>
+        </table>
+      </div>`;
   }
 
   const BUDGET_WIZARD_STEPS = [
@@ -435,9 +668,7 @@ function mount(root: ImportRoot): void {
 
   /** Returns the step labels for the current import target. */
   function wizardSteps(): string[] {
-    return state.profile?.target === "investment"
-      ? INVESTMENT_WIZARD_STEPS
-      : BUDGET_WIZARD_STEPS;
+    return BUDGET_WIZARD_STEPS;
   }
 
   /** Returns the budget fields currently selected in the wizard. */
@@ -542,8 +773,27 @@ function mount(root: ImportRoot): void {
     mapping: ImportColumnReference,
     transform?: (value: string) => string | null | undefined,
   ): string {
-    const values = importUtils.columnValues(state.parsed, mapping).slice(0, 5);
+    const values = importUtils.columnValues(state.parsed, mapping).slice(0, 3);
     return `<div class="import-wizard-samples"><strong>Sample values</strong>${values.length ? `<ul>${values.map((value) => `<li>${escapeHTML(transform ? `${value} → ${transform(value) || "invalid"}` : value)}</li>`).join("")}</ul>` : "<p>Choose a column to see examples.</p>"}</div>`;
+  }
+
+  /** Renders a dropdown-menu backed by a hidden form value for the mapping wizard. */
+  function wizardDropdown(
+    name: string,
+    label: string,
+    optionsMarkup: string,
+  ): string {
+    const select = document.createElement("select");
+    select.innerHTML = optionsMarkup;
+    const items = [...select.options]
+      .filter((option) => option.value !== "")
+      .map((option) => ({
+        key: option.value,
+        title: option.textContent || option.value,
+        isDefaultValue: option.selected,
+      }));
+    const value = select.value;
+    return `<input type="hidden" name="${escapeHTML(name)}" value="${escapeHTML(value)}" /><dropdown-menu bubbles variant="editorial" data-wizard-field="${escapeHTML(name)}" label="${escapeHTML(label)}" items="${escapeHTML(JSON.stringify(items))}" align-start></dropdown-menu>`;
   }
 
   /** Renders the mapping wizard's progress navigation. */
@@ -576,11 +826,9 @@ function mount(root: ImportRoot): void {
           : formats.includes("MM/DD/YY")
             ? "MM/DD/YY"
             : formats[0] || "";
-      const ambiguity = formats.length > 1;
       content = `<div class="import-wizard-question"><p class="eyebrow">Step 1 of 6 · Date</p><h3>Which column contains the transaction date?</h3><p>We will convert this value to the app’s standard date. Choose the date you want shown on each transaction.</p>
-          <label class="import-field"><span>Date column</span><select name="date">${wizardHeaderOptions("date")}</select></label>
+          <div class="import-grid import-date-mapping-fields"><label class="import-field"><span>Date column</span>${wizardDropdown("date", "Choose a column", wizardHeaderOptions("date"))}</label>${formats.length ? `<label class="import-field"><span>Date format</span>${wizardDropdown("dateFormat", "Choose a date format", formats.map((format) => `<option value="${format}"${format === wizard.dateFormat ? " selected" : ""}>${format}</option>`).join(""))}</label>` : ""}</div>
           ${wizardSamples(map.date, (value) => importUtils.parseDate(value, wizard.dateFormat))}
-          ${map.date === null ? "" : formats.length ? `<div class="import-inference ${ambiguity ? "ambiguous" : ""}"><strong>${ambiguity ? "This date is ambiguous" : "Date format detected"}</strong><p>${ambiguity ? "All observed month and day values are 12 or lower, so more than one interpretation fits. We selected the US month-first format; confirm it below." : "Only one supported format fits every nonblank value in this column."}</p><label class="import-field"><span>Date format</span><select name="dateFormat">${formats.map((format) => `<option value="${format}"${format === wizard.dateFormat ? " selected" : ""}>${format}</option>`).join("")}</select></label><small>Two-digit years use 00–69 as 2000–2069 and 70–99 as 1970–1999.</small></div>` : '<div class="import-inference error"><strong>We could not read this column as dates</strong><p>Choose another column. Every nonblank value must use one supported date format.</p></div>'}
         </div>${wizardActions()}`;
     }
     if (wizard.step === 1) {
@@ -593,17 +841,27 @@ function mount(root: ImportRoot): void {
       );
       content = `<div class="import-wizard-question"><p class="eyebrow">Step 2 of 6 · Amount</p><h3>How does this CSV record money?</h3><p>Some files use one signed amount column. Others separate withdrawals and deposits into debit and credit columns.</p>
           <fieldset class="import-choice-group"><legend>Amount layout</legend><label><input type="radio" name="amountMode" value="unified"${wizard.amountMode === "unified" ? " checked" : ""} /> One amount column</label><label><input type="radio" name="amountMode" value="debitCredit"${wizard.amountMode === "debitCredit" ? " checked" : ""} /> Separate debit and credit columns</label></fieldset>
-          ${wizard.amountMode === "unified" ? `<label class="import-field"><span>Amount column</span><select name="amount">${wizardHeaderOptions("amount", numeric)}</select></label>${wizardSamples(map.amount)}<div class="import-inference"><strong>How are expenses written?</strong><p>We found ${sign.negative} negative and ${sign.positive} positive non-zero sample values. Confirm the convention used by this file.</p><fieldset class="import-choice-group"><legend>Sign convention</legend><label><input type="radio" name="amountSignConvention" value="expensesNegative"${map.amountSignConvention === "expensesNegative" ? " checked" : ""} /> Expenses are negative; deposits are positive</label><label><input type="radio" name="amountSignConvention" value="expensesPositive"${map.amountSignConvention === "expensesPositive" ? " checked" : ""} /> Expenses are positive; deposits are negative</label></fieldset></div>` : `<div class="import-grid"><label class="import-field"><span>Debit / withdrawal column</span><select name="debit">${wizardHeaderOptions("debit", numeric)}</select></label><label class="import-field"><span>Credit / deposit column</span><select name="credit">${wizardHeaderOptions("credit", numeric)}</select></label></div><div class="import-inference"><strong>Direction comes from the populated column</strong><p>Debit rows become expenses and credit rows become income. Credit rows categorized as expenses remain negative refunds; debit rows categorized as income remain negative reversals.</p></div>`}
+          ${wizard.amountMode === "unified" ? `<label class="import-field"><span>Amount column</span>${wizardDropdown("amount", "Choose a column", wizardHeaderOptions("amount", numeric))}</label>${wizardSamples(map.amount)}<div class="import-inference"><strong>How are expenses written?</strong><p>We found ${sign.negative} negative and ${sign.positive} positive non-zero sample values. Confirm the convention used by this file.</p><fieldset class="import-choice-group"><legend>Sign convention</legend><label><input type="radio" name="amountSignConvention" value="expensesNegative"${map.amountSignConvention === "expensesNegative" ? " checked" : ""} /> Expenses are negative; deposits are positive</label><label><input type="radio" name="amountSignConvention" value="expensesPositive"${map.amountSignConvention === "expensesPositive" ? " checked" : ""} /> Expenses are positive; deposits are negative</label></fieldset></div>` : `<div class="import-grid"><label class="import-field"><span>Debit / withdrawal column</span>${wizardDropdown("debit", "Choose a column", wizardHeaderOptions("debit", numeric))}</label><label class="import-field"><span>Credit / deposit column</span>${wizardDropdown("credit", "Choose a column", wizardHeaderOptions("credit", numeric))}</label></div><div class="import-inference"><strong>Direction comes from the populated column</strong><p>Debit rows become expenses and credit rows become income. Credit rows categorized as expenses remain negative refunds; debit rows categorized as income remain negative reversals.</p></div>`}
         </div>${wizardActions()}`;
+      const allPositiveRefundsNegativeOption =
+        '<label><input type="radio" name="amountSignConvention" value="allPositiveRefundsNegative"' +
+        (map.amountSignConvention === "allPositiveRefundsNegative"
+          ? " checked"
+          : "") +
+        " /> All inputs are positive. All refunds are negative.</label>";
+      content = content.replace(
+        /(<input type="radio" name="amountSignConvention" value="expensesPositive"[\s\S]*?<\/label>)(<\/fieldset>)/,
+        `$1${allPositiveRefundsNegativeOption}$2`,
+      );
     }
     if (wizard.step === 2)
-      content = `<div class="import-wizard-question"><p class="eyebrow">Step 3 of 6 · Vendor</p><h3>Which column describes the vendor or payee?</h3><p>The source description does not need to match an internal vendor. We can either learn associations during review or use the source values as vendor names now.</p><label class="import-field"><span>Vendor description column</span><select name="vendorDescription">${wizardHeaderOptions("vendorDescription")}</select></label>${wizardSamples(map.vendorDescription)}<label class="import-toggle"><input type="checkbox" name="autoPopulateVendor"${wizard.autoPopulateVendor ? " checked" : ""} /><span><strong>Match or create vendors using these values</strong><small>Existing names are reused. Missing names remain provisional until Commit import.</small></span></label></div>${wizardActions()}`;
+      content = `<div class="import-wizard-question"><p class="eyebrow">Step 3 of 6 · Vendor</p><h3>Which column describes the vendor or payee?</h3><p>The source description does not need to match an internal vendor. We can either learn associations during review or use the source values as vendor names now.</p><label class="import-field"><span>Vendor description column</span>${wizardDropdown("vendorDescription", "Choose a column", wizardHeaderOptions("vendorDescription"))}</label>${wizardSamples(map.vendorDescription)}<label class="import-toggle"><input type="checkbox" name="autoPopulateVendor"${wizard.autoPopulateVendor ? " checked" : ""} /><span><strong>Match or create vendors using these values</strong><small>Existing names are reused. Missing names remain provisional until Commit import.</small></span></label></div>${wizardActions()}`;
     if (wizard.step === 3)
-      content = `<div class="import-wizard-question"><p class="eyebrow">Step 4 of 6 · Category</p><h3>Does this CSV already contain budget categories?</h3><p>When importing an existing budget spreadsheet, its category names can prefill the review table and stage any missing categories.</p><fieldset class="import-choice-group"><legend>Category information</legend><label><input type="radio" name="hasCategory" value="no"${!wizard.hasCategory ? " checked" : ""} /> No category column</label><label><input type="radio" name="hasCategory" value="yes"${wizard.hasCategory ? " checked" : ""} /> Yes, choose a column</label></fieldset>${wizard.hasCategory ? `<label class="import-field"><span>Category column</span><select name="categoryDescription">${wizardHeaderOptions("categoryDescription")}</select></label>${wizardSamples(map.categoryDescription)}<label class="import-toggle"><input type="checkbox" name="autoPopulateCategory"${wizard.autoPopulateCategory ? " checked" : ""} /><span><strong>Match or create categories using these values</strong><small>Category type follows an existing match or the amount direction for a new category.</small></span></label>` : ""}</div>${wizardActions()}`;
+      content = `<div class="import-wizard-question"><p class="eyebrow">Step 4 of 6 · Category</p><h3>Does this CSV already contain budget categories?</h3><p>When importing an existing budget spreadsheet, its category names can prefill the review table and stage any missing categories.</p><fieldset class="import-choice-group"><legend>Category information</legend><label><input type="radio" name="hasCategory" value="no"${!wizard.hasCategory ? " checked" : ""} /> No category column</label><label><input type="radio" name="hasCategory" value="yes"${wizard.hasCategory ? " checked" : ""} /> Yes, choose a column</label></fieldset>${wizard.hasCategory ? `<label class="import-field"><span>Category column</span>${wizardDropdown("categoryDescription", "Choose a column", wizardHeaderOptions("categoryDescription"))}</label>${wizardSamples(map.categoryDescription)}<label class="import-toggle"><input type="checkbox" name="autoPopulateCategory"${wizard.autoPopulateCategory ? " checked" : ""} /><span><strong>Match or create categories using these values</strong><small>Category type follows an existing match or the amount direction for a new category.</small></span></label>` : ""}</div>${wizardActions()}`;
     if (wizard.step === 4)
-      content = `<div class="import-wizard-question"><p class="eyebrow">Step 5 of 6 · Person</p><h3>Does this CSV separate transactions by cardholder or person?</h3><p>If not, imported transactions use the app’s Shared assignment.</p><fieldset class="import-choice-group"><legend>Cardholder information</legend><label><input type="radio" name="hasPerson" value="no"${!wizard.hasPerson ? " checked" : ""} /> No, use Shared</label><label><input type="radio" name="hasPerson" value="yes"${wizard.hasPerson ? " checked" : ""} /> Yes, choose a column</label></fieldset>${wizard.hasPerson ? `<label class="import-field"><span>Person / cardholder column</span><select name="personDescription">${wizardHeaderOptions("personDescription")}</select></label>${wizardSamples(map.personDescription)}<label class="import-toggle"><input type="checkbox" name="autoPopulatePerson"${wizard.autoPopulatePerson ? " checked" : ""} /><span><strong>Match or create people using these values</strong><small>Existing people are reused. Missing names remain provisional until Commit import.</small></span></label>` : ""}</div>${wizardActions()}`;
+      content = `<div class="import-wizard-question"><p class="eyebrow">Step 5 of 6 · Person</p><h3>Does this CSV separate transactions by cardholder or person?</h3><p>If not, imported transactions use the app’s Shared assignment.</p><fieldset class="import-choice-group"><legend>Cardholder information</legend><label><input type="radio" name="hasPerson" value="no"${!wizard.hasPerson ? " checked" : ""} /> No, use Shared</label><label><input type="radio" name="hasPerson" value="yes"${wizard.hasPerson ? " checked" : ""} /> Yes, choose a column</label></fieldset>${wizard.hasPerson ? `<label class="import-field"><span>Person / cardholder column</span>${wizardDropdown("personDescription", "Choose a column", wizardHeaderOptions("personDescription"))}</label>${wizardSamples(map.personDescription)}<label class="import-toggle"><input type="checkbox" name="autoPopulatePerson"${wizard.autoPopulatePerson ? " checked" : ""} /><span><strong>Match or create people using these values</strong><small>Existing people are reused. Missing names remain provisional until Commit import.</small></span></label>` : ""}</div>${wizardActions()}`;
     if (wizard.step === 5)
-      content = `<div class="import-wizard-question"><p class="eyebrow">Step 6 of 6 · Notes</p><h3>Does this CSV include personal notes for each transaction?</h3><p>Notes are optional and are copied into the transaction’s existing Notes field.</p><fieldset class="import-choice-group"><legend>Notes column</legend><label><input type="radio" name="hasNotes" value="no"${!wizard.hasNotes ? " checked" : ""} /> No notes column</label><label><input type="radio" name="hasNotes" value="yes"${wizard.hasNotes ? " checked" : ""} /> Yes, choose a column</label></fieldset>${wizard.hasNotes ? `<label class="import-field"><span>Notes column</span><select name="notes">${wizardHeaderOptions("notes")}</select></label>${wizardSamples(map.notes)}` : ""}</div>${wizardActions(true)}`;
+      content = `<div class="import-wizard-question"><p class="eyebrow">Step 6 of 6 · Notes</p><h3>Does this CSV include personal notes for each transaction?</h3><p>Notes are optional and are copied into the transaction’s existing Notes field.</p><fieldset class="import-choice-group"><legend>Notes column</legend><label><input type="radio" name="hasNotes" value="no"${!wizard.hasNotes ? " checked" : ""} /> No notes column</label><label><input type="radio" name="hasNotes" value="yes"${wizard.hasNotes ? " checked" : ""} /> Yes, choose a column</label></fieldset>${wizard.hasNotes ? `<label class="import-field"><span>Notes column</span>${wizardDropdown("notes", "Choose a column", wizardHeaderOptions("notes"))}</label>${wizardSamples(map.notes)}` : ""}</div>${wizardActions(true)}`;
     mappingForm.innerHTML = `${wizardNavigation()}<div class="import-wizard-panel">${content}</div>`;
   }
 
@@ -715,14 +973,12 @@ function mount(root: ImportRoot): void {
             : formats.includes("MM/DD/YY")
               ? "MM/DD/YY"
               : formats[0] || "";
-      const ambiguity = formats.length > 1;
       content = `<div class="import-wizard-question"><p class="eyebrow">Step 1 of 3 · Activity date</p><h3>Which column dates each investment activity row?</h3><p>Every row must contain a supported full date or YYYY-MM value. We will group all activity into calendar months.</p>
-          <label class="import-field"><span>Activity date column</span><select name="month">${investmentHeaderOptions("month")}</select></label>
+          <div class="import-grid import-date-mapping-fields"><label class="import-field"><span>Activity date column</span>${wizardDropdown("month", "Choose a column", investmentHeaderOptions("month"))}</label>${formats.length ? `<label class="import-field"><span>Date format</span>${wizardDropdown("dateFormat", "Choose a date format", formats.map((format) => `<option value="${format}"${format === wizard.dateFormat ? " selected" : ""}>${format}</option>`).join(""))}</label>` : ""}</div>
           ${wizardSamples(map.month, (value) => {
             const parsed = importUtils.parseDate(value, wizard.dateFormat);
             return parsed?.slice(0, 7);
           })}
-          ${map.month === null ? "" : formats.length ? `<div class="import-inference ${ambiguity ? "ambiguous" : ""}"><strong>${ambiguity ? "Confirm the date format" : "Date format detected"}</strong><p>${ambiguity ? "More than one supported date interpretation fits these values. Confirm the format used by this file." : "This format fits every nonblank value in the selected column."}</p><label class="import-field"><span>Date format</span><select name="dateFormat">${formats.map((format) => `<option value="${format}"${format === wizard.dateFormat ? " selected" : ""}>${format}</option>`).join("")}</select></label><small>Two-digit years use 00–69 as 2000–2069 and 70–99 as 1970–1999.</small></div>` : '<div class="import-inference error"><strong>We could not read this column as reporting months</strong><p>Choose another column. Every nonblank value must use one supported month or date format.</p></div>'}
         </div>${wizardActions()}`;
     }
     if (wizard.step === 1) {
@@ -731,7 +987,7 @@ function mount(root: ImportRoot): void {
         importUtils.isNumericColumn(state.parsed, index);
       content = `<div class="import-wizard-question"><p class="eyebrow">Step 2 of 3 · Ending balance</p><h3>Does this CSV include account balances?</h3><p>When mapped, the latest dated nonblank balance in each month is used. Otherwise, an existing balance is reused or you can enter one during review.</p>
           <fieldset class="import-choice-group"><legend>Balance information</legend><label><input type="radio" name="hasBalance" value="no"${!wizard.hasBalance ? " checked" : ""} /> No balance column</label><label><input type="radio" name="hasBalance" value="yes"${wizard.hasBalance ? " checked" : ""} /> Yes, choose a column</label></fieldset>
-          ${wizard.hasBalance ? `<label class="import-field"><span>Ending balance column</span><select name="balance">${investmentHeaderOptions("balance", numeric)}</select></label>${wizardSamples(map.balance)}` : ""}
+          ${wizard.hasBalance ? `<label class="import-field"><span>Ending balance column</span>${wizardDropdown("balance", "Choose a column", investmentHeaderOptions("balance", numeric))}</label>${wizardSamples(map.balance)}` : ""}
         </div>${wizardActions()}`;
     }
     if (wizard.step === 2) {
@@ -744,8 +1000,7 @@ function mount(root: ImportRoot): void {
 
   /** Renders the mapping workflow for the selected target. */
   function renderMapper(): void {
-    if (state.profile.target === "budget") renderBudgetWizard();
-    else renderInvestmentWizard();
+    renderBudgetWizard();
   }
 
   /** Builds the persisted column mapping from wizard state. */
@@ -753,7 +1008,7 @@ function mount(root: ImportRoot): void {
     string,
     ImportColumnReference | number[] | boolean | string
   > {
-    if (state.profile.target === "budget") {
+    if (state.profile.target !== "investment") {
       const wizard = state.mappingWizard;
       return {
         date: wizard.mapping.date,
@@ -790,8 +1045,9 @@ function mount(root: ImportRoot): void {
   function validateMapping(
     map: ImportColumnMapping,
     amountMode: AmountMode,
+    target: ImportTarget = state.profile?.target ?? state.target,
   ): void {
-    if (state.profile.target === "investment") {
+    if (target === "investment") {
       const contributions = Array.isArray(map.contributions)
         ? map.contributions
         : [];
@@ -872,9 +1128,11 @@ function mount(root: ImportRoot): void {
     );
     if (sign)
       wizard.mapping.amountSignConvention =
-        sign.value === "expensesPositive"
-          ? "expensesPositive"
-          : "expensesNegative";
+        sign.value === "allPositiveRefundsNegative"
+          ? "allPositiveRefundsNegative"
+          : sign.value === "expensesPositive"
+            ? "expensesPositive"
+            : "expensesNegative";
     const category = mappingForm.querySelector<HTMLInputElement>(
       'input[name="hasCategory"]:checked',
     );
@@ -1002,9 +1260,7 @@ function mount(root: ImportRoot): void {
 
   /** Captures controls for the active import target. */
   function captureWizardControls(changedName = ""): void {
-    if (state.profile?.target === "investment")
-      captureInvestmentWizardControls(changedName);
-    else captureBudgetWizardControls(changedName);
+    captureBudgetWizardControls(changedName);
   }
 
   /** Validates the active budget mapping step. */
@@ -1028,7 +1284,11 @@ function mount(root: ImportRoot): void {
         )
           throw new Error("Choose a numeric amount column.");
         if (
-          !["expensesNegative", "expensesPositive"].includes(
+          ![
+            "expensesNegative",
+            "expensesPositive",
+            "allPositiveRefundsNegative",
+          ].includes(
             map.amountSignConvention,
           )
         )
@@ -1123,8 +1383,7 @@ function mount(root: ImportRoot): void {
 
   /** Validates the active target's mapping step. */
   function validateWizardStep(): void {
-    if (state.profile?.target === "investment") validateInvestmentWizardStep();
-    else validateBudgetWizardStep();
+    validateBudgetWizardStep();
   }
 
   /** Collects persisted and provisional entities used during staging. */
@@ -1137,11 +1396,7 @@ function mount(root: ImportRoot): void {
       categories: APIs.budget.listCategories().concat(provisional("category")),
       vendors: APIs.budget.listVendors().concat(provisional("vendor")),
       people: APIs.budget.listPeople().concat(provisional("assignment")),
-      accounts: APIs.accounts
-        .accounts()
-        .filter(
-          (item) => item.type === "investment",
-        ) as import("../../api/investment-types").InvestmentAccount[],
+      accounts: APIs.accounts.accounts(),
       sharedAssignmentId: APIs.budget.SHARED_ASSIGNMENT_ID,
     };
   }
@@ -1201,107 +1456,56 @@ function mount(root: ImportRoot): void {
     state.pendingVendors.clear();
     state.pendingPeople.clear();
     const refs = references();
-    if (state.profile.target === "budget") {
-      // Returns an array of data for each individual row, including the original CSV data, any pre-associated vendor or person ids, and a staging id
-      state.rows = importUtils.createBudgetRows(
-        state.parsed,
-        state.profile,
-        { ...state.bundle, profile: state.profile },
-        refs,
-        (kind, name, type) => stageEntity(kind, name, type, refs),
-      );
+    state.rows = importUtils.createBudgetRows(
+      state.parsed,
+      state.profile,
+      { ...state.bundle, profile: state.profile },
+      refs,
+      (kind, name, type) => stageEntity(kind, name, type, refs),
+    );
 
-      //
-      state.rows.forEach((row) => {
-        if (row.vendorResolution === "pending" && row.vendorId)
-          state.pendingVendors.set(row.normalizedVendorDescription ?? "", {
-            sourceDescription: row.vendorDescription ?? "",
-            vendorId: row.vendorId,
-          });
-        if (row.personResolution === "pending" && row.personId)
-          state.pendingPeople.set(row.normalizedPersonDescription ?? "", {
-            sourceDescription: row.personDescription ?? "",
-            assignmentId: row.personId,
-          });
-      });
+    state.rows.forEach((row) => {
+      if (row.vendorResolution === "pending" && (row.vendorId || row.accountId))
+        state.pendingVendors.set(row.normalizedVendorDescription ?? "", {
+          sourceDescription: row.vendorDescription ?? "",
+          vendorId: row.vendorId,
+          accountId: row.accountId,
+        });
+      if (row.personResolution === "pending" && row.personId)
+        state.pendingPeople.set(row.normalizedPersonDescription ?? "", {
+          sourceDescription: row.personDescription ?? "",
+          assignmentId: row.personId,
+        });
+    });
 
-      //
-      state.resolvedCategoryMatches = new Set(
-        state.rows
-          .filter((row) => row.categoryId)
-          .map(
-            (row) =>
-              row.normalizedCategoryDescription ||
-              row.normalizedVendorDescription,
-          )
-          .filter((value): value is string => Boolean(value)),
-      );
-    } else {
-      const existing = APIs.accounts
-        .balances()
-        .filter((item) => item.accountId === state.profile.investmentAccountId)
-        .map((balance) =>
-          APIs.accounts.monthData(balance.accountId, balance.month),
+    state.resolvedCategoryMatches = new Set(
+      state.rows
+        .filter((row) => row.categoryId)
+        .map(
+          (row) =>
+            row.normalizedCategoryDescription || row.normalizedVendorDescription,
         )
-        .filter(
-          (month): month is NonNullable<typeof month> => month !== null,
-        ) as any;
-      state.rows = importUtils.createInvestmentMonths(
-        state.parsed,
-        state.profile,
-        existing,
-      );
-    }
+        .filter((value): value is string => Boolean(value)),
+    );
+    state.vendorGroups = groupBudgetRows(state.rows);
+    state.activeVendorGroupIndex = 0;
+    state.completedVendorGroups.clear();
+    state.reviewDirty = false;
     state.filter = "all";
     state.expandedInvestmentMonths.clear();
-    mappingStep.hidden = true;
-    reviewStep.hidden = false;
+    showWorkflowStep("review", 2);
     renderReview();
-    if (state.profile.target === "investment") {
-      state.rows
-        .filter((row) => row.errors.length)
-        .forEach((row) => state.expandedInvestmentMonths.add(row.stagingId));
-      renderInvestmentRows();
-    }
   }
 
   /** Revalidates every staged row against current mappings and entities. */
   function validateRows(): void {
     const refs = references();
-    if (state.profile.target === "investment") {
-      const months = new Map<string, StagedImportRow[]>();
-      state.rows.forEach((row) => {
-        row.errors = row.errors.filter(
-          (error) => !error.includes("more than once"),
-        ) as any;
-        if (row.month)
-          months.set(row.month, [...(months.get(row.month) || []), row]);
-      });
-      months.forEach((rows: StagedImportRow[]) => {
-        if (rows.length > 1)
-          rows.forEach((row) =>
-            row.errors.push(
-              "This account-month appears more than once in the CSV.",
-            ),
-          );
-      });
-    }
     state.rows.forEach((row) => {
-      if (state.profile.target === "budget") {
-        const result = importUtils.validateBudgetRow(row, refs, state.profile);
-        row.errors = result.errors;
-        row.warnings = result.warnings;
-        row.type = result.type;
-        if (!row.amountEdited) row.amount = result.amount;
-      } else {
-        const result = importUtils.validateInvestmentMonth(
-          row,
-          refs,
-          state.profile,
-        );
-        row.errors = result.errors;
-        row.warnings = result.warnings;
-      }
+      const result = importUtils.validateBudgetRow(row, refs, state.profile);
+      row.errors = result.errors;
+      row.warnings = result.warnings;
+      row.type = result.type;
+      if (!row.amountEdited) row.amount = result.amount;
       if (!APIs.budget.getActiveUser())
         row.errors.push("Choose an app user in Settings.");
     });
@@ -1330,6 +1534,16 @@ function mount(root: ImportRoot): void {
     return Number.isFinite(number) ? number.toFixed(2) : "";
   }
 
+  /** Formats an import date for people while preserving the ISO date ID in datetime. */
+  function readableImportDate(value: unknown): string {
+    const dateId = String(value || "");
+    if (!dateId) return "—";
+    const date = new Date(`${dateId}T00:00:00Z`);
+    return Number.isNaN(date.getTime())
+      ? dateId
+      : DateUtils.longDateFormatter.format(date);
+  }
+
   /** Renders validation and queue status for a staged row. */
   function statusMarkup(row: StagedImportRow): string {
     if (row.queued) return "Queued for sync";
@@ -1352,11 +1566,11 @@ function mount(root: ImportRoot): void {
       if (state.filter === "ready")
         return row.include && !row.errors.length && !row.queued;
       if (state.filter === "vendors")
-        return state.profile.target === "budget" && !row.vendorId;
+        return state.profile.target !== "investment" && !row.vendorId && !row.accountId;
       if (state.filter === "people")
-        return state.profile.target === "budget" && !row.personId;
+        return state.profile.target !== "investment" && !row.accountId && !row.personId;
       if (state.filter === "categories")
-        return state.profile.target === "budget" && !row.categoryId;
+        return state.profile.target !== "investment" && !row.accountId && !row.categoryId;
       return true;
     });
   }
@@ -1389,7 +1603,7 @@ function mount(root: ImportRoot): void {
       [ready.length, "Ready"],
       [included.filter((row) => row.errors.length).length, "With errors"],
     ];
-    if (state.profile.target === "budget") {
+    if (state.profile.target !== "investment") {
       const income = included
         .filter((row) => row.type === "income")
         .reduce((sum, row) => sum + Number(row.amount || 0), 0);
@@ -1398,13 +1612,12 @@ function mount(root: ImportRoot): void {
         .reduce((sum, row) => sum + Number(row.amount || 0), 0);
       stats.push(
         [
-          included.filter((row) => !row.vendorId && row.type !== "income")
-            .length,
-          "Unresolved vendors",
+          included.filter((row) => !row.vendorId && !row.accountId).length,
+          "Unresolved vendors / accounts",
         ],
-        [included.filter((row) => !row.personId).length, "Unresolved people"],
+        [included.filter((row) => !row.accountId && !row.personId).length, "Unresolved people"],
         [
-          included.filter((row) => !row.categoryId).length,
+          included.filter((row) => !row.accountId && !row.categoryId).length,
           "Missing categories",
         ],
         [money(income), "Income"],
@@ -1450,7 +1663,7 @@ function mount(root: ImportRoot): void {
       ["errors", "Errors"],
       ["excluded", "Excluded"],
     ];
-    if (state.profile.target === "budget")
+    if (state.profile.target !== "investment")
       filters.splice(
         3,
         0,
@@ -1507,24 +1720,246 @@ function mount(root: ImportRoot): void {
 
       vendorControl.configureOptions({
         getOptions: () => references().vendors,
-        createOption: (name) => stageEntity("vendor", name),
+        createOption: (name: string) => stageEntity("vendor", name),
         onCreate: () => {},
       });
       categoryControl.configureOptions({
         getOptions: () => references().categories,
-        createOption: (name) =>
+        createOption: (name: string) =>
           stageEntity("category", name, importUtils.suggestBudgetType(row)),
         onCreate: () => {},
       });
       personControl.configureOptions({
         getOptions: () => references().people,
-        createOption: (name) => stageEntity("assignment", name),
+        createOption: (name: string) => stageEntity("assignment", name),
         onCreate: () => {},
       });
       vendorControl.value = row.vendorId ?? "";
       categoryControl.value = row.categoryId ?? "";
       personControl.value = row.personId ?? "";
     });
+  }
+
+  /** Returns the vendor group currently being reviewed. */
+  function currentVendorGroup(): VendorReviewGroup | undefined {
+    return state.vendorGroups[state.activeVendorGroupIndex];
+  }
+
+  function rowPayeeKey(row: StagedImportRow): string {
+    return row.accountId
+      ? payeeKey("account", row.accountId)
+      : row.vendorId
+        ? payeeKey("vendor", row.vendorId)
+        : "";
+  }
+
+  function groupPayeeState(group: VendorReviewGroup): { value: string; mixed: boolean } {
+    const values = new Set(group.rows.map(rowPayeeKey));
+    return values.size === 1
+      ? { value: [...values][0] || "", mixed: false }
+      : { value: "", mixed: true };
+  }
+
+  function accountForRow(row: StagedImportRow) {
+    return row.accountId
+      ? references().accounts.find((item) => item.id === row.accountId)
+      : undefined;
+  }
+
+  function derivedCategory(row: StagedImportRow): { id: string; label: string } {
+    const account = accountForRow(row);
+    if (!account) return { id: row.categoryId || "", label: "" };
+    if (account.type === "investment") return { id: "", label: "Investment" };
+    const category = references().categories.find((item) => item.id === account.categoryId);
+    return { id: category?.id || "", label: category?.name || "Missing debt category" };
+  }
+
+  function derivedAssignment(row: StagedImportRow): { id: string; label: string } {
+    const account = accountForRow(row);
+    if (!account) return { id: row.personId || "", label: "" };
+    const assignment = references().people.find((item) => item.id === account.assignmentId);
+    return { id: assignment?.id || "", label: assignment?.name || "Missing assignment" };
+  }
+
+  /** Configures searchable group-level and row-level reference controls. */
+  function configureBudgetGroupControls(group: VendorReviewGroup): void {
+    const payeeControl = groupReview.querySelector<ImportSelectControl>(
+      'payee-select[data-group-field="payeeKey"]',
+    );
+    if (payeeControl) {
+      payeeControl.configureOptions({
+        getVendors: () => references().vendors,
+        createVendor: (name: string) => stageEntity("vendor", name),
+        onCreate: () => {},
+      });
+      payeeControl.value = groupPayeeState(group).value;
+    }
+    const categoryControls =
+      groupReview.querySelectorAll<ImportSelectControl>("category-select");
+    categoryControls.forEach((control) => {
+      const row = rowFromElement(control) || group.rows[0];
+      const derived = derivedCategory(row);
+      control.configureOptions({
+        getOptions: () => references().categories,
+        createOption: (name: string) =>
+          stageEntity("category", name, importUtils.suggestBudgetType(row)),
+        onCreate: () => {},
+      });
+      control.value = row.accountId
+        ? derived.id
+        : control.dataset.groupField
+          ? groupSelectionState(group.rows, "categoryId").value
+          : row.categoryId || "";
+    });
+
+    groupReview
+      .querySelectorAll<ImportSelectControl>("people-select")
+      .forEach((control) => {
+        const row = rowFromElement(control) || group.rows[0];
+        const derived = derivedAssignment(row);
+        control.configureOptions({
+          getOptions: () => references().people,
+          createOption: (name: string) => stageEntity("assignment", name),
+          onCreate: () => {},
+        });
+        control.value = row.accountId
+          ? derived.id
+          : control.dataset.groupField
+            ? groupSelectionState(group.rows, "personId").value
+            : row.personId || "";
+      });
+
+    groupReview
+      .querySelectorAll<ImportSelectControl>("payee-select[data-row-field]")
+      .forEach((control) => {
+        const row = rowFromElement(control);
+        control.configureOptions({
+          getVendors: () => references().vendors,
+          createVendor: (name: string) => stageEntity("vendor", name),
+          onCreate: () => {},
+        });
+        if (row) control.value = rowPayeeKey(row);
+      });
+  }
+
+  /** Renders the weighted, noninteractive group progress footer. */
+  function renderGroupFooter(group: VendorReviewGroup): void {
+    groupFooter.hidden = false;
+    const percentages = vendorGroupProgress(state.vendorGroups);
+    root.querySelector("#import-group-progress").innerHTML = state.vendorGroups
+      .map((item, index) => {
+        const status = state.completedVendorGroups.has(item.key)
+          ? "complete"
+          : index === state.activeVendorGroupIndex
+            ? "current"
+            : "upcoming";
+        return `<span class="${status}" style="flex-basis:${percentages[index]}%"></span>`;
+      })
+      .join("");
+    root.querySelector("#import-group-footer-name").textContent =
+      group.sourceDescription;
+    const includedRows = group.rows.filter((row) => row.include && !row.queued);
+    const missingPayee = includedRows.some(
+      (row) => !row.vendorId && !row.accountId && row.type !== "income",
+    );
+    const missingCategoryRows = includedRows.filter((row) => !row.accountId && !row.categoryId);
+    const footerMessage = missingPayee
+      ? "Vendor / Account selection needed"
+      : missingCategoryRows.length === includedRows.length &&
+          includedRows.length
+        ? "Category selection needed"
+        : missingCategoryRows.length
+          ? `${missingCategoryRows.length} transaction${missingCategoryRows.length === 1 ? "" : "s"} need${missingCategoryRows.length === 1 ? "s" : ""} a category`
+          : `${group.rows.length} transaction${group.rows.length === 1 ? "" : "s"}`;
+    root.querySelector("#import-group-footer-meta").textContent = footerMessage;
+    root.querySelector("#import-group-position").textContent =
+      `Group ${state.activeVendorGroupIndex + 1} of ${state.vendorGroups.length}`;
+    const previous = root.querySelector<HTMLButtonElement>(
+      '[data-import-action="group-prev"]',
+    );
+    previous.disabled = state.activeVendorGroupIndex === 0;
+    const next = root.querySelector<HTMLButtonElement>(
+      '[data-import-action="group-next"]',
+    );
+    next.textContent =
+      state.activeVendorGroupIndex === state.vendorGroups.length - 1
+        ? "Review summary →"
+        : "Next group →";
+  }
+
+  /** Renders one editable vendor group using the ledger table grammar. */
+  function renderBudgetGroupReview(): void {
+    const group = currentVendorGroup();
+    if (!group) {
+      groupReview.innerHTML =
+        '<p class="import-empty">No transactions were staged.</p>';
+      groupFooter.hidden = true;
+      return;
+    }
+    const refs = references();
+    const payeeState = groupPayeeState(group);
+    const selectedPayee = parsePayeeKey(payeeState.value);
+    const selectedRecord = selectedPayee?.kind === "account"
+      ? refs.accounts.find((item) => item.id === selectedPayee.id)
+      : refs.vendors.find((item) => item.id === selectedPayee?.id);
+    const categoryState = groupSelectionState(group.rows, "categoryId");
+    const personState = groupSelectionState(group.rows, "personId");
+    const commonAccountRow = !payeeState.mixed && selectedPayee?.kind === "account"
+      ? group.rows[0]
+      : undefined;
+    const groupCategory = commonAccountRow ? derivedCategory(commonAccountRow) : null;
+    const groupAssignment = commonAccountRow ? derivedAssignment(commonAccountRow) : null;
+
+    groupReview.innerHTML = `
+      <header class="import-group-heading">
+        <div>
+          <div class="import-group-title-line">
+            <h2>${escapeHTML(selectedRecord?.name || group.sourceDescription)}</h2>
+          </div>
+          <p class="import-source-description">CSV description: ${escapeHTML(group.sourceDescription)}</p>
+        </div>
+        <span class="import-count-tag">${group.rows.length} transaction${group.rows.length === 1 ? "" : "s"}</span>
+      </header>
+
+      <div class="import-group-fields">
+        <div class="import-field import-vendor-name-field">
+          <span>Vendor / Account</span>
+          <payee-select data-group-field="payeeKey" value="${escapeHTML(payeeState.value)}"></payee-select>
+        </div>
+        <div class="import-field">
+          <div class="import-bulk-control"><category-select data-group-field="categoryId" trigger-label="${escapeHTML(groupCategory?.label || (categoryState.mixed ? "Mixed" : "Apply category to all"))}" type="all" create-type="${escapeHTML(importUtils.suggestBudgetType(group.rows[0]))}" value="${escapeHTML(groupCategory?.id || categoryState.value)}"${commonAccountRow ? " inert" : ""}></category-select></div>
+        </div>
+        <div class="import-field">
+          <div class="import-bulk-control"><people-select data-group-field="personId" trigger-label="${escapeHTML(groupAssignment?.label || (personState.mixed ? "Mixed" : "Apply person to all"))}" allow-empty value="${escapeHTML(groupAssignment?.id || personState.value)}"${commonAccountRow ? " inert" : ""}></people-select></div>
+        </div>
+      </div>
+
+      <div class="import-group-table-wrap">
+        <table class="import-group-table">
+          <thead><tr><th class="include-column"><span class="sr-only">Include</span></th><th>Date</th><th>Vendor / Account</th><th>Category</th><th>Person</th><th class="description-column">Description</th><th class="amount-column">Amount</th></tr></thead>
+          <tbody>${group.rows
+            .map((row) => {
+              const inert = !row.include || row.queued;
+              const errors = row.include && row.errors.length;
+              const balanceEffect = transactionBalanceEffect(row);
+              const category = derivedCategory(row);
+              const assignment = derivedAssignment(row);
+              return `<tr data-staging-id="${escapeHTML(row.stagingId)}" class="${inert ? "excluded" : ""}${errors ? " has-errors" : ""}">
+                <td class="include-column"><check-box aria-label="Include transaction from ${escapeHTML(row.date || "unknown date")}" data-row-field="include"${row.include ? " active" : ""}${row.queued ? " disabled" : ""}></check-box></td>
+                <td class="date-column"><time datetime="${escapeHTML(row.date || "")}">${escapeHTML(readableImportDate(row.date))}</time></td>
+                <td class="payee-column"><payee-select data-row-field="payeeKey" value="${escapeHTML(rowPayeeKey(row))}"${inert ? " inert" : ""}></payee-select></td>
+                <td class="category-column"><category-select data-row-field="categoryId" trigger-label="${escapeHTML(category.label || "Select a category")}" type="all" create-type="${escapeHTML(importUtils.suggestBudgetType(row))}" value="${escapeHTML(category.id)}"${inert || Boolean(row.accountId) ? " inert" : ""}></category-select></td>
+                <td class="person-column"><people-select data-row-field="personId" trigger-label="${escapeHTML(assignment.label || "Select a person")}" allow-empty value="${escapeHTML(assignment.id)}"${inert || Boolean(row.accountId) ? " inert" : ""}></people-select></td>
+                <td class="description-column"><input type="text" aria-label="Short description" placeholder="Add description" maxlength="240" data-row-field="notes" value="${escapeHTML(row.notes || "")}"${row.queued ? " disabled" : ""} /></td>
+                <td class="amount-column ${balanceEffect < 0 ? "negative" : "positive"}">${balanceEffect > 0 ? "+" : balanceEffect < 0 ? "−" : ""}${money(Math.abs(balanceEffect))}</td>
+              </tr>`;
+            })
+            .join("")}</tbody>
+        </table>
+      </div>`;
+
+    configureBudgetGroupControls(group);
+    renderGroupFooter(group);
   }
 
   /** Renders editable staged investment months and flows. */
@@ -1585,39 +2020,52 @@ function mount(root: ImportRoot): void {
       `<div class="investment-import-account"><span>Importing to</span><strong>${escapeHTML(account?.name || "Unknown account")}</strong></div><div class="investment-import-month-list">${cards || '<p class="investment-import-empty">No months match this filter.</p>'}</div>`;
   }
 
-  /** Revalidates and renders the complete review step. */
-  function renderReview(): void {
+  /** Renders the final budget-import totals and commit controls. */
+  function renderFinalSummary(): void {
     validateRows();
-    renderSummary();
-    renderFilters();
-    const budget = state.profile.target === "budget";
-    root.querySelector("#import-budget-review").hidden = !budget;
-    root.querySelector("#import-investment-review").hidden = budget;
-    if (budget) renderBudgetRows();
-    else renderInvestmentRows();
-    const included = state.rows.filter((row) => row.include && !row.queued);
-    const commitButton = root.querySelector<HTMLButtonElement>(
-      '[data-import-action="commit"]',
+    const summary = summarizeBudgetImport(
+      state.rows,
+      state.vendorGroups.filter((group) =>
+        group.rows.some((row) => row.include && !row.queued),
+      ).length,
     );
     const connected = Boolean(APIs.budget.getConfig().endpoint);
     const online =
       typeof navigator === "undefined" || navigator.onLine !== false;
-    commitButton.disabled =
-      !included.length ||
-      included.some((row) => row.errors.length) ||
-      !connected ||
-      !online;
-    commitButton.title = !connected
-      ? "Connect a Google Sheet in Settings before importing."
-      : !online
-        ? "Reconnect to the internet before importing."
-        : "";
+    const invalidIncluded = state.rows.some(
+      (row) => row.include && !row.queued && row.errors.length,
+    );
+    const disabled =
+      !summary.readyCount || invalidIncluded || !connected || !online;
+    const sign =
+      summary.netBalance > 0 ? "+" : summary.netBalance < 0 ? "−" : "";
+
+    summaryContent.hidden = false;
+    progressStep.hidden = true;
+    summaryContent.innerHTML = `
+      <div class="editorial-surface import-surface">
+        <dl class="import-summary-grid">
+          <div><dt>Transactions</dt><dd>${summary.readyCount}</dd></div>
+          <div><dt>Vendor groups</dt><dd>${summary.groupCount}</dd></div>
+          <div><dt>Excluded</dt><dd>${summary.excludedCount}</dd></div>
+          <div><dt>Net balance</dt><dd class="${summary.netBalance < 0 ? "negative" : "positive"}">${sign}${money(Math.abs(summary.netBalance))}</dd></div>
+        </dl>
+        ${invalidIncluded ? '<p class="import-summary-note error">Some included transactions still need attention.</p>' : ""}
+      </div>
+      <div class="import-actions">
+        <custom-button class="secondary-button" type="button" data-import-action="summary-back">← Back to review</custom-button>
+        <custom-button class="primary-button" type="button" data-import-action="commit"${disabled ? " disabled" : ""}${!connected ? ' title="Connect a Google Sheet in Settings before importing."' : !online ? ' title="Reconnect to the internet before importing."' : ""}>Import ${summary.readyCount} transaction${summary.readyCount === 1 ? "" : "s"} →</custom-button>
+      </div>`;
   }
 
-  /** Parses a selected CSV and prepares profile selection. */
-  async function handleFileChange(): Promise<void> {
-    const file = fileInput.files?.[0];
-    if (!file) return;
+  /** Revalidates and renders the complete review step. */
+  function renderReview(): void {
+    validateRows();
+    renderBudgetGroupReview();
+  }
+
+  /** Parses a CSV and prepares profile selection. */
+  async function handleFile(file: File): Promise<void> {
     message(root.querySelector("#import-file-message"), "Reading CSV…");
     try {
       state.parsed = importUtils.parseCSV(await file.text());
@@ -1625,39 +2073,35 @@ function mount(root: ImportRoot): void {
       state.rows = [];
       state.mappingWizard = null as unknown as MappingWizard;
       state.commit = null as unknown as ImportCommit;
+      state.vendorGroups = [];
+      state.activeVendorGroupIndex = 0;
+      state.completedVendorGroups.clear();
+      state.reviewDirty = false;
       state.expandedInvestmentMonths.clear();
       resetDraftEntities();
-      mappingStep.hidden = true;
-      reviewStep.hidden = true;
       progressStep.hidden = true;
-      profileStep.hidden = false;
+      root.querySelector("[data-profile-options]").hidden = false;
+      root.querySelector("#import-file-name").textContent = file.name;
+      renderFileControl();
+      showWorkflowStep("upload", 0);
       router.setNavigationGuard(null);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       renderSourcePreview();
       profileOptions();
       const matches = state.profiles.filter(
-        (profile) => profile.headerSignature === state.parsed.signature,
+        (profile) =>
+          profile.target !== "investment" &&
+          profile.headerSignature === state.parsed.signature,
       );
       if (matches.length === 1) {
         profileForm.elements.profileId.value = matches[0].id;
         chooseProfileCandidate();
-        message(
-          profileMessage,
-          `Suggested profile: ${matches[0].name}. Confirm to apply it.`,
-          "success",
-        );
-      } else if (matches.length > 1)
-        message(
-          profileMessage,
-          `${matches.length} profiles match these headings. Choose one to continue.`,
-        );
-      else {
+      } else if (matches.length > 1) {
         profileForm.elements.profileId.value = "";
         chooseProfileCandidate();
-        message(
-          profileMessage,
-          "No exact header match. Create a profile or choose one to remap.",
-        );
+      } else {
+        profileForm.elements.profileId.value = "";
+        chooseProfileCandidate();
       }
       message(
         root.querySelector("#import-file-message"),
@@ -1673,27 +2117,62 @@ function mount(root: ImportRoot): void {
     }
   }
 
+  /** Parses the file selected through the native file input. */
+  function handleFileChange(): void {
+    const file = fileInput.files?.[0];
+    if (file) void handleFile(file);
+  }
+
+  /** Highlights the upload surface while a file is dragged over it. */
+  function handleDragEnter(event: DragEvent): void {
+    if (event.dataTransfer?.types.includes("Files")) {
+      event.preventDefault();
+      uploadSurface.classList.add("is-dragging");
+    }
+  }
+
+  function handleDragOver(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    uploadSurface.classList.add("is-dragging");
+  }
+
+  function handleDragLeave(event: DragEvent): void {
+    if (!uploadSurface.contains(event.relatedTarget as Node | null))
+      uploadSurface.classList.remove("is-dragging");
+  }
+
+  /** Loads the first dropped file through the same parser as file selection. */
+  function handleDrop(event: DragEvent): void {
+    event.preventDefault();
+    uploadSurface.classList.remove("is-dragging");
+    const file = event.dataTransfer?.files[0];
+    if (file) void handleFile(file);
+  }
+
+  /** Applies a profile chosen from the saved-profile dropdown. */
+  function handleMappingSelection(event: CustomEvent): void {
+    const value = String((event.target as ImportMappingSelect).value || "");
+    profileForm.elements.profileId.value = value;
+    chooseProfileCandidate();
+  }
+
   /** Checks whether a saved profile can map the uploaded CSV unchanged. */
   function profileMappingIsUsable(profile: ImportProfile): boolean {
+    if (profile?.target === "investment") return false;
     if (!profile || profile.headerSignature !== state.parsed.signature)
       return false;
     const map = profile.columnMapping || {};
-    const indexes =
-      profile.target === "investment"
-        ? [
-            map.month,
-            map.balance,
-            ...(Array.isArray(map.contributions) ? map.contributions : []),
-          ]
-        : [
-            map.date,
-            map.vendorDescription,
-            map.categoryDescription,
-            map.personDescription,
-            map.notes,
-            profile.amountMode === "debitCredit" ? map.debit : map.amount,
-            profile.amountMode === "debitCredit" ? map.credit : null,
-          ];
+    const indexes = [
+      map.date,
+      map.vendorDescription,
+      map.categoryDescription,
+      map.personDescription,
+      map.notes,
+      profile.amountMode === "debitCredit" ? map.debit : map.amount,
+      profile.amountMode === "debitCredit" ? map.credit : null,
+    ];
     if (
       indexes
         .filter((value) => importUtils.columnIndex(value) !== null)
@@ -1704,28 +2183,8 @@ function mount(root: ImportRoot): void {
     )
       return false;
     try {
-      validateMapping(map, profile.amountMode);
-      if (
-        profile.target === "budget" &&
-        !importUtils
-          .validDateFormats(state.parsed, map.date)
-          .includes(profile.dateFormat)
-      )
-        return false;
-      if (
-        profile.target === "investment" &&
-        (!importUtils
-          .validMonthFormats(state.parsed, map.month)
-          .includes(profile.dateFormat) ||
-          !state.parsed.rows.every((row) =>
-            Boolean(
-              importUtils.parseDate(
-                importUtils.valueAt(row, map.month),
-                profile.dateFormat,
-              ),
-            ),
-          ))
-      )
+      validateMapping(map, profile.amountMode, profile.target);
+      if (!importUtils.validDateFormats(state.parsed, map.date).includes(profile.dateFormat))
         return false;
       return true;
     } catch {
@@ -1736,37 +2195,25 @@ function mount(root: ImportRoot): void {
   /** Applies or creates the profile selected by the user. */
   async function handleProfileSubmit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    message(profileMessage, "");
     try {
       if (!state.parsed) throw new Error("Upload a CSV first.");
       const selected = state.profiles.find(
         (item) => item.id === profileForm.elements.profileId.value,
       );
-      const target: ImportTarget =
-        profileForm.elements.target.value === "investment"
-          ? "investment"
-          : "budget";
+      const target: ImportTarget = "transaction";
       const input = {
         ...(selected || {}),
         name: profileForm.elements.name.value,
         target,
-        investmentAccountId:
-          target === "investment"
-            ? profileForm.elements.investmentAccountId.value
-            : "",
+        investmentAccountId: "",
         headerSignature: selected?.headerSignature || state.parsed.signature,
         columnMapping: selected?.columnMapping || {},
-        dateFormat:
-          selected?.dateFormat ||
-          (target === "investment" ? "YYYY-MM" : "YYYY-MM-DD"),
-        amountMode:
-          selected?.amountMode || (target === "budget" ? "unified" : "monthly"),
+        dateFormat: selected?.dateFormat || "YYYY-MM-DD",
+        amountMode: selected?.amountMode || "unified",
         amountMultiplier: selected?.amountMultiplier || 1,
       };
       if (selected) {
-        const bundle = await APIs.imports.loadProfileBundle(selected.id, {
-          refresh: true,
-        });
+        const bundle = await APIs.imports.loadProfileBundle(selected.id);
         state.bundle = bundle;
         state.profile = {
           ...bundle.profile,
@@ -1778,18 +2225,8 @@ function mount(root: ImportRoot): void {
           state.mappingWizard = null as unknown as MappingWizard;
           stageRows();
           reviewStep.scrollIntoView({ behavior: "smooth", block: "start" });
-          message(
-            profileMessage,
-            `${state.profile.name} matched these headings and was applied.`,
-            "success",
-          );
           return;
         }
-        message(
-          profileMessage,
-          "This profile does not exactly match the CSV headings or has an incomplete mapping. Review the column mapping before staging rows.",
-          "error",
-        );
       } else {
         state.profile = APIs.imports.createProfileDraft({
           ...input,
@@ -1803,11 +2240,14 @@ function mount(root: ImportRoot): void {
       }
       state.mappingWizard = null as unknown as MappingWizard;
       renderMapper();
-      mappingStep.hidden = false;
-      reviewStep.hidden = true;
+      showWorkflowStep("mapping", 1);
       mappingStep.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
-      message(profileMessage, messageFromError(error), "error");
+      message(
+        root.querySelector("#import-file-message"),
+        messageFromError(error),
+        "error",
+      );
     }
   }
 
@@ -1828,10 +2268,7 @@ function mount(root: ImportRoot): void {
         return;
       }
       const columnMapping = buildColumnMapping();
-      const amountMode =
-        state.profile.target === "budget"
-          ? state.mappingWizard.amountMode
-          : "monthly";
+      const amountMode = state.mappingWizard.amountMode;
       validateMapping(columnMapping, amountMode);
       state.profile = APIs.imports.createProfileDraft({
         ...state.profile,
@@ -1840,11 +2277,9 @@ function mount(root: ImportRoot): void {
         dateFormat: state.mappingWizard.dateFormat,
         amountMode,
         amountMultiplier:
-          state.profile.target === "budget"
-            ? state.mappingWizard.mapping.amountSignConvention ===
-              "expensesNegative"
-              ? -1
-              : 1
+          state.mappingWizard.mapping.amountSignConvention ===
+          "expensesNegative"
+            ? -1
             : 1,
       });
       state.bundle = { ...state.bundle, profile: state.profile };
@@ -1865,35 +2300,23 @@ function mount(root: ImportRoot): void {
     );
   }
 
-  /** Applies a vendor or person selection and learns matching associations. */
+  /** Applies a person selection and learns matching associations. */
   function applyReference(
     row: StagedImportRow,
-    field: "vendorId" | "personId",
+    field: "personId",
     value: string,
   ): void {
-    const vendor = field === "vendorId";
-    const normalized = vendor
-      ? row.normalizedVendorDescription
-      : row.normalizedPersonDescription;
-    const resolutionField = vendor ? "vendorResolution" : "personResolution";
-    const target = vendor ? state.pendingVendors : state.pendingPeople;
-    const firstResolution = Boolean(
-      normalized &&
-      value &&
-      row[resolutionField] === "unresolved" &&
-      !target.has(normalized),
-    );
+    const normalized = row.normalizedPersonDescription;
+    const resolutionField = "personResolution";
+    const target = state.pendingPeople;
     row[field] = value;
     row[resolutionField] = "custom";
-    if (!firstResolution || !normalized) return;
+    if (!value || !normalized) return;
     importUtils.fillBlankMatches(
       state.rows,
       field,
       normalized,
-      (item) =>
-        vendor
-          ? item.normalizedVendorDescription
-          : item.normalizedPersonDescription,
+      (item) => item.normalizedPersonDescription,
       value,
       (item) => {
         item[resolutionField] = "pending";
@@ -1901,35 +2324,51 @@ function mount(root: ImportRoot): void {
     );
     target.set(
       normalized,
-      vendor
-        ? { sourceDescription: row.vendorDescription ?? "", vendorId: value }
-        : {
-            sourceDescription: row.personDescription ?? "",
-            assignmentId: value,
-          },
+      { sourceDescription: row.personDescription ?? "", assignmentId: value },
     );
+  }
+
+  /** Applies a mutually exclusive vendor or account destination. */
+  function applyPayee(row: StagedImportRow, value: string): void {
+    const selection = parsePayeeKey(value);
+    row.vendorId = selection?.kind === "vendor" ? selection.id : "";
+    row.accountId = selection?.kind === "account" ? selection.id : "";
+    row.payeeKind = selection?.kind || "";
+    row.vendorResolution = "custom";
+    if (selection?.kind === "account") {
+      const account = references().accounts.find((item) => item.id === selection.id);
+      row.accountType = account?.type;
+      row.source = account?.source === "deduction" ? "deduction" : "manual";
+      row.categoryId = "";
+      row.personId = "";
+    } else {
+      row.accountType = undefined;
+      row.source = "manual";
+      if (!row.personId) {
+        row.personId = row.normalizedPersonDescription
+          ? state.bundle.personMappings.find(
+              (item) =>
+                item.active !== false &&
+                item.normalizedSourceDescription === row.normalizedPersonDescription,
+            )?.assignmentId || ""
+          : APIs.budget.SHARED_ASSIGNMENT_ID;
+      }
+    }
+    const normalized = row.normalizedVendorDescription;
+    if (!selection || !normalized) return;
+    state.pendingVendors.set(normalized, {
+      sourceDescription: row.vendorDescription ?? "",
+      vendorId: selection.kind === "vendor" ? selection.id : "",
+      accountId: selection.kind === "account" ? selection.id : "",
+    });
   }
 
   /** Applies a category selection to matching staged rows. */
   function applyCategory(row: StagedImportRow, value: string): void {
+    if (row.accountId) return;
     row.categoryId = value;
     const category = references().categories.find((item) => item.id === value);
     if (category?.type === "income") row.vendorId = "";
-    const key =
-      row.normalizedCategoryDescription || row.normalizedVendorDescription;
-    if (!value || !key || state.resolvedCategoryMatches.has(key)) return;
-    state.resolvedCategoryMatches.add(key);
-    importUtils.fillBlankMatches(
-      state.rows,
-      "categoryId",
-      key,
-      (item) =>
-        item.normalizedCategoryDescription || item.normalizedVendorDescription,
-      value,
-      (item) => {
-        if (category?.type === "income") item.vendorId = "";
-      },
-    );
   }
 
   /** Applies edits made to staged review controls. */
@@ -1951,7 +2390,7 @@ function mount(root: ImportRoot): void {
         event.target.value === "" ? null : Number(event.target.value);
       if (field === "amount") row.amountEdited = true;
       if (field === "balance") row.balanceOrigin = "manual";
-    } else if (field === "vendorId" || field === "personId")
+    } else if (field === "personId")
       applyReference(row, field, event.target.value);
     else if (field) {
       const priorMonth = field === "month" ? row.month : "";
@@ -1977,37 +2416,83 @@ function mount(root: ImportRoot): void {
       )
         row.vendorId = "";
     }
+    state.reviewDirty = true;
+    renderReview();
+  }
+
+  /** Applies accessible checkbox selection events to staged rows. */
+  function handleCheckboxSelection(
+    event: CustomEvent<{ isOn?: boolean }>,
+  ): void {
+    const row = rowFromElement(event.target as Element);
+    if (!row || row.queued) return;
+    row.include = event.detail?.isOn === true;
+    state.reviewDirty = true;
     renderReview();
   }
 
   /** Applies a custom date-picker change to a staged transaction. */
   function handleReviewDateChange(event: ImportDateEvent): void {
     const row = rowFromElement(event.target);
-    if (!row || row.queued || state.profile?.target !== "budget") return;
+    if (!row || row.queued || state.profile?.target === "investment") return;
     row.date = event.detail?.value || "";
     renderReview();
   }
 
   /** Applies custom vendor, person, or category selection events. */
   function handleReviewSelection(event: ImportControlEvent): void {
+    const groupField = event.target.dataset.groupField;
+    const group = currentVendorGroup();
+    if (
+      group &&
+      state.profile?.target !== "investment" &&
+      (groupField === "payeeKey" ||
+        groupField === "categoryId" ||
+        groupField === "personId")
+    ) {
+      if (groupField === "payeeKey") {
+        group.rows.forEach((row) => applyPayee(row, event.target.value));
+      } else if (groupField === "categoryId") {
+        applyGroupSelection(group, "categoryId", event.target.value);
+        const category = references().categories.find(
+          (item) => item.id === event.target.value,
+        );
+        if (category?.type === "income")
+          group.rows.forEach((row) => {
+            row.vendorId = "";
+          });
+      } else {
+        group.rows.forEach((row) =>
+          applyReference(row, "personId", event.target.value),
+        );
+      }
+      state.reviewDirty = true;
+      queueMicrotask(renderReview);
+      return;
+    }
     const row = rowFromElement(event.target);
     if (!row || row.queued) return;
-    if (event.type === "vendor-selected")
-      applyReference(row, "vendorId", event.target.value);
+    if (event.type === "payee-selected")
+      applyPayee(row, event.target.value);
     if (event.type === "person-selected")
       applyReference(row, "personId", event.target.value);
     if (event.type === "category-selected")
       applyCategory(row, event.target.value);
+    state.reviewDirty = true;
     queueMicrotask(renderReview);
   }
 
   /** Captures mapping changes and rerenders dependent wizard fields. */
   function handleMappingChange(event: ImportControlEvent): void {
-    captureWizardControls(event.target.name);
+    const changedName =
+      event.target.name ||
+      (event.target as HTMLElement).dataset.wizardField ||
+      "";
+    captureWizardControls(changedName);
     const rerender =
       state.profile?.target === "investment"
         ? ["month", "balance", "hasBalance", "contributions"].includes(
-            event.target.name,
+            changedName,
           )
         : [
             "date",
@@ -2018,8 +2503,20 @@ function mount(root: ImportRoot): void {
             "hasCategory",
             "hasPerson",
             "hasNotes",
-          ].includes(event.target.name);
+          ].includes(changedName);
     if (rerender) renderMapper();
+  }
+
+  /** Copies a mapping dropdown selection into its hidden form field. */
+  function handleMappingDropdownSelection(event: CustomEvent): void {
+    const dropdown = event.target as HTMLElement;
+    const name = dropdown.dataset.wizardField;
+    const input = name
+      ? mappingForm.elements.namedItem(name)
+      : null;
+    if (!(input instanceof HTMLInputElement)) return;
+    input.value = String(event.detail?.value || "");
+    handleMappingChange({ target: input } as ImportControlEvent);
   }
 
   /** Navigates to an already visited mapping-wizard step. */
@@ -2031,6 +2528,105 @@ function mount(root: ImportRoot): void {
     state.mappingWizard.step = Number(control.dataset.wizardStep);
     renderMapper();
     mappingStep.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /** Focuses the first unresolved control in the active vendor group. */
+  function focusFirstGroupError(): void {
+    requestAnimationFrame(() => {
+      const group = currentVendorGroup();
+      const invalid = group?.rows.find(
+        (row) => row.include && !row.queued && row.errors.length,
+      );
+      if (!invalid) return;
+      const row = groupReview.querySelector<HTMLElement>(
+        `[data-staging-id="${CSS.escape(invalid.stagingId)}"]`,
+      );
+      const errorText = invalid.errors.join(" ").toLowerCase();
+      const focusTarget = errorText.includes("vendor")
+        ? groupReview.querySelector<HTMLElement>(
+            'payee-select[data-group-field="payeeKey"]',
+          )
+        : errorText.includes("category")
+          ? row?.querySelector<HTMLElement>("category-select")
+          : errorText.includes("assignment")
+            ? row?.querySelector<HTMLElement>("people-select")
+            : row?.querySelector<HTMLElement>("check-box");
+      const shadowButton = focusTarget?.shadowRoot?.querySelector<HTMLElement>(
+        "button, [tabindex='0']",
+      );
+      (shadowButton || focusTarget || row)?.focus();
+    });
+  }
+
+  /** Moves between vendor groups or advances to the summary. */
+  function navigateVendorGroup(direction: "previous" | "next"): void {
+    if (direction === "previous") {
+      state.activeVendorGroupIndex = Math.max(
+        0,
+        state.activeVendorGroupIndex - 1,
+      );
+      renderReview();
+      return;
+    }
+
+    validateRows();
+    const group = currentVendorGroup();
+    if (!group) return;
+    if (groupHasBlockingErrors(group)) {
+      renderReview();
+      focusFirstGroupError();
+      return;
+    }
+
+    state.completedVendorGroups.add(group.key);
+    if (state.activeVendorGroupIndex < state.vendorGroups.length - 1) {
+      state.activeVendorGroupIndex += 1;
+      renderReview();
+      return;
+    }
+    showWorkflowStep("summary", 3);
+    renderFinalSummary();
+  }
+
+  /** Handles selection of a reachable top-level importer step. */
+  function handleWorkflowSelection(
+    event: CustomEvent<{ value?: string }>,
+  ): void {
+    const step = event.detail?.value as WorkflowStep;
+    const index = WORKFLOW_STEPS.indexOf(step);
+    if (
+      index < 0 ||
+      index > state.maxWorkflowStep ||
+      state.commit?.status === "running"
+    ) {
+      renderWorkflowStepper();
+      return;
+    }
+    if (
+      step === "mapping" &&
+      state.rows.length &&
+      state.reviewDirty &&
+      !window.confirm(
+        "Changing the column mapping will reset vendor review edits when you restage this CSV. Continue?",
+      )
+    ) {
+      renderWorkflowStepper();
+      return;
+    }
+    showWorkflowStep(step);
+    if (step === "mapping") {
+      if (!state.mappingWizard)
+        state.mappingWizard =
+          state.profile.target === "investment"
+            ? createInvestmentWizardState()
+            : createBudgetWizardState();
+      renderMapper();
+    }
+    if (step === "review") renderReview();
+    if (step === "summary") {
+      const group = currentVendorGroup();
+      renderFinalSummary();
+    }
   }
 
   const COMMIT_STEPS = [
@@ -2050,8 +2646,13 @@ function mount(root: ImportRoot): void {
       .map(
         (step) => `
         <li class="${step.status}">
-          <span class="import-progress-icon" aria-hidden="true">${step.status === "complete" ? "✓" : step.status === "running" ? "…" : step.status === "failed" ? "!" : step.status === "skipped" ? "–" : ""}</span>
-          <span><strong>${escapeHTML(step.label)}</strong>${step.detail ? `<small>${escapeHTML(step.detail)}</small>` : ""}</span>
+          <span class="import-progress-icon" aria-hidden="true">
+            ${step.status === "complete" || step.status === "skipped" ? '<custom-icon icon="checkmark"></custom-icon>' : step.status === "running" ? "…" : step.status === "failed" ? "!" : ""}
+          </span>
+          <span>
+            <strong>${escapeHTML(step.label)}</strong>
+            ${step.detail ? `<small>${escapeHTML(step.detail)}</small>` : ""}
+          </span>
         </li>`,
       )
       .join("");
@@ -2159,12 +2760,15 @@ function mount(root: ImportRoot): void {
     personMappings: ImportMapping[];
   } {
     const vendorKeys = new Set(
-      state.commit.included
-        .map((row) => row.normalizedVendorDescription)
-        .filter(Boolean),
+      state.vendorGroups.flatMap((group) => {
+        const rows = group.rows.filter((row) => state.commit.included.includes(row));
+        const payees = new Set(rows.map(rowPayeeKey).filter(Boolean));
+        return rows.length && payees.size === 1 ? [group.key] : [];
+      }),
     );
     const personKeys = new Set(
       state.commit.included
+        .filter((row) => !row.accountId)
         .map((row) => row.normalizedPersonDescription)
         .filter(Boolean),
     );
@@ -2181,90 +2785,45 @@ function mount(root: ImportRoot): void {
   /** Queues and awaits imported budget or investment records. */
   async function commitRecords(): Promise<void> {
     const checkpoint = state.commit.checkpoint;
-    if (state.profile.target === "budget") {
-      if (!checkpoint.recordIds) {
-        const queued = APIs.budget.queueImportedTransactions(
-          state.commit.included.map((row) => ({
-            date: row.date ?? "",
-            amount: row.amount ?? 0,
-            type: row.type === "income" ? "income" : "expense",
-            categoryId: row.categoryId ?? "",
-            vendorId: row.type === "income" ? "" : (row.vendorId ?? ""),
-            assignmentId: row.personId ?? "",
-            notes: row.notes,
-          })),
-        );
-        checkpoint.recordIds = queued.map((item) => item.id);
-      } else {
-        checkpoint.recordIds.forEach((id) => {
-          const item = APIs.budget.getTransactionOutboxItem(id);
-          if (
-            item?.status === "failed" ||
-            (item?.status === "pending" && Number(item.attempts) > 0)
-          )
-            APIs.budget.retryTransaction(id);
-        });
-      }
-      await APIs.budget.awaitImportedTransactions(
-        checkpoint.recordIds,
-        ({ completed, total }) =>
-          updateCommitStep(
-            "records",
-            "running",
-            `${completed} of ${total} transactions confirmed`,
-          ),
+    if (!checkpoint.recordIds) {
+      const queued = APIs.budget.queueImportedTransactions(
+        state.commit.included.map((row) => ({
+          date: row.date ?? "",
+          amount: row.amount ?? 0,
+          type: row.accountId
+            ? undefined
+            : row.type === "income"
+              ? "income"
+              : "expense",
+          categoryId: row.accountId ? "" : (row.categoryId ?? ""),
+          vendorId:
+            row.accountId || row.type === "income" ? "" : (row.vendorId ?? ""),
+          assignmentId: row.accountId ? "" : (row.personId ?? ""),
+          accountId: row.accountId ?? "",
+          source: row.accountId ? row.source ?? "manual" : "manual",
+          notes: row.notes,
+        })),
       );
+      checkpoint.recordIds = queued.map((item) => item.id);
     } else {
-      if (!checkpoint.recordIds) {
-        const queued: any[] = APIs.accounts.queueImportedMonths(
-          state.commit.included.map((row) => ({
-            accountId: row.accountId ?? "",
-            month: row.month ?? "",
-            balance: row.balance ?? 0,
-            asOfDate: /^\d{4}-\d{2}-\d{2}$/.test(
-              String(row.balanceSourceDate || ""),
-            )
-              ? String(row.balanceSourceDate)
-              : monthEnd(row.month ?? ""),
-            balanceId: row.existing?.balance?.id || "",
-            existingActivity: (row.existing?.contributions || []).map(
-              (item) => ({ ...item, activityType: "contribution" }),
-            ),
-            activity: row.flows
-              .filter(
-                (flow) =>
-                  Number.isFinite(Number(flow.amount)) &&
-                  Number(flow.amount) !== 0,
-              )
-              .map((flow) => ({
-                amount: Number(flow.amount),
-                date: /^\d{4}-\d{2}-\d{2}$/.test(flow.sourceDate)
-                  ? flow.sourceDate
-                  : midpoint(row.month ?? ""),
-                flowType: "external" as const,
-                activityType: "contribution" as const,
-              })),
-            notes: row.existing?.balance?.notes || "",
-          })),
-        );
-        checkpoint.recordIds = queued
-          .map((item) => item.syncOperationId)
-          .filter((id): id is string => Boolean(id));
-      } else {
-        checkpoint.recordIds.forEach((id) =>
-          APIs.accounts.retry("investmentMonth", id),
-        );
-      }
-      await APIs.accounts.awaitImportedMonths(
-        checkpoint.recordIds ?? [],
-        ({ completed, total }) =>
-          updateCommitStep(
-            "records",
-            "running",
-            `${completed} of ${total} months confirmed`,
-          ),
-      );
+      checkpoint.recordIds.forEach((id) => {
+        const item = APIs.budget.getTransactionOutboxItem(id);
+        if (
+          item?.status === "failed" ||
+          (item?.status === "pending" && Number(item.attempts) > 0)
+        )
+          APIs.budget.retryTransaction(id);
+      });
     }
+    await APIs.budget.awaitImportedTransactions(
+      checkpoint.recordIds,
+      ({ completed, total }) =>
+        updateCommitStep(
+          "records",
+          "running",
+          `${completed} of ${total} transactions confirmed`,
+        ),
+    );
   }
 
   /** Confirms navigation while an import commit remains unfinished. */
@@ -2316,7 +2875,8 @@ function mount(root: ImportRoot): void {
           Object.assign(step, { status: "pending", detail: "" });
       });
     }
-    reviewStep.hidden = true;
+    showWorkflowStep("summary", 3);
+    summaryContent.hidden = true;
     progressStep.hidden = false;
     router.setNavigationGuard(guardNavigation);
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -2344,9 +2904,7 @@ function mount(root: ImportRoot): void {
       }
 
       for (const kind of ["vendor", "category", "assignment"] as EntityKind[]) {
-        if (state.profile.target === "investment")
-          updateCommitStep(kind, "skipped", "Not used for investment imports");
-        else if (
+        if (
           state.commit.steps.find((step) => step.key === kind)?.status ===
           "complete"
         )
@@ -2356,10 +2914,7 @@ function mount(root: ImportRoot): void {
 
       if (!state.commit.checkpoint.associations) {
         const mappings = relevantMappings();
-        if (
-          state.profile.target === "investment" ||
-          (!mappings.vendorMappings.length && !mappings.personMappings.length)
-        ) {
+        if (!mappings.vendorMappings.length && !mappings.personMappings.length) {
           updateCommitStep(
             "associations",
             "skipped",
@@ -2433,7 +2988,42 @@ function mount(root: ImportRoot): void {
     if (!action) return;
 
     try {
+      if (action === "use-profile") {
+        if (!profileForm.reportValidity()) return;
+        if (useProfileButton.hasAttribute("disabled")) return;
+        renderProfileFetchState(true);
+        try {
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+          await handleProfileSubmit(
+            new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+          );
+        } finally {
+          renderProfileFetchState(false);
+        }
+        return;
+      }
+      if (action === "choose-another") {
+        profileForm.elements.profileId.value = "";
+        chooseProfileCandidate();
+      }
+      if (action === "setup-profile") {
+        profileForm.elements.profileId.value = "";
+        renderProfileCard();
+        if (!profileForm.reportValidity()) return;
+        await handleProfileSubmit(
+          new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+        );
+        return;
+      }
       if (action === "clear") {
+        if (
+          (event.target as Element).closest(
+            "custom-button[data-import-action='clear']",
+          )
+        )
+          event.preventDefault();
         if (!guardNavigation()) return;
         fileInput.value = "";
         state.parsed = null as unknown as ParsedImport;
@@ -2441,13 +3031,20 @@ function mount(root: ImportRoot): void {
         state.rows = [];
         state.mappingWizard = null as unknown as MappingWizard;
         state.commit = null as unknown as ImportCommit;
+        state.vendorGroups = [];
+        state.activeVendorGroupIndex = 0;
+        state.completedVendorGroups.clear();
+        state.reviewDirty = false;
         state.expandedInvestmentMonths.clear();
         resetDraftEntities();
-        profileStep.hidden = true;
-        mappingStep.hidden = true;
-        reviewStep.hidden = true;
         progressStep.hidden = true;
+        summaryContent.hidden = false;
+        root.querySelector("[data-profile-options]").hidden = true;
+        root.querySelector("#import-file-name").textContent = "Choose a file";
+        state.maxWorkflowStep = 0;
+        showWorkflowStep("upload", 0);
         renderSourcePreview();
+        renderFileControl();
         router.setNavigationGuard(null);
         window.removeEventListener("beforeunload", handleBeforeUnload);
         message(root.querySelector("#import-file-message"), "Import cleared.");
@@ -2457,26 +3054,20 @@ function mount(root: ImportRoot): void {
         state.mappingWizard.step = Math.max(0, state.mappingWizard.step - 1);
         renderMapper();
       }
-      if (action === "archive-profile") {
-        if (
-          !profileForm.elements.profileId.value ||
-          !window.confirm(
-            "Archive this import profile? Saved mappings will be retained.",
-          )
-        )
-          return;
-        await APIs.imports.archiveProfile(profileForm.elements.profileId.value);
-        state.profiles = await APIs.imports.listProfiles();
-        profileOptions();
-        profileForm.elements.profileId.value = "";
-        chooseProfileCandidate();
-        message(profileMessage, "Profile archived.", "success");
-      }
       if (action === "back-to-mapping") {
-        reviewStep.hidden = true;
-        mappingStep.hidden = false;
+        showWorkflowStep("mapping", 1);
         if (state.mappingWizard) state.mappingWizard.step = 0;
         renderMapper();
+      }
+      if (action === "group-prev") navigateVendorGroup("previous");
+      if (action === "group-next") navigateVendorGroup("next");
+      if (action === "summary-back") {
+        state.activeVendorGroupIndex = Math.max(
+          0,
+          state.vendorGroups.length - 1,
+        );
+        showWorkflowStep("review", 2);
+        renderReview();
       }
       if (action === "toggle-investment-month") {
         const row = rowFromElement(event.target);
@@ -2500,7 +3091,8 @@ function mount(root: ImportRoot): void {
       if (action === "return-review") {
         state.commit = null as unknown as ImportCommit;
         progressStep.hidden = true;
-        reviewStep.hidden = false;
+        summaryContent.hidden = false;
+        showWorkflowStep("review", 2);
         router.setNavigationGuard(null);
         window.removeEventListener("beforeunload", handleBeforeUnload);
         renderReview();
@@ -2508,17 +3100,24 @@ function mount(root: ImportRoot): void {
       if (action === "finish-import") {
         state.commit = null as unknown as ImportCommit;
         progressStep.hidden = true;
+        summaryContent.hidden = false;
         fileInput.value = "";
         state.parsed = null as unknown as ParsedImport;
         state.profile = null as unknown as ImportProfile;
         state.rows = [];
         state.mappingWizard = null as unknown as MappingWizard;
+        state.vendorGroups = [];
+        state.completedVendorGroups.clear();
+        state.activeVendorGroupIndex = 0;
+        state.reviewDirty = false;
         state.expandedInvestmentMonths.clear();
         resetDraftEntities();
-        profileStep.hidden = true;
-        mappingStep.hidden = true;
-        reviewStep.hidden = true;
+        root.querySelector("[data-profile-options]").hidden = true;
+        root.querySelector("#import-file-name").textContent = "Choose a file";
+        state.maxWorkflowStep = 0;
+        showWorkflowStep("upload", 0);
         renderSourcePreview();
+        renderFileControl();
         message(
           root.querySelector("#import-file-message"),
           "Ready for another CSV.",
@@ -2529,7 +3128,7 @@ function mount(root: ImportRoot): void {
         handleLoadMore(event);
       }
     } catch (error) {
-      message(reviewMessage, messageFromError(error), "error");
+      showToast(messageFromError(error), { type: "error" });
     }
   }
 
@@ -2575,6 +3174,8 @@ function mount(root: ImportRoot): void {
   /** Adapts native change events to typed mapping-control events. */
   const onMappingChange: EventListener = (event) =>
     handleMappingChange(event as ImportControlEvent);
+  const onMappingDropdownSelection: EventListener = (event) =>
+    handleMappingDropdownSelection(event as CustomEvent);
   /** Adapts native change events to typed row-control events. */
   const onReviewChange: EventListener = (event) =>
     handleReviewChange(event as ImportControlEvent);
@@ -2593,8 +3194,19 @@ function mount(root: ImportRoot): void {
   /** Adapts click events to typed wizard navigation events. */
   const onWizardNavigation: EventListener = (event) =>
     handleWizardNavigation(event as ImportControlEvent);
+  const onCheckboxSelection: EventListener = (event) =>
+    handleCheckboxSelection(event as CustomEvent<{ isOn?: boolean }>);
+  const onWorkflowSelection: EventListener = (event) =>
+    handleWorkflowSelection(event as CustomEvent<{ value?: string }>);
+  const onMappingSelection: EventListener = (event) =>
+    handleMappingSelection(event as CustomEvent);
 
   fileInput.addEventListener("change", handleFileChange);
+  uploadSurface.addEventListener("dragenter", handleDragEnter);
+  uploadSurface.addEventListener("dragover", handleDragOver);
+  uploadSurface.addEventListener("dragleave", handleDragLeave);
+  uploadSurface.addEventListener("drop", handleDrop);
+  mappingSelect.addEventListener("mapping-selected", onMappingSelection);
   profileForm.addEventListener("submit", handleProfileSubmit);
   profileForm.elements.profileId.addEventListener(
     "change",
@@ -2603,22 +3215,41 @@ function mount(root: ImportRoot): void {
   profileForm.elements.target.addEventListener("change", updateTargetFields);
   mappingForm.addEventListener("submit", handleMappingSubmit);
   mappingForm.addEventListener("change", onMappingChange);
+  mappingForm.addEventListener(
+    "dropdown-selection",
+    onMappingDropdownSelection,
+  );
   root.addEventListener("change", onReviewChange);
   root.addEventListener("date-change", onReviewDateChange);
   root.addEventListener("vendor-selected", onReviewSelection);
+  root.addEventListener("payee-selected", onReviewSelection);
   root.addEventListener("person-selected", onReviewSelection);
   root.addEventListener("category-selected", onReviewSelection);
+  root.addEventListener("checkbox-selection", onCheckboxSelection);
+  workflowStepper.addEventListener(
+    "segmented-control-selection",
+    onWorkflowSelection,
+  );
   root.addEventListener("click", onAction);
   root.addEventListener("click", onFilter);
   root.addEventListener("click", onWizardNavigation);
   window.addEventListener("budget:import-profiles-changed", refreshProfiles);
 
   accountOptions();
+  mappingSelect.configureOptions(availableProfiles);
   updateTargetFields();
   refreshProfiles();
+  renderWorkflowStepper();
+  renderSourcePreview();
+  renderFileControl();
 
   cleanup = () => {
     fileInput.removeEventListener("change", handleFileChange);
+    uploadSurface.removeEventListener("dragenter", handleDragEnter);
+    uploadSurface.removeEventListener("dragover", handleDragOver);
+    uploadSurface.removeEventListener("dragleave", handleDragLeave);
+    uploadSurface.removeEventListener("drop", handleDrop);
+    mappingSelect.removeEventListener("mapping-selected", onMappingSelection);
     profileForm.removeEventListener("submit", handleProfileSubmit);
     profileForm.elements.profileId.removeEventListener(
       "change",
@@ -2630,11 +3261,21 @@ function mount(root: ImportRoot): void {
     );
     mappingForm.removeEventListener("submit", handleMappingSubmit);
     mappingForm.removeEventListener("change", onMappingChange);
+    mappingForm.removeEventListener(
+      "dropdown-selection",
+      onMappingDropdownSelection,
+    );
     root.removeEventListener("change", onReviewChange);
     root.removeEventListener("date-change", onReviewDateChange);
     root.removeEventListener("vendor-selected", onReviewSelection);
+    root.removeEventListener("payee-selected", onReviewSelection);
     root.removeEventListener("person-selected", onReviewSelection);
     root.removeEventListener("category-selected", onReviewSelection);
+    root.removeEventListener("checkbox-selection", onCheckboxSelection);
+    workflowStepper.removeEventListener(
+      "segmented-control-selection",
+      onWorkflowSelection,
+    );
     root.removeEventListener("click", onAction);
     root.removeEventListener("click", onFilter);
     root.removeEventListener("click", onWizardNavigation);

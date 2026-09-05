@@ -1,23 +1,250 @@
-<header class="import-heading"><div><p class="eyebrow">Google Sheets</p><h1>Import CSV data</h1><p>Map a recurring CSV format, review every row, then commit the ready records together.</p></div><button class="secondary-button" type="button" data-import-action="clear">Clear import</button></header>
-<section class="import-card"><h2>1. Upload CSV</h2><p>Files stay in this browser while you review them.</p><label class="import-field"><span>CSV file</span><input id="import-file" type="file" accept=".csv,text/csv" /></label><p class="import-message" id="import-file-message" role="status"></p><div class="import-preview" id="import-source-preview"></div></section>
-<section class="import-card import-step" id="import-profile-step" hidden><h2>2. Choose a mapping profile</h2><p>Header matches are suggested, but are not applied until you confirm.</p>
-  <form id="import-profile-form"><div class="import-grid">
-    <label class="import-field wide"><span>Saved profile</span><select name="profileId"><option value="">Create a new profile</option></select></label>
-    <label class="import-field"><span>Target</span><select name="target"><option value="budget">Budget transactions</option><option value="investment">Investment months</option></select></label>
-    <label class="import-field"><span>Profile name</span><input name="name" maxlength="150" required /></label>
-    <label class="import-field wide" data-investment-account-field hidden><span>Investment account</span><select name="investmentAccountId"></select></label>
-  </div><div class="import-actions"><button class="primary-button" type="submit">Continue</button><button class="secondary-button" type="button" data-import-action="archive-profile" hidden>Archive profile</button></div></form>
-  <p class="import-message" id="import-profile-message" role="status"></p>
-</section>
-<section class="import-card import-step" id="import-mapping-step" hidden><h2>3. Map CSV columns</h2><p>Choose source columns and parsing rules, then verify the preview.</p><form id="import-mapping-form"></form><p class="import-message" id="import-mapping-message" role="status"></p></section>
-<section class="import-card import-step" id="import-review-step" hidden>
-  <h2>4. Review staged rows</h2>
-  <p>Nothing is saved until you commit the import. Source descriptions are read-only; internal references and imported values remain editable.</p>
-  <div id="import-summary"></div>
-  <div class="import-filter-row" id="import-filters"></div>
-  <div class="import-review-wrap" id="import-budget-review"><table class="import-table"><thead id="import-review-head"></thead><tbody id="import-review-body"></tbody></table></div>
-  <div class="investment-import-review" id="import-investment-review" hidden></div>
-  <div class="import-actions"><button class="secondary-button" type="button" data-import-action="back-to-mapping">Edit mapping</button><button class="primary-button" type="button" data-import-action="commit">Commit import</button><button class="secondary-button" type="button" data-import-action="load-more">Load more</button></div>
-  <p class="import-message" id="import-review-message" role="status"></p>
-</section>
-<section class="import-card import-step import-progress-view" id="import-progress-step" hidden><h2>Committing import</h2><p id="import-progress-summary">Keep this page open while each step is confirmed in Google Sheets.</p><ol class="import-commit-progress" id="import-commit-progress"></ol><div class="import-actions"><button class="primary-button" type="button" data-import-action="retry-commit" hidden>Retry failed step</button><button class="secondary-button" type="button" data-import-action="return-review" hidden>Return to review</button><button class="secondary-button" type="button" data-import-action="finish-import" hidden>Start another import</button><button class="secondary-button" type="button" data-import-action="open-sync" hidden>Open Sync</button></div><p class="import-message" id="import-progress-message" role="status"></p></section>
+<main class="import-page editorial-theme" aria-labelledby="import-title">
+  <header class="tab-header">
+    <div class="tab-header-title">
+      <h1 id="import-title">Import CSV data</h1>
+      <p>Create a reusable import profile for quick bulk entries</p>
+    </div>
+  </header>
+
+  <nav class="import-workflow-nav" aria-label="Import progress">
+    <segmented-control
+      id="import-workflow-stepper"
+      variant="section-tabs"
+      aria-label="Import steps"
+    ></segmented-control>
+  </nav>
+
+  <section
+    class="import-pane"
+    id="import-profile-step"
+    data-workflow-step="upload"
+  >
+    <div
+      class="editorial-surface import-upload-surface"
+      id="import-upload-surface"
+    >
+      <label class="import-file-control" for="import-file">
+        <span>
+          <strong id="import-file-name">Choose a file</strong>
+          <small>Import a CSV file to get started</small>
+        </span>
+        <custom-button
+          class="secondary-button"
+          aria-hidden="true"
+          label="Choose a file"
+        ></custom-button>
+      </label>
+      <input
+        id="import-file"
+        class="visually-hidden"
+        type="file"
+        accept=".csv,text/csv"
+      />
+      <p
+        class="import-message"
+        id="import-file-message"
+        role="status"
+        hidden
+      ></p>
+      <div
+        class="import-source-preview"
+        id="import-source-preview"
+        hidden
+      ></div>
+    </div>
+
+    <div class="import-profile-options" data-profile-options hidden>
+      <div class="import-section-rule">
+        <span class="type-label">Mapping profile</span>
+      </div>
+      <form id="import-profile-form">
+        <input name="target" type="hidden" value="transaction" />
+        <div class="import-profile-grid">
+          <div class="import-surface" id="import-saved-profile-card">
+            <div class="horizontal-center justify-between">
+              <h3 class="type-section-title" id="import-profile-card-title">
+                Choose a profile
+              </h3>
+            </div>
+            <small class="type-meta" id="import-profile-card-description">
+              Select an existing import profile to get started
+            </small>
+            <div
+              class="horizontal-center gap-12"
+              id="import-profile-card-actions"
+              hidden
+            >
+              <custom-button
+                class="primary-button import-profile-use-button"
+                trailing-icon="arrowRight"
+                data-import-action="use-profile"
+                label="Use this profile"
+              ></custom-button>
+              <custom-button
+                class="tertiary"
+                data-import-action="choose-another"
+                label="Choose another"
+              ></custom-button>
+            </div>
+            <mapping-select
+              id="import-profile-select"
+              allow-empty
+              hidden
+            ></mapping-select>
+          </div>
+
+          <div class="import-surface">
+            <h3 class="type-section-title">Create a new profile</h3>
+            <small class="type-meta">
+              Map a new profile to save for future use
+            </small>
+            <div class="horizontal-center gap-12 import-profile-create-actions">
+              <label class="import-field">
+                <input
+                  name="name"
+                  maxlength="150"
+                  required
+                  placeholder="profile name"
+                />
+              </label>
+              <custom-button
+                class="tertiary"
+                trailing-icon="arrowRight"
+                data-import-action="setup-profile"
+                label="Set up"
+              ></custom-button>
+            </div>
+          </div>
+
+          <select
+            class="visually-hidden"
+            name="profileId"
+            tabindex="-1"
+            aria-hidden="true"
+          >
+            <option value="">Create a new profile</option>
+          </select>
+          <label class="import-field" data-investment-account-field hidden>
+            <span>Investment account</span>
+            <select name="investmentAccountId"></select>
+          </label>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section
+    class="import-pane"
+    id="import-mapping-step"
+    data-workflow-step="mapping"
+    hidden
+  >
+    <div class="editorial-surface import-mapping-surface">
+      <form id="import-mapping-form"></form>
+      <p class="import-message" id="import-mapping-message" role="status"></p>
+    </div>
+  </section>
+
+  <section
+    class="import-pane import-review-pane"
+    id="import-review-step"
+    data-workflow-step="review"
+    hidden
+  >
+    <div id="import-budget-group-review"></div>
+    <div class="import-legacy-review" hidden>
+      <div id="import-summary"></div>
+      <div id="import-filters"></div>
+      <div id="import-budget-review">
+        <table class="import-table">
+          <thead id="import-review-head"></thead>
+          <tbody id="import-review-body"></tbody>
+        </table>
+      </div>
+      <div id="import-investment-review"></div>
+      <button type="button" data-import-action="load-more">Load more</button>
+    </div>
+    <footer class="import-group-footer" id="import-group-footer" hidden>
+      <div
+        class="import-group-progress"
+        id="import-group-progress"
+        aria-hidden="true"
+      ></div>
+      <div class="import-group-footer-copy">
+        <strong id="import-group-footer-name"></strong>
+        <span id="import-group-footer-meta"></span>
+      </div>
+      <p class="import-group-position" id="import-group-position"></p>
+      <div class="import-actions">
+        <button
+          class="secondary-button"
+          type="button"
+          data-import-action="group-prev"
+        >
+          ← Previous
+        </button>
+        <button
+          class="primary-button"
+          type="button"
+          data-import-action="group-next"
+        >
+          Next group →
+        </button>
+      </div>
+    </footer>
+  </section>
+
+  <section
+    class="import-pane"
+    id="import-summary-step"
+    data-workflow-step="summary"
+    hidden
+  >
+    <div id="import-summary-content"></div>
+    <div
+      class="editorial-surface import-progress-view import-surface"
+      id="import-progress-step"
+      hidden
+    >
+      <strong id="import-progress-title" class="surface-title"
+        >Import in progress</strong
+      >
+      <p id="import-progress-summary">
+        Keep this page open while each step is confirmed in Google Sheets.
+      </p>
+
+      <ol class="import-commit-progress" id="import-commit-progress"></ol>
+      <div class="import-actions">
+        <button
+          class="primary-button"
+          type="button"
+          data-import-action="retry-commit"
+          hidden
+        >
+          Retry failed step
+        </button>
+        <button
+          class="secondary-button"
+          type="button"
+          data-import-action="return-review"
+          hidden
+        >
+          Return to review
+        </button>
+        <custom-button
+          class="secondary-button"
+          data-import-action="open-sync"
+          label="Open Sync"
+          hidden
+        ></custom-button>
+        <custom-button
+          class="primary-button"
+          data-import-action="finish-import"
+          label="Start another import"
+          hidden
+        ></custom-button>
+      </div>
+      <p class="import-message" id="import-progress-message" role="status"></p>
+    </div>
+  </section>
+</main>
