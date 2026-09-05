@@ -73,28 +73,6 @@ investment-overview-screen {
     }
   }
 
-  .investment-overview-screen__legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-lg);
-    color: var(--color-text-muted);
-    font-size: var(--text-xs);
-
-    span {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2xs);
-    }
-    i {
-      width: 18px;
-      height: 0;
-      border-top: 2px solid var(--ochre-500);
-    }
-    .is-contributions {
-      border-top: 2px dashed var(--moss-500);
-    }
-  }
-
   .investment-overview-screen__roi-lead {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -174,50 +152,6 @@ investment-overview-screen {
   .investment-overview-screen__chart {
     position: relative;
     min-height: 300px;
-  }
-  .investment-overview-screen__chart svg {
-    display: block;
-    width: 100%;
-    height: auto;
-    overflow: visible;
-  }
-  .investment-overview-screen__chart .trend-area {
-    fill: transparent;
-  }
-  .investment-overview-screen__chart .trend-line {
-    fill: none;
-    stroke: var(--ochre-500);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .investment-overview-screen__chart .trend-contribution-line {
-    stroke: var(--moss-500);
-    stroke-width: 2;
-    stroke-dasharray: 4 6;
-  }
-  .investment-overview-screen__chart .trend-grid line {
-    stroke: var(--color-chart-grid);
-    stroke-width: 0.8;
-  }
-  .investment-overview-screen__chart .trend-y-axis {
-    display: none;
-  }
-  .investment-overview-screen__chart circle {
-    fill: var(--ochre-500);
-    stroke: none;
-  }
-  .investment-overview-screen__chart
-    :is(.trend-contribution-point, .trend-scrub-contribution-marker) {
-    fill: var(--moss-500);
-  }
-  .investment-overview-screen__chart text {
-    fill: var(--color-text-subtle);
-    font-family: var(--font-mono);
-    font-size: 10px;
-  }
-  .investment-overview-screen__chart .trend-legend {
-    display: none;
   }
 
   .investment-overview-screen__table-wrap {

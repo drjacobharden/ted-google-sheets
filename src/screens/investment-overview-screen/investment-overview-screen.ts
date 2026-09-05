@@ -1,7 +1,17 @@
 import { APIs } from "../../api/api";
+import type { DataChart } from "../../components/data-chart/data-chart";
+import type {
+  DropdownMenu,
+  DropdownSelectionEvent,
+} from "../../components/dropdown-menu/dropdown-menu";
 import { router } from "../../router/router";
 import type { RouteChangedEventDetail } from "../../router/types";
 import { InvestmentView } from "../../utilities/investment-view";
+import {
+  buildInvestmentOverviewChartMonths,
+  investmentOverviewChartData,
+  type InvestmentOverviewChartDisplay,
+} from "../../utilities/investment-overview-chart";
 import { escapeHTML, money, netFlows } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -61,11 +71,12 @@ export class InvestmentOverviewScreen
   extends HTMLElement
   implements EventListenerObject
 {
-  #trend!: HTMLElement;
+  #chart!: DataChart;
+  #chartMode!: DropdownMenu;
   #tableBody!: HTMLElement;
   #tableFooter!: HTMLElement;
   #empty!: HTMLElement;
-  #cleanupTrend: (() => void) | null = null;
+  #chartDisplay: InvestmentOverviewChartDisplay = "balance";
   #year = new Date().getFullYear();
   #listening = false;
 
@@ -75,7 +86,14 @@ export class InvestmentOverviewScreen
       this.classList.add("screen");
       this.dataset.screen = "investment-overview";
       this.append(template.content.cloneNode(true));
-      this.#trend = this.querySelector("#investment-trend")!;
+      this.#chart = this.querySelector<DataChart>("#investment-trend")!;
+      this.#chartMode = this.querySelector<DropdownMenu>("#investment-trend-chart-mode")!;
+      this.#chartMode.items = [
+        { key: "balance", title: "Balance", isDefaultValue: true },
+        { key: "total-contributions", title: "Total contributions" },
+        { key: "yearly-contributions", title: "Yearly contributions" },
+        { key: "monthly-contributions", title: "Monthly contributions" },
+      ];
       this.#tableBody = this.querySelector("#investment-account-totals")!;
       this.#tableFooter = this.querySelector("#investment-account-footer")!;
       this.#empty = this.querySelector("#investment-accounts-empty")!;
@@ -87,6 +105,7 @@ export class InvestmentOverviewScreen
     window.addEventListener("budget:accounts-loaded", this);
     this.addEventListener("click", this);
     this.addEventListener("keydown", this);
+    this.#chartMode.addEventListener("dropdown-selection", this);
     this.#readYear();
     this.#render();
   }
@@ -94,8 +113,7 @@ export class InvestmentOverviewScreen
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    this.#cleanupTrend?.();
-    this.#cleanupTrend = null;
+    this.#chartMode.removeEventListener("dropdown-selection", this);
     window.removeEventListener("app:route-changed", this);
     window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("budget:accounts-loaded", this);
@@ -104,6 +122,12 @@ export class InvestmentOverviewScreen
   }
 
   handleEvent(event: Event): void {
+    if (event.type === "dropdown-selection" && event.target === this.#chartMode) {
+      const value = (event as DropdownSelectionEvent).detail.value as InvestmentOverviewChartDisplay;
+      this.#chartDisplay = value;
+      this.#renderTrend();
+      return;
+    }
     if (event.type === "click" || event.type === "keydown") {
       if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") return;
       const row = (event.target as Element | null)?.closest<HTMLElement>("[data-account-id]");
@@ -148,6 +172,48 @@ export class InvestmentOverviewScreen
     if (!element) return;
     element.textContent = annualActivityText(value, this.#year);
     element.className = comparisonClass(value, inverse);
+  }
+
+  #renderTrend(): void {
+    const accounts = APIs.accounts.accounts();
+    const balances = APIs.accounts.balances();
+    const activities = APIs.accounts.investmentActivity();
+    const endMonth = Number(rangeForYear(this.#year).end.slice(5, 7));
+    const rows = buildInvestmentOverviewChartMonths(
+      balances,
+      activities,
+      accounts,
+      this.#year,
+      endMonth,
+    );
+    const previousRows = buildInvestmentOverviewChartMonths(
+      balances,
+      activities,
+      accounts,
+      this.#year - 1,
+      12,
+    );
+    const items = [
+      { key: "balance", title: "Balance", isDefaultValue: true },
+      { key: "total-contributions", title: "Total contributions" },
+      { key: "yearly-contributions", title: "Yearly contributions" },
+      { key: "monthly-contributions", title: "Monthly contributions" },
+    ];
+    this.#chartMode.items = items;
+    if (!items.some((item) => item.key === this.#chartDisplay)) {
+      this.#chartDisplay = "balance";
+    }
+    this.#chartMode.selection = this.#chartDisplay;
+    const comparisonRows =
+      this.#chartDisplay === "balance"
+        ? previousRows
+        : previousRows.slice(0, endMonth);
+    this.#chart.data = investmentOverviewChartData(
+      rows,
+      this.#chartDisplay,
+      this.#year,
+      comparisonRows,
+    );
   }
 
   #render(): void {
@@ -220,12 +286,7 @@ export class InvestmentOverviewScreen
       annualDebtChange,
       true,
     );
-    this.#cleanupTrend?.();
-    this.#cleanupTrend = InvestmentView.mountTrend(this.#trend, {
-      range,
-      includeContributions: true,
-      fullYear: this.#year,
-    });
+    this.#renderTrend();
     this.#renderAccounts(range);
   }
 

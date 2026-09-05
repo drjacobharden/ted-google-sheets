@@ -42,21 +42,21 @@
   >
     <header class="editorial-section-header">
       <h2 id="investment-trend-title" class="type-section-title">
-        Balance &amp; contributions <span class="type-meta">— fig. 01</span>
+        Investment trends <span class="type-meta">— fig. 01</span>
       </h2>
-      <div class="investment-overview-screen__legend" aria-label="Chart legend">
-        <span><i class="is-balance" aria-hidden="true"></i>Total balance</span>
-        <span
-          ><i class="is-contributions" aria-hidden="true"></i>Cumulative
-          contributions</span
-        >
-      </div>
+      <dropdown-menu
+        id="investment-trend-chart-mode"
+        variant="ghost"
+        label="Balance"
+        aria-label="Investment trend chart presentation"
+      ></dropdown-menu>
     </header>
     <div class="investment-overview-screen__chart-frame editorial-surface">
-      <div
+      <data-chart
         id="investment-trend"
         class="investment-overview-screen__chart"
-      ></div>
+        aria-label="Investment overview chart"
+      ></data-chart>
     </div>
   </section>
 
