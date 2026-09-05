@@ -1,20 +1,42 @@
-<page-title eyebrow="Preferences" title="Settings" subtitle="Manage your profile and connect this app to Google Sheets."></page-title>
-<div class="settings-screen__grid">
-  <user-form></user-form>
-  <url-form></url-form>
-  <aside class="settings-screen__contract">
-    <p class="eyebrow">Expected API</p>
-    <h2>Apps Script contract</h2>
-    <p>The frontend sends normalized transaction and entity actions:</p>
-    <dl>
-      <div><dt>GET</dt><dd><code>?action=health</code></dd></div>
-      <div><dt>GET</dt><dd><code>?action=listTransactions</code></dd></div>
-      <div><dt>POST</dt><dd><code>add/update Transactions</code></dd></div>
-      <div><dt>GET</dt><dd><code>?action=listUsers</code></dd></div>
-      <div><dt>POST</dt><dd><code>addUser / updateUser</code></dd></div>
-      <div><dt>GET</dt><dd><code>listCategories / listVendors / listAssignments</code></dd></div>
-      <div><dt>POST</dt><dd><code>addEntities / update / archive entity</code></dd></div>
-    </dl>
-    <p class="settings-screen__note">List responses can be a JSON array or <code>{ "data": [...] }</code>.</p>
-  </aside>
-</div>
+<main
+  class="settings-screen__page editorial-theme"
+  aria-labelledby="settings-title"
+>
+  <header class="tab-header settings-screen__masthead">
+    <div class="tab-header-title">
+      <h1 id="new-transaction-title">Settings</h1>
+    </div>
+  </header>
+
+  <div class="settings-screen__ledger">
+    <section
+      class="settings-screen__section"
+      aria-labelledby="settings-profile-title"
+    >
+      <header class="settings-screen__section-heading">
+        <h2 id="settings-profile-title" class="type-section-title">
+          Your name <span class="type-meta">— fig. 01</span>
+        </h2>
+        <p class="type-caption">
+          The name attached to your activity in the ledger.
+        </p>
+      </header>
+      <user-form></user-form>
+    </section>
+
+    <section
+      class="settings-screen__section"
+      aria-labelledby="settings-sheet-title"
+    >
+      <header class="settings-screen__section-heading">
+        <h2 id="settings-sheet-title" class="type-section-title">
+          Google Sheet <span class="type-meta">— fig. 02</span>
+        </h2>
+        <p class="type-caption">
+          The deployed Apps Script URL used to read and write your budget.
+        </p>
+      </header>
+      <url-form></url-form>
+    </section>
+  </div>
+</main>
