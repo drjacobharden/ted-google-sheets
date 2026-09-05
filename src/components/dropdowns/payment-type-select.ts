@@ -115,7 +115,9 @@ export class PaymentTypeSelect extends HTMLElement {
         bubbles: true,
         detail: {
           value,
-          title: options[value === "negative" ? 1 : 0],
+          title: options[
+            value === "negative" ? 1 : value === "balance" ? 2 : 0
+          ],
         },
       }),
     );
@@ -124,12 +126,10 @@ export class PaymentTypeSelect extends HTMLElement {
   #render(): void {
     if (!this.#dropdown) return;
     const options = paymentTypeOptions(this.#kind, this.#accountType);
-    this.#dropdown.items = options.map((title, index) => ({
-      key: index === 0 ? "positive" : "negative",
-      title,
-      isDefaultValue:
-        this.#value === (index === 0 ? "positive" : "negative"),
-    }));
+    this.#dropdown.items = options.map((title, index) => {
+      const key = index === 0 ? "positive" : index === 1 ? "negative" : "balance";
+      return { key, title, isDefaultValue: this.#value === key };
+    });
     this.#dropdown.selection = this.#value;
   }
 
@@ -142,6 +142,7 @@ export class PaymentTypeSelect extends HTMLElement {
   }
 
   #normalizeValue(value: string | null): PaymentTypeKey {
+    if (value === "balance" && this.#kind === "account") return "balance";
     return value === "negative" ? "negative" : "positive";
   }
 }

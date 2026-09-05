@@ -1,17 +1,17 @@
 import type { AccountType } from "../../api/account-api";
 
 export type PaymentKind = "expense" | "income" | "account";
-export type PaymentTypeKey = "positive" | "negative";
+export type PaymentTypeKey = "positive" | "negative" | "balance";
 
 export function paymentTypeOptions(
   kind: PaymentKind,
   accountType: AccountType | null = null,
-): readonly [string, string] {
+): readonly string[] {
   if (kind === "income") return ["Deposit", "Refund"];
   if (kind === "account") {
-    if (accountType === "investment") return ["Contribution", "Withdrawal"];
-    if (accountType === "debt") return ["Payment", "New Borrowing"];
-    return ["Account Activity", "Reversal"];
+    if (accountType === "investment") return ["Contribution", "Withdrawal", "Balance"];
+    if (accountType === "debt") return ["Payment", "New Borrowing", "Balance"];
+    return ["Account Activity", "Reversal", "Balance"];
   }
   return ["Payment", "Refund"];
 }
