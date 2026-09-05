@@ -97,6 +97,11 @@ export class NewTransactionScreen extends HTMLElement {
         this.#syncSourceVisibility();
         break;
 
+      case "click":
+        if ((event.target as HTMLElement).closest('[data-action="open-import"]'))
+          router.navigate("import");
+        break;
+
       default:
         break;
     }
@@ -130,6 +135,7 @@ export class NewTransactionScreen extends HTMLElement {
 
   #bindEvents(): void {
     this.#form.addEventListener("submit", this);
+    this.addEventListener("click", this);
     this.#kindControl.addEventListener("segmented-control-selection", this);
     this.#inlineDatePicker.addEventListener("date-change", this);
     this.#compactDatePicker.addEventListener("date-change", this);
@@ -140,6 +146,7 @@ export class NewTransactionScreen extends HTMLElement {
 
   #disconnectEvents() {
     this.#form.removeEventListener("submit", this);
+    this.removeEventListener("click", this);
     this.#kindControl.removeEventListener("segmented-control-selection", this);
     this.#inlineDatePicker.removeEventListener("date-change", this);
     this.#compactDatePicker.removeEventListener("date-change", this);
