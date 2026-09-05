@@ -22,10 +22,12 @@ describe("shared payment type select", () => {
     expect(paymentTypeOptions("account", "investment")).toEqual([
       "Contribution",
       "Withdrawal",
+      "Balance",
     ]);
     expect(paymentTypeOptions("account", "debt")).toEqual([
       "Payment",
       "New Borrowing",
+      "Balance",
     ]);
   });
 
