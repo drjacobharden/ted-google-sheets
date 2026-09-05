@@ -842,9 +842,7 @@ body.onboarding-open {
 tbody tr:first-child td {
   border-top: 0;
 }
-tbody tr:hover {
-  background: #fbfcfa;
-}
+
 .transaction-name {
   display: flex;
   align-items: center;
