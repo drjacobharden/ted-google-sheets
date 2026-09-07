@@ -15,7 +15,13 @@ export interface BudgetingHeaderConfig {
 
 export interface BudgetingRouteDefinition {
   route: BudgetingRouteName;
-  contentKey: "overview" | "flow" | "transactions" | "categories" | "vendors" | "people";
+  contentKey:
+    | "overview"
+    | "flow"
+    | "transactions"
+    | "categories"
+    | "vendors"
+    | "people";
   title: string;
   icon: IconKeys;
   getHeaderConfig(
@@ -38,10 +44,7 @@ const IMPORT_TRANSACTIONS: HeaderAction = {
 };
 
 const BASE_DEFINITIONS: Record<
-  Exclude<
-    BudgetingRouteName,
-    "entity-detail" | "entity-archive"
-  >,
+  Exclude<BudgetingRouteName, "entity-detail" | "entity-archive">,
   BudgetingRouteDefinition
 > = {
   "budget-overview": {
@@ -56,7 +59,7 @@ const BASE_DEFINITIONS: Record<
   "money-flow": {
     route: "money-flow",
     contentKey: "flow",
-    title: "WMMG",
+    title: "WMMG?",
     icon: "chart",
     getHeaderConfig: () => ({ actions: [] }),
   },
