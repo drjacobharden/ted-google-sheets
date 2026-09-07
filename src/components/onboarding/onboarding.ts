@@ -155,7 +155,7 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
   function focusFirst() {
     setTimeout(() => {
       const target = elements.dialog.querySelector(
-        "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled])",
+        "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [role='checkbox']:not([aria-disabled='true'])",
       );
       (target || elements.dialog).focus();
     }, 0);
@@ -166,16 +166,23 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
     elements.actions.hidden = true;
     setMessage();
     elements.content.innerHTML = `
-      <h2>How are you setting up this app?</h2>
-      <p>Start with a new spreadsheet or connect to a household that already has one.</p>
+      <div class="onboarding-section-heading">
+        <p class="type-meta">Setup method — fig. 01</p>
+        <h2 class="type-section-title">How are you setting up this app?</h2>
+        <p class="type-body type-muted">Start with a new spreadsheet or connect to a household that already has one.</p>
+      </div>
       <div class="onboarding-choice-grid">
         <button class="onboarding-choice" type="button" data-onboarding-flow="new">
+          <span class="onboarding-choice-index" aria-hidden="true">01</span>
           <strong>Start a new budget</strong>
           <span>Copy the template, initialize it, and create your household’s deployment.</span>
+          <span class="onboarding-choice-action" aria-hidden="true">Begin setup →</span>
         </button>
         <button class="onboarding-choice" type="button" data-onboarding-flow="join">
+          <span class="onboarding-choice-index" aria-hidden="true">02</span>
           <strong>Join an existing budget</strong>
           <span>Use a private connection URL from someone in your household.</span>
+          <span class="onboarding-choice-action" aria-hidden="true">Connect ledger →</span>
         </button>
       </div>`;
     elements.content
@@ -216,7 +223,7 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
     const checkbox = elements.content.querySelector(
       "[data-onboarding-confirm]",
     );
-    checkbox.checked = checked;
+    checkbox.isOn = checked;
     setPrimary(
       "Continue",
       () => {
@@ -226,10 +233,10 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
       },
       !checked,
     );
-    checkbox.addEventListener("change", () => {
-      progress.confirmations[options.key] = checkbox.checked;
+    checkbox.addEventListener("checkbox-selection", () => {
+      progress.confirmations[options.key] = checkbox.isOn;
       writeProgress();
-      elements.next.disabled = !checkbox.checked;
+      elements.next.disabled = !checkbox.isOn;
     });
   }
 
@@ -237,10 +244,13 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
     confirmationStep({
       key: "sheetReady",
       html: `
-        <h2>Make your private budget Sheet</h2>
-        <p>Google will create a copy in your Drive. If you already made one, you can use that copy.</p>
+        <div class="onboarding-section-heading">
+          <p class="type-meta">Document — fig. 01</p>
+          <h2 class="type-section-title">Make your private budget Sheet</h2>
+          <p class="type-body type-muted">Google will create a copy in your Drive. If you already made one, you can use that copy.</p>
+        </div>
         <a class="onboarding-link" href="${TEMPLATE_URL}" target="_blank" rel="noopener noreferrer">Open spreadsheet template</a>
-        <label class="onboarding-check"><input type="checkbox" data-onboarding-confirm><span>My budget Sheet is open in my Google Drive.</span></label>`,
+        <div class="onboarding-check"><check-box data-onboarding-confirm aria-label="My budget Sheet is open in my Google Drive"></check-box><span>My budget Sheet is open in my Google Drive.</span></div>`,
     });
   }
 
@@ -248,15 +258,18 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
     confirmationStep({
       key: "initialized",
       html: `
-        <h2>Initialize the copied Sheet</h2>
-        <p>In the Google Sheet, use the custom menu to create the normalized budget tabs and Ledger.</p>
+        <div class="onboarding-section-heading">
+          <p class="type-meta">Structure — fig. 02</p>
+          <h2 class="type-section-title">Initialize the copied Sheet</h2>
+          <p class="type-body type-muted">In the Google Sheet, use the custom menu to create the normalized budget tabs and Ledger.</p>
+        </div>
         <ol class="onboarding-instructions">
           <li>Reload the copied Sheet.</li>
           <li>Choose <strong>My Finance → Set up budget</strong>.</li>
           <li>Continue through Google’s authorization screens.</li>
           <li>Wait for the <strong>Budget initialized</strong> message.</li>
         </ol>
-        <label class="onboarding-check"><input type="checkbox" data-onboarding-confirm><span>I saw the Budget initialized message.</span></label>`,
+        <div class="onboarding-check"><check-box data-onboarding-confirm aria-label="I saw the Budget initialized message"></check-box><span>I saw the Budget initialized message.</span></div>`,
     });
   }
 
@@ -264,8 +277,11 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
     confirmationStep({
       key: "deployed",
       html: `
-        <h2>Deploy the Sheet’s web app</h2>
-        <p>This creates the private connection URL used by My Finance.</p>
+        <div class="onboarding-section-heading">
+          <p class="type-meta">Access — fig. 03</p>
+          <h2 class="type-section-title">Deploy the Sheet’s web app</h2>
+          <p class="type-body type-muted">This creates the private connection URL used by My Finance.</p>
+        </div>
         <ol class="onboarding-instructions">
           <li>Choose <strong>Extensions → Apps Script</strong>.</li>
           <li>Choose <strong>Deploy → New deployment → Web app</strong>.</li>
@@ -273,19 +289,22 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
           <li>Set access to <strong>Anyone</strong>, then deploy.</li>
           <li>Copy Google’s <strong>Web app URL</strong> ending in <code>/exec</code>.</li>
         </ol>
-        <label class="onboarding-check"><input type="checkbox" data-onboarding-confirm><span>I deployed the web app and copied its URL.</span></label>`,
+        <div class="onboarding-check"><check-box data-onboarding-confirm aria-label="I deployed the web app and copied its URL"></check-box><span>I deployed the web app and copied its URL.</span></div>`,
     });
   }
 
   function renderConnectStep() {
     const joining = progress.flow === "join";
     elements.content.innerHTML = `
-      <h2>${joining ? "Connect to your household" : "Connect My Finance"}</h2>
-      <p>${joining ? "Ask the household owner to send the private production connection URL." : "Paste the production Web app URL supplied by Google."}</p>
-      <div class="onboarding-fields">
-        <label class="form-field full-width"><span>Web app URL</span><input id="onboarding-endpoint" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <div class="onboarding-section-heading">
+        <p class="type-meta">Connection — fig. ${joining ? "01" : "04"}</p>
+        <h2 class="type-section-title">${joining ? "Connect to your household" : "Connect My Finance"}</h2>
+        <p class="type-body type-muted">${joining ? "Ask the household owner to send the private production connection URL." : "Paste the production Web app URL supplied by Google."}</p>
       </div>
-      <p class="onboarding-secret-note">Keep this URL private. Anyone who has it can access this household’s budget API.</p>`;
+      <div class="onboarding-fields">
+        <label class="form-field full-width"><span class="form-field-label">Web app URL</span><input id="onboarding-endpoint" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      </div>
+      <p class="onboarding-secret-note"><strong>Private credential.</strong> Anyone who has this URL can access this household’s budget API.</p>`;
     const endpointInput = elements.content.querySelector(
       "#onboarding-endpoint",
     );
@@ -313,11 +332,14 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
 
   function renderProfileForm() {
     elements.content.innerHTML = `
-      <h2>Create your profile</h2>
-      <p>Your UUID-backed profile will be stored in the shared Sheet and used to identify transactions you create.</p>
+      <div class="onboarding-section-heading">
+        <p class="type-meta">Identity — fig. ${progress.flow === "join" ? "02" : "05"}</p>
+        <h2 class="type-section-title">Create your profile</h2>
+        <p class="type-body type-muted">Your UUID-backed profile will be stored in the shared Sheet and used to identify transactions you create.</p>
+      </div>
       <div class="onboarding-fields">
-        <label class="form-field"><span>First name</span><input id="onboarding-first-name" maxlength="80" autocomplete="given-name" required></label>
-        <label class="form-field"><span>Last name</span><input id="onboarding-last-name" maxlength="80" autocomplete="family-name" required></label>
+        <label class="form-field"><span class="form-field-label">First name</span><input id="onboarding-first-name" maxlength="80" autocomplete="given-name" required></label>
+        <label class="form-field"><span class="form-field-label">Last name</span><input id="onboarding-last-name" maxlength="80" autocomplete="family-name" required></label>
       </div>
       ${connectedUsers?.length ? '<button class="onboarding-profile-switch" id="choose-existing-profile" type="button">Choose an existing profile instead</button>' : ""}`;
     elements.content
@@ -360,10 +382,13 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
 
   function renderProfilePicker() {
     elements.content.innerHTML = `
-      <h2>Who is using this computer?</h2>
-      <p>Profiles are shared in the Sheet, but the active selection stays on this computer.</p>
+      <div class="onboarding-section-heading">
+        <p class="type-meta">Identity — fig. ${progress.flow === "join" ? "02" : "05"}</p>
+        <h2 class="type-section-title">Who is using this computer?</h2>
+        <p class="type-body type-muted">Profiles are shared in the Sheet, but the active selection stays on this computer.</p>
+      </div>
       <div class="onboarding-fields">
-        <label class="form-field full-width"><span>Profile</span><select id="onboarding-user"><option value="">Choose a profile</option></select></label>
+        <label class="form-field full-width"><span class="form-field-label">Profile</span><select id="onboarding-user"><option value="">Choose a profile</option></select></label>
       </div>
       <button class="onboarding-profile-switch" id="create-onboarding-profile" type="button">Add a new profile</button>`;
     const select = elements.content.querySelector("#onboarding-user");
@@ -432,16 +457,19 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
     const user = APIs.budget.getActiveUser();
     const name = fullName(user) || "Your profile";
     elements.content.innerHTML = `
-      <h2>Confirm the Sheet received your profile</h2>
-      <p>Return to the shared Google Sheet and open the <strong>Users</strong> tab. Confirm that <strong>${escapeHTML(name)}</strong> appears there.</p>
-      <label class="onboarding-check"><input type="checkbox" id="onboarding-verified"><span>I can see ${escapeHTML(name)} in the Users tab.</span></label>`;
+      <div class="onboarding-section-heading">
+        <p class="type-meta">Verification — fig. ${progress.flow === "join" ? "03" : "06"}</p>
+        <h2 class="type-section-title">Confirm the Sheet received your profile</h2>
+        <p class="type-body type-muted">Return to the shared Google Sheet and open the <strong>Users</strong> tab. Confirm that <strong>${escapeHTML(name)}</strong> appears there.</p>
+      </div>
+      <div class="onboarding-check"><check-box id="onboarding-verified" aria-label="I can see ${escapeHTML(name)} in the Users tab"></check-box><span>I can see ${escapeHTML(name)} in the Users tab.</span></div>`;
     const checkbox = elements.content.querySelector("#onboarding-verified");
-    checkbox.checked = Boolean(progress.confirmations.profileVerified);
-    setPrimary("Finish setup", finishOnboarding, !checkbox.checked);
-    checkbox.addEventListener("change", () => {
-      progress.confirmations.profileVerified = checkbox.checked;
+    checkbox.isOn = Boolean(progress.confirmations.profileVerified);
+    setPrimary("Finish setup", finishOnboarding, !checkbox.isOn);
+    checkbox.addEventListener("checkbox-selection", () => {
+      progress.confirmations.profileVerified = checkbox.isOn;
       writeProgress();
-      elements.next.disabled = !checkbox.checked;
+      elements.next.disabled = !checkbox.isOn;
     });
   }
 
