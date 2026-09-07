@@ -146,10 +146,12 @@ separate Contribution and Withdrawal sections; withdrawals are stored as negativ
 amounts for net-flow and contribution-adjusted growth calculations.
 
 After upgrading an existing template, save both Apps Script files and run
-**Track Every Dollar → Set up budget** once. Setup version 6 creates the balance and
-contribution tabs and migrates every prior investment snapshot layout. Each old
-aggregate becomes one signed flow record, while zero aggregates create no flow.
-The old snapshot tab is retained as a hidden legacy archive after migration.
-Review account sources afterward, then publish a new version of the existing
-web-app deployment. API version 8 rejects legacy aggregate writes to protect the
-new itemized contribution history.
+**Track Every Dollar → Set up budget** once. The current upgrader supports the
+production setup-version-7/API-version-10 schema: its separate investment
+accounts, balances, and contributions are normalized into unified accounts and
+transactions. Missing investment assignments default to `Shared`; legacy
+monthly balances use month-end dates and contributions use midpoint dates. A
+spreadsheet-scoped completion marker prevents the activity migration from
+running again, while copied templates still migrate independently. The legacy
+tabs remain available as read-only migration/audit sources. Review the unified
+rows afterward, then publish a new version of the existing web-app deployment.

@@ -3,7 +3,8 @@
 const APP = Object.freeze({
   spreadsheetIdProperty: "SPREADSHEET_ID",
   setupVersionProperty: "SETUP_VERSION",
-  setupVersion: "13",
+  setupVersion: "15",
+  unifiedActivityMigrationProperty: "UNIFIED_ACTIVITY_V12_SPREADSHEET_ID",
   apiVersion: 15,
   ledgerDirtyProperty: "LEDGER_DIRTY",
   incomeCategoryId: "00000000-0000-4000-8000-000000000001",
@@ -20,6 +21,14 @@ const LEGACY_ACCOUNT_TABLES = Object.freeze({
   debtAccounts: { name: "DebtAccounts", headers: ["ID", "Name", "Assignment ID", "Active", "Created At", "Updated At", "Interest Rate"], fields: ["id", "name", "assignmentId", "active", "createdAt", "updatedAt", "interestRate"] },
   debtBalances: { name: "DebtBalances", headers: ["ID", "Debt Account ID", "Month", "Balance", "Notes", "Created At", "Created By", "Updated At", "Updated By", "As Of Date"], fields: ["id", "debtAccountId", "month", "balance", "notes", "createdAt", "createdBy", "updatedAt", "updatedBy", "asOfDate"] },
   debtPayments: { name: "DebtPayments", headers: ["ID", "Debt Account ID", "Date", "Month", "Amount", "Created At", "Created By", "Updated At", "Updated By", "Kind"], fields: ["id", "debtAccountId", "date", "month", "amount", "createdAt", "createdBy", "updatedAt", "updatedBy", "kind"] },
+});
+
+// Production setup v7 / API v10 predates assignments on investment accounts
+// and the date/flow metadata added to investment balances and contributions.
+const PRODUCTION_V7_INVESTMENT_TABLES = Object.freeze({
+  investmentAccounts: { name: "InvestmentAccounts", headers: ["ID", "Name", "Source", "Active", "Created At", "Updated At"], fields: ["id", "name", "source", "active", "createdAt", "updatedAt"] },
+  investmentBalances: { name: "InvestmentBalances", headers: ["ID", "Account ID", "Month", "Ending Balance", "Notes", "Created At", "Created By", "Updated At", "Updated By"], fields: ["id", "accountId", "month", "balance", "notes", "createdAt", "createdBy", "updatedAt", "updatedBy"] },
+  investmentContributions: { name: "InvestmentContributions", headers: ["ID", "Account ID", "Month", "Amount", "Created At", "Created By", "Updated At", "Updated By"], fields: ["id", "accountId", "month", "amount", "createdAt", "createdBy", "updatedAt", "updatedBy"] },
 });
 
 const TABLES = Object.freeze({
@@ -3130,6 +3139,17 @@ function derivedInvestmentContributionId_(snapshotId) {
   );
 }
 
+function legacyAccountReadSpec_(sheet,key,currentSpec) {
+  const candidates=[currentSpec];
+  if(PRODUCTION_V7_INVESTMENT_TABLES[key]) candidates.push(PRODUCTION_V7_INVESTMENT_TABLES[key]);
+  for(let index=0;index<candidates.length;index+=1){
+    const candidate=candidates[index];
+    const header=sheet.getRange(1,1,1,candidate.headers.length).getValues()[0];
+    if(headersMatch_(header,candidate.headers)) return candidate;
+  }
+  throw new Error("Cannot migrate "+currentSpec.name+": its headers do not match a supported legacy schema.");
+}
+
 function migrateLegacyAccountsV11_() {
   const spreadsheet = getSpreadsheet_();
   const legacy = {};
@@ -3137,10 +3157,8 @@ function migrateLegacyAccountsV11_() {
     const spec = LEGACY_ACCOUNT_TABLES[key];
     const sheet = spreadsheet.getSheetByName(spec.name);
     if (!sheet) { legacy[key] = []; return; }
-    const header = sheet.getRange(1, 1, 1, spec.headers.length).getValues()[0];
-    if (!headersMatch_(header, spec.headers))
-      throw new Error("Cannot migrate " + spec.name + ": its headers do not match the legacy schema.");
-    legacy[key] = readRecordsFromSheet_(sheet, spec, true);
+    const readSpec=legacyAccountReadSpec_(sheet,key,spec);
+    legacy[key] = readRecordsFromSheet_(sheet, readSpec, true);
   });
   const accountIds = new Map();
   function addAccount(record, type) {
@@ -3149,8 +3167,9 @@ function migrateLegacyAccountsV11_() {
       id: record.id, name: record.name, type: type,
       assignmentId: record.assignmentId || APP.sharedAssignmentId,
       active: record.active !== false, createdAt: record.createdAt,
-      updatedAt: record.updatedAt, source: type === "investment" ? record.source : "",
+      updatedAt: record.updatedAt, source: type === "investment" ? (record.source === "paycheck" ? "deduction" : record.source || "manual") : "manual",
       interestRate: type === "debt" ? record.interestRate : "",
+      categoryId: type === "debt" ? APP.debtPaymentCategoryId : "",
     };
     const previous = accountIds.get(unified.id);
     if (previous && (previous.type !== unified.type || previous.name !== unified.name || previous.assignmentId !== unified.assignmentId))
@@ -3159,7 +3178,7 @@ function migrateLegacyAccountsV11_() {
   }
   legacy.investmentAccounts.forEach(function (item) { addAccount(item, "investment"); });
   legacy.debtAccounts.forEach(function (item) { addAccount(item, "debt"); });
-  const balances = legacy.investmentBalances.map(function (item) { return { ...item, accountId: item.accountId }; })
+  const balances = legacy.investmentBalances.map(function (item) { return { ...item, accountId: item.accountId, asOfDate: item.asOfDate || investmentMonthEnd_(item.month) }; })
     .concat(legacy.debtBalances.map(function (item) { return { id: item.id, accountId: item.debtAccountId, month: item.month, balance: item.balance, notes: item.notes, createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy, asOfDate: item.asOfDate }; }));
   const activity = legacy.investmentContributions.map(function (item) { return { id: item.id, accountId: item.accountId, date: item.date || item.month + "-15", month: item.month, amount: item.amount, activityType: "contribution", flowType: item.flowType, transferId: item.transferId, counterpartyAccountId: item.counterpartyAccountId, createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy }; })
     .concat(legacy.debtPayments.map(function (item) { return { id: item.id, accountId: item.debtAccountId, date: item.date, month: item.month, amount: item.amount, activityType: item.kind === "borrowing" ? "borrowing" : "payment", flowType: "", transferId: "", counterpartyAccountId: "", createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy }; }));
@@ -3388,11 +3407,16 @@ function getTransactionSheet_() {
   const spreadsheet = getSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(TABLES.transactions.name);
   if (!sheet) sheet = spreadsheet.insertSheet(TABLES.transactions.name);
-  const existing = sheet.getRange(1, 1, 1, LEGACY_TRANSACTION_HEADERS.length).getValues()[0];
-  if (headersMatch_(existing, LEGACY_TRANSACTION_HEADERS))
-    migrateLegacyTransactions_(sheet);
-  const v11 = sheet.getRange(1,1,1,V11_TRANSACTION_HEADERS.length).getValues()[0];
-  if (headersMatch_(v11, V11_TRANSACTION_HEADERS)) migrateV11Transactions_(sheet);
+  const current = sheet.getRange(1,1,1,TABLES.transactions.headers.length).getValues()[0];
+  // The current schema begins with all ten V11 headers. Check the complete
+  // schema first so repeated setup never mistakes a current sheet for V11 and
+  // truncates Account ID, Source, and Legacy Activity ID from every row.
+  if(!headersMatch_(current,TABLES.transactions.headers)){
+    if(headersMatch_(current,LEGACY_TRANSACTION_HEADERS))
+      migrateLegacyTransactions_(sheet);
+    else if(headersMatch_(current,V11_TRANSACTION_HEADERS))
+      migrateV11Transactions_(sheet);
+  }
   ensureSheetHeaders_(
     sheet,
     TABLES.transactions.headers,
@@ -3417,6 +3441,11 @@ function migratedActivityId_(id) {
 
 /** V12: make Transactions canonical while retaining AccountActivity untouched. */
 function migrateUnifiedActivityV12_() {
+  const spreadsheet=getSpreadsheet_();
+  const properties=PropertiesService.getScriptProperties();
+  // Script properties can be inherited by a copied bound spreadsheet. Scope the
+  // completion marker to the spreadsheet ID so every copy migrates exactly once.
+  if(properties.getProperty(APP.unifiedActivityMigrationProperty)===spreadsheet.getId()) return;
   const accountSheet=getTableSheet_(TABLES.accounts);
   const accountRowCount=Math.max(accountSheet.getLastRow()-1,0);
   const accountRows=accountRowCount?accountSheet.getRange(2,1,accountRowCount,TABLES.accounts.headers.length).getValues():[];
@@ -3446,44 +3475,62 @@ function migrateUnifiedActivityV12_() {
   const transactionRows=transactionRowCount?transactionSheet.getRange(2,1,transactionRowCount,TABLES.transactions.headers.length).getValues():[];
   const transactions=[];
   const transactionSheetRows=[];
-  const metadataRows=transactionRows.map(function(row,index){
-    if(row[0]==="")return [row[10]||"",row[11]||"",row[12]||""];
+  const legacyActivityIdRows=transactionRows.map(function(row,index){
+    if(row[0]==="")return [row[12]||""];
     const item=rowToRecord_(TABLES.transactions,row);
     item.accountId=item.accountId||"";
     item.source=item.source==="deduction"?"deduction":"manual";
     item.legacyActivityId=item.legacyActivityId||"";
     transactions.push(item);
     transactionSheetRows.push(index);
-    return [item.accountId,item.source,item.legacyActivityId];
+    return [item.legacyActivityId];
   });
   const existingTransactionCount=transactions.length;
   const byId=new Map(transactions.map(function(item){return [item.id,item];}));
   const imported=new Set(transactions.map(function(item){return item.legacyActivityId;}).filter(Boolean));
   let legacyActivity=readRecords_(TABLES.accountActivity,true);
-  const spreadsheet=getSpreadsheet_();
   const oldInvestments=spreadsheet.getSheetByName(LEGACY_ACCOUNT_TABLES.investmentContributions.name);
   if(oldInvestments) legacyActivity=legacyActivity.concat(readRecordsFromSheet_(oldInvestments,LEGACY_ACCOUNT_TABLES.investmentContributions,true).map(function(item){return {...item,activityType:"contribution"};}));
   const oldDebt=spreadsheet.getSheetByName(LEGACY_ACCOUNT_TABLES.debtPayments.name);
   if(oldDebt) legacyActivity=legacyActivity.concat(readRecordsFromSheet_(oldDebt,LEGACY_ACCOUNT_TABLES.debtPayments,true).map(function(item){return {...item,accountId:item.debtAccountId,activityType:item.kind==="borrowing"?"borrowing":"payment"};}));
+  const hasPendingActivity=legacyActivity.some(function(activity){
+    return activity.id&&accountById.has(activity.accountId)&&!imported.has(activity.id);
+  });
+  // Adopt spreadsheets successfully migrated before the completion property
+  // existed. Their account-linked rows already carry every legacy activity ID.
+  if(!hasPendingActivity){
+    properties.setProperty(APP.unifiedActivityMigrationProperty,spreadsheet.getId());
+    return;
+  }
   legacyActivity.forEach(function(activity){
     if(!activity.id||imported.has(activity.id)) return;
     const account=accountById.get(activity.accountId); if(!account)return;
+    let amount=Number(activity.amount)||0;
+    if(account.type==="debt"&&activity.activityType==="borrowing") amount=-Math.abs(amount);
+    function adoptExisting_(same){
+      if(!same||same.accountId!==activity.accountId||Number(same.amount)!==amount) return false;
+      same.legacyActivityId=activity.id;
+      const existingIndex=transactions.indexOf(same);
+      if(existingIndex>=0&&existingIndex<existingTransactionCount) legacyActivityIdRows[transactionSheetRows[existingIndex]][0]=activity.id;
+      imported.add(activity.id);
+      return true;
+    }
     let id=activity.id;
-    if(byId.has(id)){const same=byId.get(id);if(same.accountId===activity.accountId&&Number(same.amount)===Number(activity.amount)){same.legacyActivityId=activity.id;const existingIndex=transactions.indexOf(same);if(existingIndex>=0&&existingIndex<existingTransactionCount)metadataRows[transactionSheetRows[existingIndex]][2]=activity.id;imported.add(activity.id);return;}id=migratedActivityId_(activity.id);}
-    if(byId.has(id)){const same=byId.get(id);if(same.legacyActivityId===activity.id){imported.add(activity.id);return;}throw new Error("Cannot migrate AccountActivity: derived transaction ID collision for "+activity.id+".");}
+    if(byId.has(id)){if(adoptExisting_(byId.get(id)))return;id=migratedActivityId_(activity.id);}
+    if(byId.has(id)){if(adoptExisting_(byId.get(id)))return;throw new Error("Cannot migrate AccountActivity: derived transaction ID collision for "+activity.id+".");}
     const explicit=normalizeDateId_(activity.date);
     const month=normalizeMonthId_(activity.month||explicit);
     const date=/^\d{4}-\d{2}-\d{2}$/.test(explicit)?explicit:month+"-15";
-    let amount=Number(activity.amount)||0;
-    if(account.type==="debt"&&activity.activityType==="borrowing") amount=-Math.abs(amount);
     const source=activity.flowType==="transfer"?"manual":account.source;
     const record={id:id,createdAt:activity.createdAt,createdBy:activity.createdBy,type:"",amount:amount,date:date,categoryId:"",vendorId:"",assignmentId:"",notes:"",accountId:account.id,source:source,legacyActivityId:activity.id};
     transactions.push(record);byId.set(id,record);imported.add(activity.id);
   });
-  // Never rewrite the original budget columns. Only backfill the three V12
-  // metadata columns, then append account activity that was not already copied.
-  if(metadataRows.length)transactionSheet.getRange(2,11,metadataRows.length,3).setValues(metadataRows);
+  // Existing transactions are immutable here, except for the migration marker.
+  // In particular, setup must never rewrite or clear their Account ID values.
+  if(legacyActivityIdRows.length)transactionSheet.getRange(2,13,legacyActivityIdRows.length,1).setValues(legacyActivityIdRows);
   appendRows_(transactionSheet,transactions.slice(existingTransactionCount).map(function(item){return recordToRow_(TABLES.transactions,item);}));
+  SpreadsheetApp.flush();
+  properties.setProperty(APP.unifiedActivityMigrationProperty,spreadsheet.getId());
 }
 function getLedgerSheet_() {
   const spreadsheet = getSpreadsheet_();
