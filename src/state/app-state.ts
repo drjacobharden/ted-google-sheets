@@ -3,7 +3,7 @@ import type { MonthlyTransactionSummaries } from "../utilities/monthly-transacti
 import type { AnnualBudgetOverviews } from "../utilities/annual-budget-overview";
 import type { AnnualSummaryCards } from "../utilities/annual-summary-cards";
 import type { AnnualSpendTrendSeries } from "../utilities/annual-spend-trend";
-import type { BudgetingRouteName } from "../router/types";
+import type { BudgetingRouteName, RouteName } from "../router/types";
 
 export type SpendTrendsByYear = Record<
   number,
@@ -25,6 +25,17 @@ export interface BudgetOverviewDerivedState {
 export interface BudgetingContext {
   year: number;
   lastRoute: BudgetingRouteName;
+  lastParams: Record<string, string>;
+}
+
+export type InvestmentContentRoute =
+  | "investment-overview"
+  | "investment-accounts"
+  | "investment-debts"
+  | "investment-ledger";
+
+export interface InvestmentContext {
+  lastRoute: InvestmentContentRoute;
   lastParams: Record<string, string>;
 }
 
@@ -144,6 +155,7 @@ export class StateStore<State extends object> {
 
 export interface AppState {
   activeDropdownKey: string | null;
+  openAccordionId: string | null;
   spendTrends: Record<SpendTrendPeriod, SpendTrendSeries | null>;
   spendTrendsByYear: SpendTrendsByYear;
   annualSpendTrendsByYear: AnnualSpendTrendsByYear;
@@ -153,6 +165,7 @@ export interface AppState {
   hasPaycheckDeductionHistory: boolean;
   budgetOverview: BudgetOverviewDerivedState;
   budgetingContext: BudgetingContext;
+  investmentContext: InvestmentContext;
 }
 
 function isBudgetingContext(value: unknown): value is BudgetingContext {
@@ -163,6 +176,7 @@ function isBudgetingContext(value: unknown): value is BudgetingContext {
     typeof context.lastRoute === "string" &&
     [
       "budget-overview",
+      "money-flow",
       "transactions",
       "categories",
       "vendors",
@@ -178,17 +192,40 @@ function isBudgetingContext(value: unknown): value is BudgetingContext {
   );
 }
 
+function isInvestmentContext(value: unknown): value is InvestmentContext {
+  if (!value || typeof value !== "object") return false;
+  const context = value as Partial<InvestmentContext>;
+  return (
+    typeof context.lastRoute === "string" &&
+    [
+      "investment-overview",
+      "investment-accounts",
+      "investment-debts",
+      "investment-ledger",
+    ].includes(context.lastRoute) &&
+    Boolean(context.lastParams) &&
+    typeof context.lastParams === "object" &&
+    Object.values(context.lastParams).every((item) => typeof item === "string")
+  );
+}
+
 const APP_STATE_PERSISTENCE: PersistenceConfig<AppState> = {
   budgetingContext: {
     storage: "session",
     key: "ted.budgeting-context",
     validate: isBudgetingContext,
   },
+  investmentContext: {
+    storage: "session",
+    key: "ted.investment-context",
+    validate: isInvestmentContext,
+  },
 };
 
 export const appState = new StateStore<AppState>(
   {
     activeDropdownKey: null,
+    openAccordionId: null,
     spendTrends: { weekly: null, monthly: null },
     spendTrendsByYear: {},
     annualSpendTrendsByYear: {},
@@ -205,6 +242,10 @@ export const appState = new StateStore<AppState>(
     budgetingContext: {
       year: new Date().getFullYear(),
       lastRoute: "budget-overview",
+      lastParams: {},
+    },
+    investmentContext: {
+      lastRoute: "investment-overview",
       lastParams: {},
     },
   },
