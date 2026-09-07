@@ -1,7 +1,7 @@
 /* Editorial font families */
 @font-face {
   font-family: "Fraunces";
-  src: url("../assets/fonts/Fraunces_72pt-Light.woff2") format("woff2");
+  src: url("../assets/fonts/Baskervville-Regular.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 300;
@@ -9,7 +9,7 @@
 
 @font-face {
   font-family: "Fraunces";
-  src: url("../assets/fonts/Fraunces_72pt-Regular.woff2") format("woff2");
+  src: url("../assets/fonts/Baskervville-Regular.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -17,7 +17,7 @@
 
 @font-face {
   font-family: "Fraunces";
-  src: url("../assets/fonts/Fraunces_72pt-Italic.woff2") format("woff2");
+  src: url("../assets/fonts/Baskervville-Italic.woff2") format("woff2");
   font-display: swap;
   font-style: italic;
   font-weight: 400;
@@ -25,7 +25,7 @@
 
 @font-face {
   font-family: "Fraunces";
-  src: url("../assets/fonts/Fraunces_72pt-SemiBold.woff2") format("woff2");
+  src: url("../assets/fonts/Baskervville-SemiBold.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 600;
@@ -33,7 +33,7 @@
 
 @font-face {
   font-family: "Fraunces";
-  src: url("../assets/fonts/Fraunces_72pt-Bold.woff2") format("woff2");
+  src: url("../assets/fonts/Baskervville-Bold.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 700;
@@ -118,8 +118,18 @@
   --color-chart-expense-muted: var(--clay-300);
   --color-chart-expense-debt: var(--clay-400);
   --color-chart-expense-lightest: var(--clay-200);
+  --color-chart-growth-positive: var(--clay-500);
+  --color-chart-growth-positive-muted: var(--clay-400);
+  --color-chart-growth-positive-subdued: var(--clay-300);
+  --color-chart-growth-positive-lightest: var(--clay-200);
+  --color-chart-growth-negative: var(--moss-700);
+  --color-chart-growth-negative-muted: var(--moss-500);
+  --color-chart-growth-negative-subdued: var(--moss-300);
+  --color-chart-growth-negative-lightest: var(--moss-100);
   --color-chart-savings: var(--slate-500);
   --color-chart-savings-muted: var(--slate-300);
+  --color-chart-debt: var(--plum-500);
+  --color-chart-debt-muted: var(--plum-400);
   --color-chart-trend: var(--color-chart-income);
   --color-chart-bars: var(--color-chart-savings);
   --color-chart-bars-muted: var(--plum-400);

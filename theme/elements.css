@@ -300,6 +300,20 @@
     flex-direction: column;
     margin-right: auto;
 
+    .tab-header-title__row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+
+      h1 {
+        margin-bottom: 0;
+      }
+    }
+
+    .tab-header-title__row + p {
+      margin-top: var(--space-2xs);
+    }
+
     h1 {
       margin: 0 0 var(--space-2xs);
       color: var(--color-text);
@@ -357,6 +371,14 @@
   .editorial-split {
     grid-template-columns: 1fr;
   }
+}
+
+svg {
+  height: 16px;
+  width: 16px;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 @media (prefers-reduced-motion: reduce) {

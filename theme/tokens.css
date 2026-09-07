@@ -1,16 +1,16 @@
 :root {
   /* Primitive colors. Components should use semantic aliases from variables.css. */
-  --paper-50: #faf6ef;
-  --paper-100: #f5ecdf;
-  --paper-200: #f1e7d8;
-  --paper-300: #eddfc9;
-  --paper-400: #e7dbc9;
-  --paper-500: #d8cbb2;
-  --paper-600: #cbb99c;
-  --paper-700: #a9977f;
-  --paper-800: #746858;
-  --paper-900: #433b33;
-  --paper-950: #2b241e;
+  --paper-50: hsl(38, 52%, 96%);
+  --paper-100: hsl(35, 52%, 92%);
+  --paper-200: hsl(36, 25%, 90%);
+  --paper-300: hsl(37, 25%, 86%);
+  --paper-400: hsl(36, 25%, 85%);
+  --paper-500: hsl(39, 33%, 77%);
+  --paper-600: hsl(37, 31%, 70%);
+  --paper-700: hsl(34, 20%, 58%);
+  --paper-800: hsl(34, 14%, 40%);
+  --paper-900: hsl(30, 14%, 23%);
+  --paper-950: hsl(28, 18%, 14%);
 
   --clay-50: #f8eee9;
   --clay-100: #efd8cd;
