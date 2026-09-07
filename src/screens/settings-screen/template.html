@@ -8,14 +8,23 @@
     </div>
   </header>
 
-  <div class="settings-screen__ledger">
+  <nav class="settings-screen__sections" aria-label="Settings sections">
+    <segmented-control
+      id="settings-section-selector"
+      variant="section-tabs"
+      aria-label="Settings section"
+    ></segmented-control>
+  </nav>
+
+  <div class="settings-screen__panel" id="settings-setup-panel" role="tabpanel">
+    <div class="settings-screen__ledger">
     <section
       class="settings-screen__section"
       aria-labelledby="settings-profile-title"
     >
       <header class="settings-screen__section-heading">
         <h2 id="settings-profile-title" class="type-section-title">
-          Your name <span class="type-meta">— fig. 01</span>
+          Your name
         </h2>
         <p class="type-caption">
           The name attached to your activity in the ledger.
@@ -30,7 +39,7 @@
     >
       <header class="settings-screen__section-heading">
         <h2 id="settings-sheet-title" class="type-section-title">
-          Google Sheet <span class="type-meta">— fig. 02</span>
+          Google Sheet
         </h2>
         <p class="type-caption">
           The deployed Apps Script URL used to read and write your budget.
@@ -38,5 +47,16 @@
       </header>
       <url-form></url-form>
     </section>
+    </div>
+  </div>
+
+  <div
+    class="settings-screen__panel"
+    id="settings-sync-panel"
+    role="tabpanel"
+    aria-label="Sync settings"
+    hidden
+  >
+    <sync-screen></sync-screen>
   </div>
 </main>

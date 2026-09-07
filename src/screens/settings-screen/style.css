@@ -10,11 +10,33 @@ settings-screen {
   .settings-screen__masthead {
     display: grid;
     gap: var(--space-sm);
-    padding-block: var(--space-lg);
-    border-bottom: var(--rule-thin) solid var(--color-rule-strong);
+    padding-top: var(--space-lg);
+    margin-bottom: var(--space-2xs);
 
     .type-body {
       max-width: var(--measure-copy);
+    }
+  }
+
+  .settings-screen__sections {
+    position: relative;
+    margin-bottom: var(--space-xl);
+    border-bottom: var(--rule-thin) solid var(--color-rule);
+  }
+
+  #settings-section-selector {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+
+    .segmented-control__list {
+      width: max-content;
+    }
+
+    .segmented-control__item {
+      flex: 0 0 auto;
+      padding-inline: 0;
     }
   }
 
