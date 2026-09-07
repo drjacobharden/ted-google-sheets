@@ -1,7 +1,15 @@
 <section class="transaction-ledger editorial-theme" data-screen="transactions">
   <header class="tab-header">
     <div class="tab-header-title">
-      <h1>Transaction ledger</h1>
+      <div class="tab-header-title__row">
+        <h1>Transactions</h1>
+        <custom-button
+          class="tertiary circle"
+          leading-icon="plus"
+          data-header-action="new-transaction"
+          aria-label="Add transaction"
+        ></custom-button>
+      </div>
       <p id="transaction-ledger-subtitle">
         Showing all transactions recorded for the selected year.
       </p>
