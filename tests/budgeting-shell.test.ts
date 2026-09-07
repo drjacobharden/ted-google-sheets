@@ -5,6 +5,14 @@ import type { BudgetTransaction } from "../src/api/budget-api";
 
 describe("standard budgeting routes", () => {
   test("parses flat screens and accepts old nested links", () => {
+    expect(parseRoute("#/money-flow?year=2026")).toEqual({
+      name: "money-flow",
+      params: { year: "2026" },
+    });
+    expect(parseRoute("#/budgeting/flow?year=2025")).toEqual({
+      name: "money-flow",
+      params: { year: "2025" },
+    });
     expect(parseRoute("#/categories?year=2025")).toEqual({
       name: "categories",
       params: { year: "2025" },
