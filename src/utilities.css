@@ -1,13 +1,5 @@
 /* Fonts */
 @font-face {
-  font-family: "Chewy";
-  src: url("../assets/fonts/Chewy-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  letter-spacing: 0.2em;
-}
-
-@font-face {
   font-family: "Urbanist";
   src: url("../assets/fonts/Urbanist-Regular.woff2") format("woff2");
   font-weight: 400;
@@ -93,11 +85,6 @@ input,
 textarea {
   font-family: "Urbanist";
   text-wrap: pretty;
-}
-
-.logo {
-  font-family: "Chewy";
-  line-height: 1;
 }
 
 /* Text presets */
