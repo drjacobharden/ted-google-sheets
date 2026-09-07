@@ -7,16 +7,14 @@ import { APIs } from "../../api/api";
 import type { BudgetEntity, BudgetTransaction, EntityKind, SyncItem } from "../../api/budget-api";
 import { escapeHTML, messageFromError, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
+import type { DataTable, DataTableColumn, DataTableData } from "../../components/data-table/data-table";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
 
 /** Displays and manages pending, retrying, and failed synchronization work. */
 export class SyncScreen extends HTMLElement implements EventListenerObject {
-  #list!: HTMLElement;
-  #empty!: HTMLElement;
-  #summary!: HTMLElement;
-  #retryAll!: HTMLButtonElement;
+  #table!: DataTable<SyncTableRow>;
   #countdownTimer: ReturnType<typeof setInterval> | null = null;
   #listening = false;
 
@@ -31,8 +29,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
     }
     if (this.#listening) return;
     this.#listening = true;
-    this.#list.addEventListener("click", this);
-    this.#retryAll.addEventListener("click", this);
+    this.#table.addEventListener("click", this);
     window.addEventListener("budget:sync-changed", this);
     window.addEventListener("online", this);
     window.addEventListener("offline", this);
@@ -43,8 +40,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    this.#list.removeEventListener("click", this);
-    this.#retryAll.removeEventListener("click", this);
+    this.#table.removeEventListener("click", this);
     window.removeEventListener("budget:sync-changed", this);
     window.removeEventListener("online", this);
     window.removeEventListener("offline", this);
@@ -54,17 +50,13 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
 
   /** Routes list, retry-all, connectivity, and sync events to screen behavior. */
   handleEvent(event: Event): void {
-    if (event.type === "click" && event.currentTarget === this.#retryAll) this.#handleRetryAll();
-    else if (event.type === "click") this.#handleListClick(event);
+    if (event.type === "click") this.#handleListClick(event);
     else this.#render();
   }
 
   /** Captures the typed elements cloned from the sync template. */
   #captureElements(): void {
-    this.#list = this.querySelector<HTMLElement>("#sync-list")!;
-    this.#empty = this.querySelector<HTMLElement>("#sync-empty")!;
-    this.#summary = this.querySelector<HTMLElement>("#sync-screen-summary")!;
-    this.#retryAll = this.querySelector<HTMLButtonElement>("#retry-all-sync")!;
+    this.#table = this.querySelector<DataTable<SyncTableRow>>("#sync-table")!;
   }
 
   /** Returns whether the browser currently reports an offline state. */
@@ -107,31 +99,19 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   }
 
   /** Builds the legacy sync-center markup for one queued item. */
-  #itemMarkup(item: SyncItem): string {
+  #actionMarkup(item: SyncItem): string {
     const failed = item.status === "failed";
     const syncing = item.status === "syncing";
-    const title = item.source === "transaction"
-      ? `${item.operation === "update" ? "Update" : "New"} transaction`
-      : item.source === "investmentAccount"
-        ? "New investment account"
-        : this.#isInvestmentMonth(item)
-          ? "Investment monthly update"
-          : `${item.operation === "archive" ? "Archive" : item.operation === "reactivate" ? "Reactivate" : "New"} ${item.kind ? ({ category: "category", vendor: "vendor", assignment: "assignment" } satisfies Record<EntityKind, string>)[item.kind] : "entity"}`;
-    const detail = item.source === "transaction"
-      ? this.#transactionDescription(item.record as BudgetTransaction)
-      : this.#isInvestmentMonth(item)
-        ? `${this.#recordString(item, "month")} · ${this.#recordString(item, "accountName")} · ${money(this.#recordNumber(item, "balance"))}`
-        : this.#recordString(item, "name");
-    const icon = item.source === "transaction" ? "$" : this.#isInvestmentMonth(item) ? "↗" : (this.#recordString(item, "name") || "?").charAt(0).toUpperCase();
-    const offlineRetry = '<button class="sync-screen__retry-now" type="button" disabled title="Available when online">Retry now</button>';
+    const title = this.#itemTitle(item);
+    const offlineRetry = '<custom-button class="secondary-button sync-screen__action" label="Retry now" disabled title="Available when online"></custom-button>';
     const controls = item.waitingForOnline
-      ? `${offlineRetry}<button class="sync-screen__discard" type="button" data-sync-action="discard">Discard</button>`
+      ? `${offlineRetry}<custom-button class="secondary-button sync-screen__action sync-screen__discard" data-sync-action="discard" label="Discard"></custom-button>`
       : item.retrying
-        ? '<button class="sync-screen__retry-now" type="button" data-sync-action="retry">Retry now</button><button class="sync-screen__discard" type="button" data-sync-action="discard">Discard</button>'
+        ? '<custom-button class="secondary-button sync-screen__action" data-sync-action="retry" label="Retry now"></custom-button><custom-button class="secondary-button sync-screen__action sync-screen__discard" data-sync-action="discard" label="Discard"></custom-button>'
         : failed
-          ? `${item.failureCode === "conflict" ? '<button class="sync-screen__review" type="button" data-sync-action="review">Review</button>' : this.#browserIsOffline() ? offlineRetry : `<button class="sync-screen__retry" type="button" data-sync-action="retry" aria-label="Retry ${escapeHTML(title)}"><span class="retry-idle" aria-hidden="true">×</span><span class="retry-hover" aria-hidden="true">↻</span><span class="sr-only">Retry</span></button>`}<button class="sync-screen__discard" type="button" data-sync-action="discard">Discard</button>`
+          ? `${item.failureCode === "conflict" ? '<custom-button class="secondary-button sync-screen__action" data-sync-action="review" label="Review"></custom-button>' : this.#browserIsOffline() ? offlineRetry : `<custom-button class="secondary-button sync-screen__action" data-sync-action="retry" label="Retry now" aria-label="Retry ${escapeHTML(title)}"></custom-button>`}<custom-button class="secondary-button sync-screen__action sync-screen__discard" data-sync-action="discard" label="Discard"></custom-button>`
           : syncing ? '<span class="sync-screen__spinner" aria-label="Syncing"></span>' : '<span class="sync-screen__pending" aria-label="Waiting to sync"></span>';
-    return `<article class="sync-screen__item ${escapeHTML(item.status)}" data-sync-key="${escapeHTML(item.key)}"><span class="sync-screen__icon" aria-hidden="true">${escapeHTML(icon)}</span><div class="sync-screen__copy">${escapeHTML(title)}<span>${escapeHTML(detail)}</span>${item.waitingForOnline ? `<small class="retry offline">Offline · Sync will attempt again when back online</small>${item.error ? `<small class="transport">${escapeHTML(item.error)}</small>` : ""}` : ""}${item.retrying ? `<small class="retry">${escapeHTML(this.#retryDescription(item))}</small><small class="transport">${escapeHTML(item.error)}</small>` : ""}${failed ? `<small class="error">Needs attention · ${escapeHTML(item.error)}</small>` : ""}</div><div class="sync-screen__actions">${controls}</div></article>`;
+    return controls;
   }
 
   /** Renders every sync item and updates retry summary state. */
@@ -142,17 +122,19 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
     const waiting = items.filter((item) => item.waitingForOnline).length;
     const retryable = items.filter((item) => (item.status === "failed" && item.failureCode !== "conflict") || item.retrying || item.waitingForOnline).length;
     const syncing = items.filter((item) => item.status === "syncing").length;
-    this.#empty.hidden = items.length > 0;
-    this.#list.innerHTML = items.map((item) => this.#itemMarkup(item)).join("");
-    this.#retryAll.hidden = retryable === 0;
-    this.#retryAll.disabled = this.#browserIsOffline() && retryable > 0;
-    this.#retryAll.title = this.#retryAll.disabled ? "Available when online" : "";
-    this.#summary.textContent = !items.length ? "All changes are saved."
-      : waiting ? `Offline · Sync will attempt again when back online. ${waiting} ${waiting === 1 ? "change is" : "changes are"} waiting${failed ? ` · ${failed} ${failed === 1 ? "needs" : "need"} attention` : ""}.`
-        : failed ? `${failed} ${failed === 1 ? "change needs" : "changes need"} attention · ${items.length - failed} waiting`
-          : retrying ? `${retrying} ${retrying === 1 ? "change is" : "changes are"} waiting to retry.`
-            : syncing ? `Syncing ${syncing} ${syncing === 1 ? "change" : "changes"}…`
-              : `${items.length} ${items.length === 1 ? "change is" : "changes are"} waiting to sync.`;
+    const rows = items.map((item) => ({
+      id: item.key,
+      change: this.#itemTitle(item),
+      detail: this.#itemDetail(item),
+      status: this.#itemStatus(item),
+      actions: this.#actionMarkup(item),
+    }));
+    const data: DataTableData<SyncTableRow> = {
+      columns: this.#columns(),
+      rows,
+      rowKey: (row) => row.id,
+    };
+    this.#table.data = data;
     if (retrying > 0 && this.#countdownTimer === null) this.#countdownTimer = setInterval(() => this.#render(), 1000);
     else if (retrying === 0 && this.#countdownTimer !== null) {
       clearInterval(this.#countdownTimer);
@@ -164,9 +146,9 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   #handleListClick(event: Event): void {
     const target = eventTargetElement(event);
     const action = target?.closest<HTMLElement>("[data-sync-action]")?.dataset.syncAction;
-    const element = target?.closest<HTMLElement>("[data-sync-key]");
-    if (!action || !element?.dataset.syncKey) return;
-    const item = APIs.getSyncItems().find((entry) => entry.key === element.dataset.syncKey);
+    const element = target?.closest<HTMLElement>("[data-row-key]");
+    if (!action || !element?.dataset.rowKey) return;
+    const item = APIs.getSyncItems().find((entry) => entry.key === element.dataset.rowKey);
     if (!item) return;
     try {
       if (action === "review") this.#reviewItem(item);
@@ -181,7 +163,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   /** Opens the appropriate conflict-review drawer for a sync item. */
   #reviewItem(item: SyncItem): void {
     if (item.source === "transaction") router.updateParams({ drawer: "review", transactionId: item.id });
-    else if (this.#isInvestmentMonth(item)) router.updateParams({ drawer: "investment-month", investmentAccountId: this.#recordString(item, "accountId"), investmentMonth: this.#recordString(item, "month"), investmentReviewId: item.id });
+    else if (this.#isInvestmentMonth(item)) router.updateParams({ drawer: "edit", transactionId: item.currentRecord?.id || this.#recordString(item, "id") || item.id });
   }
 
   /** Retries a transaction, investment, or entity sync item. */
@@ -213,6 +195,44 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
     });
     this.#render();
   }
+
+  #itemTitle(item: SyncItem): string {
+    if (item.source === "transaction") return `${item.operation === "update" ? "Update" : "New"} transaction`;
+    if (item.source === "investmentAccount") return "New investment account";
+    if (this.#isInvestmentMonth(item)) return "Investment monthly update";
+    return `${item.operation === "archive" ? "Archive" : item.operation === "reactivate" ? "Reactivate" : "New"} ${item.kind ? ({ category: "category", vendor: "vendor", assignment: "assignment" } as Record<EntityKind, string>)[item.kind] : "entity"}`;
+  }
+
+  #itemDetail(item: SyncItem): string {
+    if (item.source === "transaction") return this.#transactionDescription(item.record as BudgetTransaction);
+    if (this.#isInvestmentMonth(item)) return `${this.#recordString(item, "month")} · ${this.#recordString(item, "accountName")} · ${money(this.#recordNumber(item, "balance"))}`;
+    return this.#recordString(item, "name");
+  }
+
+  #itemStatus(item: SyncItem): string {
+    if (item.waitingForOnline) return "Offline · Waiting to sync";
+    if (item.retrying) return this.#retryDescription(item);
+    if (item.status === "failed") return `Needs attention · ${item.error}`;
+    if (item.status === "syncing") return "Syncing…";
+    return "Waiting to sync";
+  }
+
+  #columns(): DataTableColumn<SyncTableRow>[] {
+    return [
+      { key: "change", title: "Change", cellClass: ["primary"], formatter: (value) => escapeHTML(value) },
+      { key: "detail", title: "Details", formatter: (value) => escapeHTML(value) },
+      { key: "status", title: "Status", formatter: (value) => escapeHTML(value) },
+      { key: "actions", title: "Actions", formatter: (value) => String(value ?? "") },
+    ];
+  }
+}
+
+interface SyncTableRow {
+  id: string;
+  change: string;
+  detail: string;
+  status: string;
+  actions: string;
 }
 
 if (!customElements.get("sync-screen")) customElements.define("sync-screen", SyncScreen);
