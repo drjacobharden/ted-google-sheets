@@ -1,10 +1,8 @@
 :is(
   transaction-drawer-screen,
-  investment-ledger-drawer-screen,
-  investment-month-drawer-screen,
   investment-account-drawer-screen
 ) {
-  :is(#transaction-edit-form, #investment-ledger-entry-form) {
+  #transaction-edit-form {
     color: var(--color-text);
   }
 
@@ -537,7 +535,7 @@ transaction-drawer-screen {
 }
 
 @media (max-width: 640px) {
-  :is(transaction-drawer-screen, investment-ledger-drawer-screen) {
+  transaction-drawer-screen {
     .transaction-drawer {
       inset: 0;
       width: 100%;

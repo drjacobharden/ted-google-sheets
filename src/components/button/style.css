@@ -63,15 +63,15 @@ custom-button {
 
   &.tertiary {
     background-color: transparent;
-    border: 1px solid var(--main-chart-gridline);
+    border: 1px solid var(--color-rule);
     color: var(--text);
 
     &:hover {
-      background-color: var(--main-chart-inactive);
+      background-color: var(--color-rule);
     }
 
     &:active {
-      background-color: var(--main-chart-active);
+      background-color: var(--color-background);
       opacity: 0.6;
     }
   }

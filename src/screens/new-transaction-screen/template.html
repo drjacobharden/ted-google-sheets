@@ -6,23 +6,24 @@
     <div class="tab-header-title">
       <h1 id="new-transaction-title">New transaction</h1>
     </div>
-    <div class="tab-header-tools">
-      <custom-button
-        class="secondary-button"
-        leading-icon="import"
-        data-action="open-import"
-        label="Bulk import"
-        type="button"
-      ></custom-button>
-    </div>
   </header>
 
-  <nav class="budgeting-header__sections" aria-label="Transction input actions">
+  <nav
+    class="budgeting-header__sections new-transaction-page__kind-nav"
+    aria-label="Transaction input actions"
+  >
     <segmented-control
       id="new-transaction-kind"
       variant="section-tabs"
       aria-label="Transaction type"
     ></segmented-control>
+    <custom-button
+      class="ghost-button new-transaction-page__import-button"
+      leading-icon="import"
+      data-action="open-import"
+      label="Bulk import"
+      type="button"
+    ></custom-button>
   </nav>
 
   <form id="new-transaction-form" novalidate>
@@ -91,6 +92,7 @@
           ></p>
           <custom-button
             class="primary-button"
+            data-action="submit-transaction"
             type="submit"
             label="Add transaction"
           ></custom-button>

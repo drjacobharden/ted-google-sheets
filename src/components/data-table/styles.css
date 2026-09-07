@@ -5,6 +5,15 @@ data-table {
   min-width: 0;
   overflow-x: auto;
 
+  .data-table__empty {
+    margin: 0;
+    padding-block: var(--space-xl);
+    border-block: 1px solid var(--color-rule);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+  }
+
   table {
     width: 100%;
     min-width: 640px;

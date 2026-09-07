@@ -4,7 +4,15 @@
 >
   <header class="tab-header">
     <div class="tab-header-title">
-      <h1>Investment activity</h1>
+      <div class="tab-header-title__row">
+        <h1>Account activity</h1>
+        <custom-button
+          class="tertiary circle"
+          leading-icon="plus"
+          data-ledger-entry
+          aria-label="Add investment activity"
+        ></custom-button>
+      </div>
       <p id="investment-ledger-subtitle">
         Showing investment activity for the selected year.
       </p>
@@ -31,5 +39,9 @@
       ></filter-bar>
     </div>
   </header>
-  <data-table sortable interactive aria-label="Investment activity"></data-table>
+  <data-table
+    sortable
+    interactive
+    aria-label="Investment activity"
+  ></data-table>
 </section>

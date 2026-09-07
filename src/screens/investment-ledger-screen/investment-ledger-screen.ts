@@ -35,7 +35,10 @@ const monthItems: DropdownMenuItem[] = [
   { key: "all", title: "All months", isDefaultValue: true },
   ...Array.from({ length: 12 }, (_, index) => ({
     key: String(index + 1).padStart(2, "0"),
-    title: DateUtils.monthFormatter.format(new Date(2024, index, 1)),
+    title: new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      timeZone: "UTC",
+    }).format(new Date(2024, index, 1)),
   })),
 ];
 

@@ -4,7 +4,15 @@
 >
   <header class="tab-header">
     <div class="tab-header-title">
-      <h1>Accounts</h1>
+      <div class="tab-header-title__row">
+        <h1>Portfolio</h1>
+        <custom-button
+          class="tertiary circle"
+          leading-icon="plus"
+          data-account-new
+          aria-label="Add account"
+        ></custom-button>
+      </div>
       <p id="investment-account-ledger-subtitle">Investment account balances</p>
     </div>
     <div class="tab-header-tools" aria-label="Investment account list controls">
@@ -20,5 +28,9 @@
       ></filter-bar>
     </div>
   </header>
-  <data-table sortable interactive aria-label="Investment accounts"></data-table>
+  <data-table
+    sortable
+    interactive
+    aria-label="Investment accounts"
+  ></data-table>
 </section>

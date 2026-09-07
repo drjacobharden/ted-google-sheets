@@ -3,6 +3,10 @@ investment-overview-screen {
   min-height: 0;
   background: var(--color-canvas);
 
+  .content-container {
+    min-width: 0;
+  }
+
   .investment-overview-screen__hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -236,6 +240,15 @@ investment-overview-screen {
     padding: var(--space-xl);
     color: var(--color-text-muted);
     text-align: center;
+  }
+
+  .investment-overview-screen__activity-frame {
+    display: grid;
+    gap: var(--space-lg);
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--space-md);
   }
 }
 

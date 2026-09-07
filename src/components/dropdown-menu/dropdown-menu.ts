@@ -179,7 +179,8 @@ export class DropdownMenu extends HTMLElement {
         this.#selection = option;
         this.#selection.classList.add("is-selected");
         this.#value = key;
-        if (!this.hasAttribute("preserve-label")) this.#trigger.label = selectionLabel ?? title;
+        if (!this.hasAttribute("preserve-label"))
+          this.#trigger.label = selectionLabel ?? title;
       }
 
       if (destructive) {
@@ -400,7 +401,8 @@ export class DropdownMenu extends HTMLElement {
     if (item === null) {
       this.#trigger.label = this.#defaultLabel;
     } else if (item && !this.hasAttribute("preserve-label") && this.#trigger) {
-      this.#trigger.label = item.dataset.selectionTitle ?? item.dataset.title ?? "";
+      this.#trigger.label =
+        item.dataset.selectionTitle ?? item.dataset.title ?? "";
     }
   }
 
@@ -411,9 +413,11 @@ export class DropdownMenu extends HTMLElement {
       side: "bottom",
       align: this.hasAttribute("align-start")
         ? "start"
-        : this.hasAttribute("align-end")
-          ? "end"
-          : "start",
+        : this.hasAttribute("align-center")
+          ? "center"
+          : this.hasAttribute("align-end")
+            ? "end"
+            : "start",
       gap: 4,
     });
     this.toggleAttribute("is-open", true);

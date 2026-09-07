@@ -1,15 +1,18 @@
 import type {
-  DropdownMenu,
-  DropdownSelectionEvent,
-} from "../../components/dropdown-menu/dropdown-menu";
-import type {
   SegmentedControl,
   SegmentedControlSelectionEvent,
 } from "../../components/segmented-control/segmented-control";
 import { CustomButton } from "../../components/button/button";
+import type { YearSelector } from "../../components/year-selector/year-selector";
 import { APIs } from "../../api/api";
 import { router } from "../../router/router";
+import { appState, type InvestmentContentRoute } from "../../state/app-state";
 import type { RouteChangedEventDetail, RouteName } from "../../router/types";
+import {
+  addListener,
+  handleCustomEvent,
+  removeListener,
+} from "../../utilities/event-utilities";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -17,9 +20,9 @@ template.innerHTML = templateString;
 
 const CONTENT_ROUTES = [
   { route: "investment-overview", title: "Overview" },
-  { route: "investment-accounts", title: "Accounts" },
+  { route: "investment-accounts", title: "Portfolio" },
   { route: "investment-debts", title: "Debts" },
-  { route: "investment-ledger", title: "Ledger" },
+  { route: "investment-ledger", title: "Activity" },
 ] as const;
 
 function isInvestmentRoute(name: RouteName): boolean {
@@ -35,15 +38,37 @@ function contentRoute(name: RouteName): string {
 function availableYears(): number[] {
   const currentYear = new Date().getFullYear();
   const years = new Set<number>([currentYear]);
-  [...APIs.accounts.balances(), ...APIs.accounts.activity()].forEach(
-    (item) => {
-      const year = Number(String(item.month).slice(0, 4));
-      if (Number.isInteger(year) && year >= 1900 && year <= currentYear) {
-        years.add(year);
-      }
-    },
+  const overview = appState.get("budgetOverview");
+  Object.entries(overview.monthlyTransactionSummaries).forEach(([year, rows]) => {
+    const numericYear = Number(year);
+    const deductionMonths =
+      overview.annualSummaryCards[numericYear]?.metrics.paycheckDeductions.months ?? [];
+    if (
+      Number.isInteger(numericYear) &&
+      numericYear >= 1900 &&
+      numericYear <= currentYear &&
+      (rows.some((row) => row.hasData) || deductionMonths.some((month) => month.hasData))
+    ) {
+      years.add(numericYear);
+    }
+  });
+  APIs.accounts.balances().forEach((item) => {
+    const year = Number(String(item.month).slice(0, 4));
+    if (Number.isInteger(year) && year >= 1900 && year <= currentYear) {
+      years.add(year);
+    }
+  });
+  APIs.accounts.activity().forEach((item) => {
+    const year = Number(String(item.date).slice(0, 4));
+    if (Number.isInteger(year) && year >= 1900 && year <= currentYear) {
+      years.add(year);
+    }
+  });
+  const firstYear = Math.min(...years);
+  return Array.from(
+    { length: currentYear - firstYear + 1 },
+    (_, index) => currentYear - index,
   );
-  return [...years].sort((left, right) => right - left);
 }
 
 /** Owns the shared year, navigation, and entry action for Investments. */
@@ -52,10 +77,7 @@ export class InvestmentsHeader
   implements EventListenerObject
 {
   #sectionSelector!: SegmentedControl;
-  #yearSelector!: DropdownMenu;
-  #previousYearButton!: CustomButton;
-  #nextYearButton!: CustomButton;
-  #primaryAction!: CustomButton;
+  #yearSelector!: YearSelector;
   #route: RouteChangedEventDetail | null = null;
   #listening = false;
 
@@ -63,17 +85,17 @@ export class InvestmentsHeader
     if (!this.dataset.initialized) {
       this.dataset.initialized = "true";
       this.append(template.content.cloneNode(true));
-      this.#sectionSelector = this.querySelector("#investments-section-selector")!;
+      this.#sectionSelector = this.querySelector(
+        "#investments-section-selector",
+      )!;
       this.#yearSelector = this.querySelector("#investments-year-selector")!;
-      this.#previousYearButton = this.querySelector("#investments-year-previous")!;
-      this.#nextYearButton = this.querySelector("#investments-year-next")!;
-      this.#primaryAction = this.querySelector("#investments-primary-action")!;
     }
     if (!this.#listening) {
       this.#listening = true;
       this.#sectionSelector.addListener(this);
-      this.#yearSelector.addListener(this);
+      addListener("year-selection-changed", this.#yearSelector, this);
       this.addEventListener("click", this);
+      window.addEventListener("click", this);
       window.addEventListener("app:route-changed", this);
       window.addEventListener("budget:accounts-changed", this);
       window.addEventListener("budget:accounts-loaded", this);
@@ -89,8 +111,9 @@ export class InvestmentsHeader
     if (!this.#listening) return;
     this.#listening = false;
     this.#sectionSelector.removeListener(this);
-    this.#yearSelector.removeListener(this);
+    removeListener("year-selection-changed", this.#yearSelector, this);
     this.removeEventListener("click", this);
+    window.removeEventListener("click", this);
     window.removeEventListener("app:route-changed", this);
     window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("budget:accounts-loaded", this);
@@ -99,18 +122,25 @@ export class InvestmentsHeader
   handleEvent(event: Event): void {
     if (event.type === "segmented-control-selection") {
       const value = (event as SegmentedControlSelectionEvent).detail.value;
+      this.#rememberTab(value as InvestmentContentRoute);
       router.navigate(value as RouteName, { year: this.#selectedYear() });
       return;
     }
-    if (event.type === "dropdown-selection") {
-      if (event.target === this.#yearSelector) {
-        router.replaceParams({
-          year: (event as DropdownSelectionEvent).detail.value,
-        });
-      }
+    if (event.type === "year-selection-changed") {
+      handleCustomEvent("year-selection-changed", event, ({ year }) => {
+        router.replaceParams({ year });
+      });
       return;
     }
     if (event.type === "click") {
+      if (
+        event.currentTarget === window &&
+        !(event.target as Element | null)?.closest(
+          "[data-edit-investment-account], [data-ledger-entry], [data-debt-account-new], [data-account-new]",
+        )
+      ) {
+        return;
+      }
       const section = (event.target as Element | null)?.closest<HTMLElement>(
         ".segmented-control__item",
       );
@@ -127,28 +157,40 @@ export class InvestmentsHeader
           return;
         }
       }
-      const editAccount = (event.target as Element | null)?.closest<HTMLElement>(
-        "[data-edit-investment-account]",
-      );
-      if (editAccount && this.#route?.name === "investment-account-detail") {
+      const editAccount = (
+        event.target as Element | null
+      )?.closest<HTMLElement>("[data-edit-investment-account]");
+      if (
+        editAccount &&
+        (this.#route?.name === "investment-account-detail" ||
+          this.#route?.name === "investment-debt-detail")
+      ) {
         router.updateParams({
           drawer: "investment-account",
           investmentAccountId: this.#route.params.accountId ?? null,
-          investmentLedgerSource: "investment",
+          investmentLedgerSource:
+            this.#route.name === "investment-debt-detail"
+              ? "debt-account"
+              : "investment",
         });
         return;
       }
-      const ledgerEntry = (event.target as Element | null)?.closest<HTMLElement>("[data-ledger-entry]");
+      const ledgerEntry = (
+        event.target as Element | null
+      )?.closest<HTMLElement>("[data-ledger-entry]");
       if (ledgerEntry) {
-        const year = Number(this.#selectedYear());
-        const today = new Date();
-        const month = year === today.getFullYear() ? String(today.getMonth() + 1).padStart(2, "0") : "12";
-        router.updateParams({ drawer: "investment-month", investmentAccountId: null, investmentMonth: `${year}-${month}`, investmentLedgerSource: "investment" });
+        router.navigate("new-transaction", { transactionKind: "account" });
         return;
       }
-      const addDebt = (event.target as Element | null)?.closest<HTMLElement>("[data-debt-account-new]");
+      const addDebt = (event.target as Element | null)?.closest<HTMLElement>(
+        "[data-debt-account-new]",
+      );
       if (addDebt) {
-        router.updateParams({ drawer: "investment-account", investmentAccountId: null, investmentLedgerSource: "debt-account" });
+        router.updateParams({
+          drawer: "investment-account",
+          investmentAccountId: null,
+          investmentLedgerSource: "debt-account",
+        });
         return;
       }
       const addAccount = (event.target as Element | null)?.closest<HTMLElement>(
@@ -161,40 +203,17 @@ export class InvestmentsHeader
         });
         return;
       }
-      const entry = (event.target as Element | null)?.closest<HTMLElement>(
-        "[data-balance]",
-      );
-      if (entry) {
-        event.stopPropagation();
-        const year = Number(this.#selectedYear());
-        const today = new Date();
-        const month = year === today.getFullYear()
-          ? String(today.getMonth() + 1).padStart(2, "0")
-          : "12";
-        router.updateParams({
-          drawer: "investment-month",
-          investmentAccountId: null,
-          investmentMonth: `${year}-${month}`,
-          investmentReviewId: null,
-          investmentLedgerSource: "investment",
-        });
-        return;
-      }
-      const step = (event.target as Element | null)?.closest<HTMLElement>(
-        "[data-year-step]",
-      );
-      if (step?.dataset.year) {
-        router.replaceParams({ year: step.dataset.year });
-      }
       return;
     }
     if (event.type === "app:route-changed") {
-      this.#applyRoute(
-        (event as CustomEvent<RouteChangedEventDetail>).detail,
-      );
+      this.#applyRoute((event as CustomEvent<RouteChangedEventDetail>).detail);
       return;
     }
-    this.#applyRoute({ name: router.currentRoute(), route: router.currentRoute(), params: router.currentParams() });
+    this.#applyRoute({
+      name: router.currentRoute(),
+      route: router.currentRoute(),
+      params: router.currentParams(),
+    });
   }
 
   #selectedYear(): string {
@@ -210,70 +229,59 @@ export class InvestmentsHeader
     this.hidden = false;
     const years = availableYears();
     const requested = Number(detail.params.year);
-    const year = years.includes(requested) ? requested : years[0];
+    const sharedYear = appState.get("budgetingContext").year;
+    const year = years.includes(requested)
+      ? requested
+      : years.includes(sharedYear)
+        ? sharedYear
+        : years[0];
     if (detail.params.year !== String(year)) {
       if (!document.getElementById("route-outlet")) return;
       router.replace(detail.name, { ...detail.params, year: String(year) });
       return;
     }
+    this.#syncBudgetingYear(year);
+    if (
+      detail.name === "investment-overview" &&
+      appState.get("investmentContext").lastRoute !== "investment-overview"
+    ) {
+      const context = appState.get("investmentContext");
+      router.replace(context.lastRoute, {
+        ...context.lastParams,
+        year: String(year),
+      });
+      return;
+    }
     this.#route = detail;
+    this.#rememberTab(contentRoute(detail.name) as InvestmentContentRoute, String(year));
     this.#sectionSelector.items = CONTENT_ROUTES.map((item) => ({
       key: item.route,
       title: item.title,
       isDefaultValue: item.route === contentRoute(detail.name),
     }));
     this.#sectionSelector.selection = contentRoute(detail.name);
-    const onAccounts = contentRoute(detail.name) === "investment-accounts";
-    const onAccountDetail = detail.name === "investment-account-detail";
-    const onDebts = contentRoute(detail.name) === "investment-debts";
-    const onLedger = contentRoute(detail.name) === "investment-ledger";
-    this.#primaryAction.label = onAccountDetail
-      ? "Edit account"
-      : onLedger
-        ? "Add ledger entry"
-        : onDebts
-          ? "Add debt account"
-          : onAccounts
-            ? "Add account"
-            : "Add investment entry";
-    this.#primaryAction.toggleAttribute("data-edit-investment-account", onAccountDetail);
-    this.#primaryAction.toggleAttribute("data-account-new", onAccounts && !onAccountDetail);
-    this.#primaryAction.toggleAttribute("data-debt-account-new", onDebts);
-    this.#primaryAction.toggleAttribute("data-ledger-entry", onLedger);
-    this.#primaryAction.toggleAttribute("data-balance", !onAccounts && !onDebts && !onLedger);
-    this.#yearSelector.items = years.map((item) => ({
-      key: String(item),
-      title: String(item),
-      isDefaultValue: item === year,
-    }));
-    const ascending = [...years].sort((left, right) => left - right);
-    const index = ascending.indexOf(year);
-    this.#setYearButton(
-      this.#previousYearButton,
-      index > 0 ? ascending[index - 1] : null,
-      "Previous",
-    );
-    this.#setYearButton(
-      this.#nextYearButton,
-      index < ascending.length - 1 ? ascending[index + 1] : null,
-      "Next",
-    );
+    this.#yearSelector.years = years;
+    this.#yearSelector.selectedYear = String(year);
   }
 
-  #setYearButton(
-    button: CustomButton,
-    year: number | null,
-    direction: string,
-  ): void {
-    if (year === null) delete button.dataset.year;
-    else button.dataset.year = String(year);
-    button.toggleAttribute("disabled", year === null);
-    button.setAttribute("aria-disabled", String(year === null));
-    button.setAttribute(
-      "aria-label",
-      year === null ? `No ${direction.toLowerCase()} year available` : `${direction} year, ${year}`,
-    );
+  #rememberTab(route: InvestmentContentRoute, year = this.#selectedYear()): void {
+    appState.set("investmentContext", {
+      lastRoute: route,
+      lastParams: { year },
+    });
   }
+
+  #syncBudgetingYear(year: number): void {
+    const context = appState.get("budgetingContext");
+    const yearString = String(year);
+    if (context.year === year && context.lastParams.year === yearString) return;
+    appState.set("budgetingContext", {
+      ...context,
+      year,
+      lastParams: { ...context.lastParams, year: yearString },
+    });
+  }
+
 }
 
 if (!customElements.get("investments-header")) {

@@ -264,15 +264,6 @@ entity-detail-screen {
   .entity-detail__tools search-bar {
     display: flex;
   }
-  .entity-detail__empty {
-    margin: 0;
-    padding-block: var(--space-xl);
-    border-block: 1px solid var(--color-rule);
-    color: var(--color-text-muted);
-    font-family: var(--font-body);
-    font-size: var(--text-sm);
-  }
-
   data-table {
     --outer-padding: 0px;
     --vertical-padding: 12px;

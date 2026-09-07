@@ -19,6 +19,7 @@ const NAVIGATION_BUTTONS = [
     action: "new-transaction",
     data: [
       { label: "Overview", icon: "dashboard", tab: "budget-overview" },
+      { label: "Flow", icon: "chart", tab: "money-flow" },
       { label: "Transactions", icon: "transactions", tab: "transactions" },
       { label: "Categories", icon: "label", tab: "categories" },
       { label: "Vendors", icon: "cart", tab: "vendors" },

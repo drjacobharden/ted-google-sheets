@@ -1,0 +1,129 @@
+spending-heatmap-chart {
+  position: relative;
+  display: block;
+  min-width: 0;
+  width: 100%;
+  min-height: 9rem;
+  overflow: hidden;
+
+  .spending-heatmap-chart__svg {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    overflow: visible;
+  }
+
+  .spending-heatmap-chart__month-label,
+  .spending-heatmap-chart__day-label {
+    fill: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .spending-heatmap-chart__month-label {
+    fill: var(--color-text-subtle);
+  }
+
+  .spending-heatmap-chart__day {
+    outline: none;
+  }
+
+  .spending-heatmap-chart__cell {
+    cursor: pointer;
+    fill: color-mix(in srgb, var(--color-text-subtle) 20%, var(--color-surface));
+    stroke: var(--color-surface);
+    stroke-width: 1;
+    transition:
+      fill 120ms ease,
+      opacity 180ms ease,
+      stroke 180ms ease;
+  }
+
+  .spending-heatmap-chart__day.is-dimmed .spending-heatmap-chart__cell {
+    opacity: 0.16;
+  }
+
+  .spending-heatmap-chart__day.is-highlighted .spending-heatmap-chart__cell {
+    opacity: 1;
+  }
+
+  .spending-heatmap-chart__day.is-zero-spend-highlighted .spending-heatmap-chart__cell {
+    fill: #000;
+    opacity: 1;
+  }
+
+  .spending-heatmap-chart__grid-cell {
+    fill: transparent;
+    stroke: transparent;
+    stroke-width: 1;
+  }
+
+  .spending-heatmap-chart__grid-cell.is-calendar-day {
+    fill: color-mix(in srgb, var(--color-text-subtle) 20%, var(--color-surface));
+  }
+
+  .spending-heatmap-chart__day.is-level-1 .spending-heatmap-chart__cell {
+    fill: var(--color-chart-expense-lightest);
+  }
+
+  .spending-heatmap-chart__day.is-level-2 .spending-heatmap-chart__cell {
+    fill: var(--color-chart-expense-muted);
+  }
+
+  .spending-heatmap-chart__day.is-level-3 .spending-heatmap-chart__cell {
+    fill: var(--color-chart-expense);
+  }
+
+  .spending-heatmap-chart__day.is-level-4 .spending-heatmap-chart__cell {
+    fill: var(--color-accent-strong);
+  }
+
+  &[data-variant="investment"] .spending-heatmap-chart__day.is-level-1 .spending-heatmap-chart__cell {
+    fill: var(--color-chart-bars-subdued);
+  }
+
+  &[data-variant="investment"] .spending-heatmap-chart__day.is-level-2 .spending-heatmap-chart__cell {
+    fill: var(--color-chart-savings-muted);
+  }
+
+  &[data-variant="investment"] .spending-heatmap-chart__day.is-level-3 .spending-heatmap-chart__cell {
+    fill: var(--color-chart-savings);
+  }
+
+  &[data-variant="investment"] .spending-heatmap-chart__day.is-level-4 .spending-heatmap-chart__cell {
+    fill: var(--slate-700);
+  }
+
+  .spending-heatmap-chart__day:hover .spending-heatmap-chart__cell,
+  .spending-heatmap-chart__day.is-active .spending-heatmap-chart__cell {
+    fill: color-mix(in srgb, currentColor 78%, var(--color-text));
+    stroke: var(--color-focus);
+    stroke-width: 2;
+  }
+
+  .spending-heatmap-chart__day:focus-visible .spending-heatmap-chart__cell {
+    stroke: var(--color-focus);
+    stroke-width: 2;
+  }
+
+  .spending-heatmap-chart__tooltip-anchor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .spending-heatmap-chart__empty {
+    display: grid;
+    min-height: 9rem;
+    place-items: center;
+    margin: 0;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+}

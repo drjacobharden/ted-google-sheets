@@ -1,7 +1,10 @@
 <article class="investment-account-detail editorial-theme">
   <header class="tab-header">
     <div class="tab-header-title">
-      <h1 id="debt-detail-title">Debt account</h1>
+      <div class="tab-header-title__row">
+        <h1 id="debt-detail-title">Debt account</h1>
+        <custom-button class="tertiary circle" leading-icon="pencil" data-edit-investment-account aria-label="Edit debt account"></custom-button>
+      </div>
       <p id="debt-detail-subtitle">Viewing summary</p>
     </div>
   </header>
@@ -66,9 +69,6 @@
         <filter-bar id="debt-detail-filter" variant="editorial"></filter-bar>
       </div>
     </header>
-    <p id="debt-history-empty" class="investment-account-detail__empty" hidden>
-      No monthly debt data has been recorded for this year.
-    </p>
     <data-table
       id="debt-history-table"
       sortable

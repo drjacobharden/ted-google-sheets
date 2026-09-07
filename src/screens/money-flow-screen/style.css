@@ -1,0 +1,133 @@
+money-flow-screen {
+  display: block;
+  min-height: 0;
+  background: var(--color-canvas);
+
+  .content-container {
+    min-width: 0;
+  }
+
+  .money-flow-screen__section {
+    margin: 0;
+  }
+
+  .money-flow-screen__header {
+    align-items: end;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-md);
+  }
+
+  .money-flow-screen__header > div {
+    display: grid;
+    gap: var(--space-xs);
+  }
+
+  .money-flow-screen__header p {
+    max-width: var(--measure-copy);
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .money-flow-screen__legend {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .money-flow-screen__legend .is-income i {
+    background: var(--color-chart-income);
+  }
+
+  .money-flow-screen__legend .is-savings i {
+    background: var(--color-chart-savings);
+  }
+
+  .money-flow-screen__legend .is-expense i {
+    background: var(--color-chart-expense);
+  }
+
+  .money-flow-screen__legend .is-debt i {
+    background: var(--color-chart-debt);
+  }
+
+  .money-flow-screen__notice {
+    margin: 0 0 var(--space-sm);
+    padding: var(--space-xs) 0;
+    border-top: var(--rule-thin) solid var(--color-rule);
+    border-bottom: var(--rule-thin) solid var(--color-rule);
+    color: var(--color-text-muted);
+  }
+
+  .money-flow-screen__frame {
+    min-height: 420px;
+    padding: var(--space-sm) 0;
+    overflow: hidden;
+  }
+
+  .money-flow-screen__scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-color: var(--color-rule-strong) var(--color-rule);
+    scrollbar-width: thin;
+  }
+
+  .money-flow-screen__scroll:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: -2px;
+  }
+
+  .money-flow-screen__category-frame {
+    min-height: 20rem;
+    padding: var(--space-sm) 0;
+    overflow: hidden;
+  }
+
+  .money-flow-screen__vendor-frame {
+    min-height: 12rem;
+    padding: var(--space-md);
+    overflow: hidden;
+  }
+
+  .money-flow-screen__category-scatter-frame {
+    min-height: 26rem;
+    padding: var(--space-md);
+    overflow: hidden;
+  }
+
+  .money-flow-screen__footer {
+    display: flex;
+    gap: var(--space-md);
+    justify-content: space-between;
+    padding-top: var(--space-sm);
+    border-top: var(--rule-thin) solid var(--color-rule);
+    color: var(--color-text-subtle);
+  }
+
+  .empty-state {
+    display: grid;
+    min-height: 390px;
+    place-items: center;
+    margin: 0;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+}
+
+@media (max-width: 48rem) {
+  money-flow-screen {
+    .money-flow-screen__header {
+      align-items: start;
+    }
+
+    .money-flow-screen__legend {
+      justify-content: flex-start;
+    }
+
+    .money-flow-screen__footer {
+      display: grid;
+      gap: var(--space-2xs);
+    }
+  }
+}

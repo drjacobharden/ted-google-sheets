@@ -109,12 +109,27 @@ import-screen {
   }
 
   .import-workflow-nav {
-    margin-top: var(--space-xl);
+    display: flex;
+    min-height: 40px;
+    align-items: flex-end;
+    margin-top: 0;
+    overflow-x: auto;
     border-bottom: var(--rule-thin) solid var(--color-rule);
   }
 
   .import-workflow-nav segmented-control {
-    width: 100%;
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: 0;
+
+    .segmented-control__list {
+      width: max-content;
+      gap: var(--space-md);
+    }
+
+    .segmented-control__item {
+      flex: 0 0 auto;
+    }
   }
 
   .import-pane {
@@ -832,7 +847,6 @@ import-screen {
 
     .import-page {
       width: min(100% - (2 * var(--space-md)), 1440px);
-      padding-top: var(--space-xl);
     }
 
     .import-file-control {

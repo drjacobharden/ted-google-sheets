@@ -1,7 +1,10 @@
 <article class="investment-account-detail editorial-theme">
   <header class="tab-header">
     <div class="tab-header-title">
-      <h1 id="investment-detail-title">Investment account</h1>
+      <div class="tab-header-title__row">
+        <h1 id="investment-detail-title">Investment account</h1>
+        <custom-button class="tertiary circle" leading-icon="pencil" data-edit-investment-account aria-label="Edit account"></custom-button>
+      </div>
       <p id="investment-detail-subtitle">Viewing summary</p>
     </div>
   </header>
@@ -86,36 +89,52 @@
   >
     <header class="investment-account-detail__history-header">
       <h2 id="investment-history-title" class="type-section-title">
-        Month by month
+        Monthly Balances
       </h2>
-      <div
-        class="investment-account-detail__tools"
-        aria-label="Account history controls"
-      >
-        <search-bar
-          id="investment-detail-search"
-          variant="editorial"
-          placeholder="search"
-          aria-label="Search account history"
-        ></search-bar>
-        <filter-bar
-          id="investment-detail-filter"
-          variant="editorial"
-        ></filter-bar>
-      </div>
     </header>
-    <p
-      id="investment-account-history-empty"
-      class="investment-account-detail__empty"
-      hidden
-    >
-      No monthly balances have been recorded for this year.
-    </p>
     <data-table
       id="investment-account-history-table"
       sortable
       interactive
       aria-label="Investment account monthly history"
+    ></data-table>
+  </section>
+
+  <section
+    class="investment-account-detail__history editorial-section"
+    aria-labelledby="investment-account-activity-title"
+  >
+    <header class="investment-account-detail__history-header">
+      <h2 id="investment-account-activity-title" class="type-section-title">
+        Account activity
+      </h2>
+      <div
+        class="investment-account-detail__tools investment-account-detail__activity-tools"
+        aria-label="Account activity controls"
+      >
+        <dropdown-menu
+          id="investment-account-activity-month"
+          variant="editorial"
+          label="All months"
+          aria-label="Filter account activity by month"
+        ></dropdown-menu>
+        <search-bar
+          id="investment-account-activity-search"
+          variant="editorial"
+          placeholder="search"
+          aria-label="Search account activity"
+        ></search-bar>
+        <filter-bar
+          id="investment-account-activity-filter"
+          variant="editorial"
+        ></filter-bar>
+      </div>
+    </header>
+    <data-table
+      id="investment-account-activity-table"
+      sortable
+      interactive
+      aria-label="Investment account activity"
     ></data-table>
   </section>
 </article>

@@ -16,6 +16,11 @@ import { appState } from "../../state/app-state";
 import { appController } from "../../state/app-controller";
 import { APIs } from "../../api/api";
 import type { DataChart } from "../../components/data-chart/data-chart";
+import type { SpendingHeatmapChart } from "../../components/spending-heatmap-chart/spending-heatmap-chart";
+import type {
+  SpendingInsightSelectionEvent,
+  SpendingInsights,
+} from "../../components/spending-insights/spending-insights";
 import {
   budgetOverviewChartData,
   buildBudgetOverviewChartMonths,
@@ -43,6 +48,8 @@ import {
   savingsRateBreakdown,
 } from "../../utilities/savings-rate-breakdown";
 import { deductedInvestmentSavings } from "../../utilities/activity-effects";
+import { buildAnnualSpendingHeatmap } from "../../utilities/annual-spending-heatmap";
+import { buildBudgetSpendingInsights } from "../../utilities/budget-spending-insights";
 import templateString from "./template.html" with { type: "text" };
 
 import { DateUtils } from "../../utilities/date-utilities";
@@ -50,7 +57,8 @@ import { DateUtils } from "../../utilities/date-utilities";
 const template = document.createElement("template");
 template.innerHTML = templateString;
 
-let selectedBudgetOverviewChart: BudgetOverviewChartDisplay = "cumulative-savings";
+let selectedBudgetOverviewChart: BudgetOverviewChartDisplay =
+  "cumulative-savings";
 
 interface MonthlySummaryTableRow {
   month: string;
@@ -759,6 +767,8 @@ export class BudgetOverviewScreen
   #monthlySummaryTable!: DataTable<MonthlySummaryTableRow>;
   #monthlySummaryAssignmentSelector!: DropdownMenu;
   #monthlySummaryAssignmentId: string | null = null;
+  #spendingHeatmap!: SpendingHeatmapChart;
+  #spendingInsights!: SpendingInsights;
   #topVendorsList!: HTMLOListElement;
   #topVendorsEmpty!: HTMLElement;
   #topCategoriesList!: HTMLOListElement;
@@ -815,6 +825,7 @@ export class BudgetOverviewScreen
     this.#listening = true;
     this.#monthlySummaryAssignmentSelector.addListener(this);
     this.#chartMode.addEventListener("dropdown-selection", this);
+    this.#spendingInsights.addEventListener("spending-insight-change", this);
 
     this.#annualSummaryCards.addEventListener("pointerover", this);
     this.#annualSummaryCards.addEventListener("pointerout", this);
@@ -847,6 +858,7 @@ export class BudgetOverviewScreen
     this.#listening = false;
     this.#monthlySummaryAssignmentSelector.removeListener(this);
     this.#chartMode.removeEventListener("dropdown-selection", this);
+    this.#spendingInsights.removeEventListener("spending-insight-change", this);
 
     this.#annualSummaryCards.removeEventListener("pointerover", this);
     this.#annualSummaryCards.removeEventListener("pointerout", this);
@@ -868,6 +880,17 @@ export class BudgetOverviewScreen
   }
 
   handleEvent(event: Event): void {
+    if (
+      event.type === "spending-insight-change" &&
+      event.target === this.#spendingInsights
+    ) {
+      const selection = event as SpendingInsightSelectionEvent;
+      this.#spendingHeatmap.highlightedDayIds =
+        selection.detail.insight.dayIds ?? [];
+      this.#spendingHeatmap.highlightZeroSpendDays =
+        selection.detail.insight.highlightZeroSpendDays === true;
+      return;
+    }
     if (
       event.type === "dropdown-selection" &&
       event.target === this.#monthlySummaryAssignmentSelector
@@ -1002,15 +1025,60 @@ export class BudgetOverviewScreen
         group: "Cumulative",
         isDefaultValue: true,
       },
-      { key: "cumulative-income", title: "Income", selectionLabel: "Cumulative income", group: "Cumulative" },
-      { key: "cumulative-spend", title: "Spend", selectionLabel: "Cumulative spend", group: "Cumulative" },
-      { key: "cumulative-income-vs-spend", title: "Income vs Spend", selectionLabel: "Cumulative Income vs Spend", group: "Cumulative" },
-      { key: "cumulative-savings-rate", title: "Savings rate", selectionLabel: "Cumulative savings rate", group: "Cumulative" },
-      { key: "total-savings", title: "Savings", selectionLabel: "Monthly savings", group: "Monthly" },
-      { key: "monthly-income", title: "Income", selectionLabel: "Monthly income", group: "Monthly" },
-      { key: "monthly-spend", title: "Spend", selectionLabel: "Monthly spend", group: "Monthly" },
-      { key: "monthly-savings-rate", title: "Savings rate", selectionLabel: "Monthly savings rate", group: "Monthly" },
-      { key: "income-vs-expense", title: "Income vs Spend", selectionLabel: "Monthly Income vs Spend", group: "Monthly" },
+      {
+        key: "cumulative-income",
+        title: "Income",
+        selectionLabel: "Cumulative income",
+        group: "Cumulative",
+      },
+      {
+        key: "cumulative-spend",
+        title: "Spend",
+        selectionLabel: "Cumulative spend",
+        group: "Cumulative",
+      },
+      {
+        key: "cumulative-income-vs-spend",
+        title: "Income vs Spend",
+        selectionLabel: "Cumulative Income vs Spend",
+        group: "Cumulative",
+      },
+      {
+        key: "cumulative-savings-rate",
+        title: "Savings rate",
+        selectionLabel: "Cumulative savings rate",
+        group: "Cumulative",
+      },
+      {
+        key: "total-savings",
+        title: "Savings",
+        selectionLabel: "Monthly savings",
+        group: "Monthly",
+      },
+      {
+        key: "monthly-income",
+        title: "Income",
+        selectionLabel: "Monthly income",
+        group: "Monthly",
+      },
+      {
+        key: "monthly-spend",
+        title: "Spend",
+        selectionLabel: "Monthly spend",
+        group: "Monthly",
+      },
+      {
+        key: "monthly-savings-rate",
+        title: "Savings rate",
+        selectionLabel: "Monthly savings rate",
+        group: "Monthly",
+      },
+      {
+        key: "income-vs-expense",
+        title: "Income vs Spend",
+        selectionLabel: "Monthly Income vs Spend",
+        group: "Monthly",
+      },
     ];
     this.#metrics = this.querySelector<HTMLElement>("#spend-trend-metrics")!;
     this.#totalBalance = this.querySelector<HTMLElement>(
@@ -1043,6 +1111,12 @@ export class BudgetOverviewScreen
     >("#monthly-summary-table")!;
     this.#monthlySummaryAssignmentSelector = this.querySelector<DropdownMenu>(
       "#monthly-summary-assignment-selector",
+    )!;
+    this.#spendingHeatmap = this.querySelector<SpendingHeatmapChart>(
+      "#budget-overview-spending-heatmap",
+    )!;
+    this.#spendingInsights = this.querySelector<SpendingInsights>(
+      "#budget-overview-spending-insights",
     )!;
 
     this.#topVendorsList =
@@ -1127,6 +1201,7 @@ export class BudgetOverviewScreen
   #renderOverview(): void {
     // this.#renderAssignmentFilter();
     this.#renderMonthlySummary();
+    this.#renderDailySpendingInsights();
     this.#renderAnnualSummaryCards();
     this.#renderTrend();
     this.#renderInsights();
@@ -1249,7 +1324,7 @@ export class BudgetOverviewScreen
     this.#totalBalance.textContent = hasData
       ? money(totals.savings, false)
       : "—";
-    this.#totalBalanceCaption.textContent = `Total balance in ${this.#selectedYear}`;
+    this.#totalBalanceCaption.textContent = `Total savings in ${this.#selectedYear}`;
     this.#totalSpend.textContent = hasData ? money(totals.spend, false) : "—";
     this.#totalIncome.textContent = hasData ? money(totals.income, false) : "—";
     this.#renderHeroComparison(
@@ -1283,6 +1358,24 @@ export class BudgetOverviewScreen
       this.#selectedYear,
       previousRows,
     );
+  }
+
+  #renderDailySpendingInsights(): void {
+    const data = buildAnnualSpendingHeatmap(
+      appController.getTransactions(),
+      APIs.accounts.accounts(),
+      this.#selectedYear,
+    );
+    const { insights } = buildBudgetSpendingInsights({
+      data,
+      transactions: appController.getTransactions(),
+      accounts: APIs.accounts.accounts(),
+      categories: APIs.budget.listAllCategories(),
+      vendors: APIs.budget.listAllVendors(),
+      people: APIs.budget.listAllPeople(),
+    });
+    this.#spendingHeatmap.data = data;
+    this.#spendingInsights.data = insights;
   }
 
   #renderMonthlySummary(): void {
@@ -1386,7 +1479,8 @@ export class BudgetOverviewScreen
         income: hasData ? summaryTableMoney(income) : "—",
         spend: hasData ? summaryTableMoney(spend) : "—",
         amount: hasData ? summaryTableMoney(net) : "—",
-        comparison: difference === null ? "—" : signedSummaryTableMoney(difference),
+        comparison:
+          difference === null ? "—" : signedSummaryTableMoney(difference),
         amountValue: net,
         comparisonValue: difference,
         hasData,
@@ -1442,7 +1536,9 @@ export class BudgetOverviewScreen
           summaryTableMoney(totals.income),
           summaryTableMoney(totals.spend),
           summaryTableMoney(totals.net),
-          yearDifference === null ? "—" : signedSummaryTableMoney(yearDifference),
+          yearDifference === null
+            ? "—"
+            : signedSummaryTableMoney(yearDifference),
         ],
       },
     };

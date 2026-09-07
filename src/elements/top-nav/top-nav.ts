@@ -350,6 +350,12 @@ class TopNavBar extends HTMLElement {
       });
       return;
     }
+    if (route.startsWith("investment-")) {
+      router.navigate(route, {
+        year: String(appState.get("budgetingContext").year),
+      });
+      return;
+    }
     router.navigate(route);
   }
 
@@ -396,10 +402,20 @@ class TopNavBar extends HTMLElement {
   ): void {
     if (event.detail.value === "budgeting") {
       const context = appState.get("budgetingContext");
-      router.navigate(context.lastRoute, context.lastParams);
+      router.navigate(context.lastRoute, {
+        ...context.lastParams,
+        year: String(context.year),
+      });
       return;
     }
-    router.navigate(event.detail.value as import("../../router/types").RouteName);
+    const route = event.detail.value as import("../../router/types").RouteName;
+    if (route.startsWith("investment-")) {
+      router.navigate(route, {
+        year: String(appState.get("budgetingContext").year),
+      });
+      return;
+    }
+    router.navigate(route);
   }
 
   private handleNavigationClick(target: HTMLElement) {
@@ -408,7 +424,14 @@ class TopNavBar extends HTMLElement {
     const route = (item as HTMLElement).dataset.tab;
     if (route === "budgeting") {
       const context = appState.get("budgetingContext");
-      router.navigate(context.lastRoute, context.lastParams);
+      router.navigate(context.lastRoute, {
+        ...context.lastParams,
+        year: String(context.year),
+      });
+    } else if (route?.startsWith("investment-")) {
+      router.navigate(route as import("../../router/types").RouteName, {
+        year: String(appState.get("budgetingContext").year),
+      });
     } else if (route) {
       router.navigate(route as import("../../router/types").RouteName);
     }

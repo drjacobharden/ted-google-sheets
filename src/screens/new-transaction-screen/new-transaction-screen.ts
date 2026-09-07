@@ -60,6 +60,9 @@ export class NewTransactionScreen extends HTMLElement {
       this.#kindControl.items = KIND_OPTIONS;
       this.#bindEvents();
       this.#reset(DateUtils.toISODate(new Date()), false);
+      if (router.currentParams().transactionKind === "account") {
+        this.#setKind("account");
+      }
     }
   }
 
@@ -100,6 +103,12 @@ export class NewTransactionScreen extends HTMLElement {
       case "click":
         if ((event.target as HTMLElement).closest('[data-action="open-import"]'))
           router.navigate("import");
+        else if (
+          (event.target as HTMLElement).closest(
+            '[data-action="submit-transaction"]',
+          )
+        )
+          this.#form.requestSubmit();
         break;
 
       default:

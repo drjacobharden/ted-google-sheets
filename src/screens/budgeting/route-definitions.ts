@@ -15,7 +15,7 @@ export interface BudgetingHeaderConfig {
 
 export interface BudgetingRouteDefinition {
   route: BudgetingRouteName;
-  contentKey: "overview" | "transactions" | "categories" | "vendors" | "people";
+  contentKey: "overview" | "flow" | "transactions" | "categories" | "vendors" | "people";
   title: string;
   icon: IconKeys;
   getHeaderConfig(
@@ -52,6 +52,13 @@ const BASE_DEFINITIONS: Record<
     getHeaderConfig: () => ({
       actions: [IMPORT_TRANSACTIONS, NEW_TRANSACTION],
     }),
+  },
+  "money-flow": {
+    route: "money-flow",
+    contentKey: "flow",
+    title: "WMMG",
+    icon: "chart",
+    getHeaderConfig: () => ({ actions: [] }),
   },
   transactions: {
     route: "transactions",
@@ -189,4 +196,11 @@ export function getBudgetingRouteDefinition(
   };
 }
 
-export const BUDGETING_CONTENT_ROUTES = Object.values(BASE_DEFINITIONS);
+export const BUDGETING_CONTENT_ROUTES = [
+  BASE_DEFINITIONS["budget-overview"],
+  BASE_DEFINITIONS.transactions,
+  BASE_DEFINITIONS.categories,
+  BASE_DEFINITIONS.vendors,
+  BASE_DEFINITIONS.people,
+  BASE_DEFINITIONS["money-flow"],
+];

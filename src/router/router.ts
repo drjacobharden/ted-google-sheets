@@ -10,7 +10,7 @@ import type {
 export const DEFAULT_ROUTE: RouteName = "budget-overview";
 
 const BUDGETING_ROUTES = new Set<BudgetingRouteName>([
-  "budget-overview", "transactions", "categories", "vendors", "people",
+  "budget-overview", "money-flow", "transactions", "categories", "vendors", "people",
   "entity-detail", "entity-archive",
 ]);
 
@@ -31,6 +31,7 @@ const ROUTES = new Set<RouteName>([
 
 const NESTED_BUDGET_ROUTES: Record<string, BudgetingRouteName> = {
   "budgeting/overview": "budget-overview",
+  "budgeting/flow": "money-flow",
   "budgeting/transactions": "transactions",
   "budgeting/categories": "categories",
   "budgeting/vendors": "vendors",

@@ -13,9 +13,23 @@ import { router } from "../../router/router";
 import { matchesLedgerFilterGroups } from "../../utilities/entity-ledger";
 import { InvestmentView } from "../../utilities/investment-view";
 import { modifiedDietz, monthEnd } from "../../utilities/investment-returns";
-import { escapeHTML, netFlows, summaryMoney } from "../../utilities/view-formatters";
+import { escapeHTML, money, netFlows, summaryMoney } from "../../utilities/view-formatters";
+import {
+  addListener,
+  handleCustomEvent,
+  removeListener,
+} from "../../utilities/event-utilities";
+import {
+  investmentLedgerRows,
+  type InvestmentLedgerType,
+} from "../../utilities/investment-ledger";
+import {
+  buildInvestmentOverviewChartMonths,
+  investmentOverviewChartData,
+  type InvestmentOverviewChartDisplay,
+} from "../../utilities/investment-overview-chart";
 import type { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
-import type { DataChart, DataChartData } from "../../components/data-chart/data-chart";
+import type { DataChart } from "../../components/data-chart/data-chart";
 import type {
   DropdownMenu,
   DropdownSelectionEvent,
@@ -34,9 +48,15 @@ interface MonthlyHistoryRow {
   growth: number | null;
 }
 
-type ChartDisplay = "balance" | "contributions";
+interface AccountActivityRow {
+  id: string;
+  date: string;
+  month: string;
+  type: InvestmentLedgerType;
+  amount: number;
+}
 
-const chartDisplayByAccount = new Map<string, ChartDisplay>();
+const chartDisplayByAccount = new Map<string, InvestmentOverviewChartDisplay>();
 
 function validDate(value: unknown, fallback: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ""))
@@ -44,22 +64,22 @@ function validDate(value: unknown, fallback: string): string {
     : fallback;
 }
 
-function matchesAccountHistorySearch(
-  row: MonthlyHistoryRow,
-  query: string,
-): boolean {
-  if (!query) return true;
-  const textQuery = query.toLowerCase();
-  const textValues = [InvestmentView.formatMonth(row.month)];
-  if (textValues.some((value) => value.toLowerCase().includes(textQuery))) {
-    return true;
-  }
+const monthFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  timeZone: "UTC",
+});
+const monthItems = [
+  { key: "all", title: "All months", isDefaultValue: true },
+  ...Array.from({ length: 12 }, (_, index) => ({
+    key: String(index + 1).padStart(2, "0"),
+    title: monthFormatter.format(new Date(2024, index, 1)),
+  })),
+];
 
-  const numericValues = [row.contributions, row.balance, row.roi, row.growth];
-  return numericValues.some(
-    (value) => value !== null && String(value).startsWith(query),
-  );
-}
+const activityDate = (value: string): string => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[2]}.${match[3]}.${match[1].slice(-2)}` : value;
+};
 
 export class InvestmentAccountDetailScreen
   extends HTMLElement
@@ -68,17 +88,20 @@ export class InvestmentAccountDetailScreen
   #accountId = "";
   #year = new Date().getFullYear();
   #table!: DataTable<MonthlyHistoryRow>;
-  #search!: SearchBar;
-  #filterBar!: FilterBar<MonthlyHistoryRow>;
-  #empty!: HTMLElement;
   #summary!: HTMLElement;
   #overlayManager!: OverlayManager;
   #chart!: DataChart;
   #chartMode!: DropdownMenu;
-  #chartDisplay: ChartDisplay = "balance";
-  #query = "";
-  #filters: AppliedFilter<MonthlyHistoryRow>[] = [];
+  #chartDisplay: InvestmentOverviewChartDisplay = "balance";
   #rows: MonthlyHistoryRow[] = [];
+  #activityTable!: DataTable<AccountActivityRow>;
+  #activityMonth!: DropdownMenu;
+  #activitySearch!: SearchBar;
+  #activityFilterBar!: FilterBar<AccountActivityRow>;
+  #activityRows: AccountActivityRow[] = [];
+  #activityMonthValue: string | null = null;
+  #activityQuery = "";
+  #activityFilters: AppliedFilter<AccountActivityRow>[] = [];
   #listening = false;
 
   connectedCallback(): void {
@@ -87,9 +110,11 @@ export class InvestmentAccountDetailScreen
       this.classList.add("screen");
       this.append(template.content.cloneNode(true));
       this.#table = this.querySelector("data-table")!;
-      this.#search = this.querySelector("#investment-detail-search")!;
-      this.#filterBar = this.querySelector("#investment-detail-filter")!;
-      this.#empty = this.querySelector("#investment-account-history-empty")!;
+      this.#activityTable = this.querySelector("#investment-account-activity-table")!;
+      this.#activityMonth = this.querySelector("#investment-account-activity-month")!;
+      this.#activitySearch = this.querySelector("#investment-account-activity-search")!;
+      this.#activityFilterBar = this.querySelector("#investment-account-activity-filter")!;
+      this.#activityMonth.items = monthItems;
       this.#summary = this.querySelector(
         ".investment-account-detail__summary",
       )!;
@@ -99,7 +124,9 @@ export class InvestmentAccountDetailScreen
       this.#chartMode = this.querySelector("#investment-detail-chart-mode")!;
       this.#chartMode.items = [
         { key: "balance", title: "Balance", isDefaultValue: true },
-        { key: "contributions", title: "Contributions" },
+        { key: "total-contributions", title: "Total contributions" },
+        { key: "yearly-contributions", title: "Yearly contributions" },
+        { key: "monthly-contributions", title: "Monthly contributions" },
       ];
     }
 
@@ -111,9 +138,11 @@ export class InvestmentAccountDetailScreen
     this.#chartMode.selection = this.#chartDisplay;
     if (this.#listening) return;
     this.#listening = true;
-    this.addEventListener("filters-changed", this);
-    this.addEventListener("search-changed", this);
+    addListener("filters-changed", this, this);
+    addListener("search-changed", this, this);
     this.#table.rowSelection.addListener(this);
+    this.#activityTable.rowSelection.addListener(this);
+    this.#activityMonth.addListener(this);
     this.#chartMode.addEventListener("dropdown-selection", this);
     this.addEventListener("click", this);
     this.#summary.addEventListener("pointerover", this);
@@ -128,9 +157,11 @@ export class InvestmentAccountDetailScreen
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    this.removeEventListener("filters-changed", this);
-    this.removeEventListener("search-changed", this);
+    removeListener("filters-changed", this, this);
+    removeListener("search-changed", this, this);
     this.#table.rowSelection.removeListener(this);
+    this.#activityTable.rowSelection.removeListener(this);
+    this.#activityMonth.removeListener(this);
     this.#chartMode.removeEventListener("dropdown-selection", this);
     this.removeEventListener("click", this);
     this.#summary.removeEventListener("pointerover", this);
@@ -148,10 +179,15 @@ export class InvestmentAccountDetailScreen
       event.currentTarget === this.#chartMode
     ) {
       const value = (event as DropdownSelectionEvent).detail.value;
-      if (value === "balance" || value === "contributions") {
+      if (
+        value === "balance" ||
+        value === "total-contributions" ||
+        value === "yearly-contributions" ||
+        value === "monthly-contributions"
+      ) {
         this.#chartDisplay = value;
         chartDisplayByAccount.set(this.#accountId, value);
-        this.#renderChart(this.#allRows());
+        this.#renderChart();
       }
       return;
     }
@@ -198,9 +234,16 @@ export class InvestmentAccountDetailScreen
       if (leaving && !next) this.#overlayManager.hideTooltip();
       return;
     }
+    if (event.type === "dropdown-selection" && event.currentTarget === this.#activityMonth) {
+      const value = (event as DropdownSelectionEvent).detail.value;
+      this.#activityMonthValue = value === "all" ? null : value;
+      this.#renderActivity();
+      return;
+    }
     if (event.type === "table-row-selected") {
       const id = (event as CustomEvent<{ id: string }>).detail.id;
-      const row = this.#rows.find((item) => item.id === id);
+      const rows = event.currentTarget === this.#activityTable ? this.#activityRows : this.#rows;
+      const row = rows.find((item) => item.id === id);
       if (row) {
         router.updateParams({
           drawer: "edit",
@@ -210,17 +253,16 @@ export class InvestmentAccountDetailScreen
       return;
     }
     if (event.type === "filters-changed") {
-      this.#filters = (
-        event as CustomEvent<{ filters: AppliedFilter<MonthlyHistoryRow>[] }>
-      ).detail.filters;
-      this.#render();
+      handleCustomEvent("filters-changed", event, ({ filters }) => {
+        this.#activityFilters = filters as AppliedFilter<AccountActivityRow>[];
+        this.#renderActivity();
+      });
       return;
     }
     if (event.type === "search-changed") {
-      this.#query = (event as CustomEvent<{ value: string }>).detail.value
-        .trim()
-        .toLowerCase();
-      this.#render();
+      const value = (event as CustomEvent<{ value: string }>).detail.value.trim().toLowerCase();
+      this.#activityQuery = value;
+      this.#renderActivity();
     }
   }
 
@@ -345,25 +387,39 @@ export class InvestmentAccountDetailScreen
     ];
   }
 
-  #renderChart(rows: readonly MonthlyHistoryRow[]): void {
-    const isBalance = this.#chartDisplay === "balance";
-    const data: DataChartData = {
-      year: this.#year,
-      format: "monthly",
-      ariaLabel: `${isBalance ? "Monthly balance" : "Monthly contributions"} for ${this.#year}`,
-      series: [
-        {
-          type: isBalance ? "line" : "bar",
-          variant: "primary",
-          label: isBalance ? "Balance" : "Contributions",
-          points: rows.map((row) => ({
-            date: row.month,
-            value: isBalance ? row.balance : row.contributions,
-          })),
-        },
-      ],
-    };
-    this.#chart.data = data;
+  #renderChart(): void {
+    const accounts = APIs.accounts
+      .accounts()
+      .filter((account) => account.id === this.#accountId);
+    const balances = APIs.accounts
+      .balances()
+      .filter((item) => item.accountId === this.#accountId);
+    const activities = APIs.accounts
+      .investmentActivity()
+      .filter((item) => item.accountId === this.#accountId);
+    const today = new Date();
+    const endMonth =
+      this.#year === today.getFullYear() ? today.getMonth() + 1 : 12;
+    const rows = buildInvestmentOverviewChartMonths(
+      balances,
+      activities,
+      accounts,
+      this.#year,
+      endMonth,
+    );
+    const previousRows = buildInvestmentOverviewChartMonths(
+      balances,
+      activities,
+      accounts,
+      this.#year - 1,
+      12,
+    );
+    this.#chart.data = investmentOverviewChartData(
+      rows,
+      this.#chartDisplay,
+      this.#year,
+      previousRows,
+    );
   }
 
   #render(): void {
@@ -386,18 +442,9 @@ export class InvestmentAccountDetailScreen
       "#investment-detail-subtitle",
     )!.textContent = `Viewing summary for ${this.#year}`;
     const allRows = this.#allRows();
-    this.#renderChart(allRows);
-    this.#filterBar.availableFilters = [
-      { key: "contributions", title: "Contributions", dataType: "number" },
-      { key: "balance", title: "Balance", dataType: "number" },
-    ];
-    const rows = allRows.filter(
-      (row) =>
-        matchesAccountHistorySearch(row, this.#query) &&
-        matchesLedgerFilterGroups(row, this.#filters),
-    );
+    this.#renderChart();
+    const rows = allRows;
     this.#rows = rows;
-    this.#empty.hidden = rows.length > 0;
     const totalContributions = allRows.reduce(
       (sum, row) => sum + row.contributions,
       0,
@@ -460,6 +507,74 @@ export class InvestmentAccountDetailScreen
       },
     };
     this.#table.data = data;
+    this.#renderActivity();
+  }
+
+  #allActivityRows(): AccountActivityRow[] {
+    return investmentLedgerRows()
+      .filter((row) => row.accountId === this.#accountId)
+      .map(({ id, date, month, type, amount }) => ({ id, date, month, type, amount }));
+  }
+
+  #activityColumns(): DataTableColumn<AccountActivityRow>[] {
+    return [
+      {
+        key: "date",
+        title: "Date",
+        formatter: (value) => activityDate(String(value ?? "")),
+        sizing: "narrow",
+        cellClass: ["date"],
+      },
+      {
+        key: "type",
+        title: "Type",
+        formatter: (value) => escapeHTML(String(value ?? "")),
+        sizing: 55,
+        cellClass: ["tag"],
+      },
+      {
+        key: "amount",
+        title: "Amount",
+        formatter: (value) => money(Number(value)),
+        sizing: "narrow",
+        cellClass: ["numeric", "align-right"],
+        headerClass: "align-right",
+      },
+    ];
+  }
+
+  #renderActivity(): void {
+    const allRows = this.#allActivityRows();
+    this.#activityFilterBar.availableFilters = [
+      { key: "type", title: "Type", dataType: ["Investment", "Withdrawal", "Debt payment", "New borrowing"] },
+      { key: "date", title: "Date", dataType: "date" },
+      { key: "amount", title: "Amount", dataType: "number" },
+    ];
+    const columns = this.#activityColumns();
+    const rows = allRows
+      .filter((row) => row.month.startsWith(`${this.#year}-`))
+      .filter((row) => !this.#activityMonthValue || row.month.slice(5, 7) === this.#activityMonthValue)
+      .filter((row) => {
+        if (!this.#activityQuery) return true;
+        return columns.some((column) => {
+          const rawValue = row[column.key];
+          const value = column.formatter?.(rawValue, row) ?? String(rawValue ?? "");
+          return value.toLowerCase().includes(this.#activityQuery);
+        });
+      })
+      .filter((row) => matchesLedgerFilterGroups(row, this.#activityFilters, (item, key) => item[key]));
+    this.#activityRows = rows;
+    const total = rows.reduce((sum, row) => sum + row.amount, 0);
+    this.#activityTable.data = {
+      columns,
+      rows,
+      interactiveRows: true,
+      rowKey: (row) => row.id,
+      footer: {
+        cells: [null, "Total", money(total)],
+        ariaLabel: `Account activity total ${money(total)}`,
+      },
+    };
   }
 }
 

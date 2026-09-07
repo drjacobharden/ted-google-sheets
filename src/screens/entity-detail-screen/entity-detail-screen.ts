@@ -176,7 +176,6 @@ export class EntityDetailScreen
   #chartMode!: DropdownMenu;
   #chartDisplay: EntityChartDisplay = "monthly-spend";
   #table!: DataTable<BudgetTransaction>;
-  #empty!: HTMLElement;
   #filterBar!: FilterBar<BudgetTransaction>;
   #monthSelector!: DropdownMenu;
   #search!: SearchBar;
@@ -317,7 +316,6 @@ export class EntityDetailScreen
     )!;
     this.#chart = this.querySelector("#entity-monthly-chart")!;
     this.#table = this.querySelector("#entity-transaction-table")!;
-    this.#empty = this.querySelector("#entity-transaction-empty")!;
     this.#filterBar = this.querySelector("#entity-transaction-filter")!;
     this.#monthSelector = this.querySelector(
       "#entity-transaction-month-selector",
@@ -922,7 +920,6 @@ export class EntityDetailScreen
       },
     };
     this.#table.data = data;
-    this.#empty.hidden = rows.length > 0;
   }
 
   #handleEdit(): void {

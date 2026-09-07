@@ -1,7 +1,15 @@
 <article class="entity-detail editorial-theme">
   <header class="tab-header">
     <div class="tab-header-title">
-      <h1 id="entity-detail-title">Entity</h1>
+      <div class="tab-header-title__row">
+        <h1 id="entity-detail-title">Entity</h1>
+        <custom-button
+          class="tertiary circle"
+          leading-icon="pencil"
+          data-header-action="edit-entity"
+          aria-label="Edit entity"
+        ></custom-button>
+      </div>
       <p id="entity-detail-subtitle">Viewing summary for the selected year.</p>
     </div>
   </header>
@@ -55,7 +63,7 @@
   >
     <header class="editorial-section-header">
       <h2 id="entity-monthly-summary-title" class="type-section-title">
-        Monthly summary <span class="type-meta">— fig. 01</span>
+        Trends <span class="type-meta">— fig. 01</span>
       </h2>
       <dropdown-menu
         id="entity-chart-mode"
@@ -103,9 +111,6 @@
         ></filter-bar>
       </div>
     </header>
-    <p class="entity-detail__empty" id="entity-transaction-empty" hidden>
-      No transactions match the current view.
-    </p>
     <data-table
       id="entity-transaction-table"
       sortable

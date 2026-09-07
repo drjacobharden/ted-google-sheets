@@ -44,12 +44,6 @@ export class OverlayManager extends HTMLElement {
       const investmentAccountDrawer = document.createElement(
         "investment-account-drawer-screen",
       );
-      const investmentMonthDrawer = document.createElement(
-        "investment-month-drawer-screen",
-      );
-      const investmentLedgerDrawer = document.createElement(
-        "investment-ledger-drawer-screen",
-      );
 
       const onboarding = document.createElement("onboarding-overlay");
       manager.append(
@@ -59,8 +53,6 @@ export class OverlayManager extends HTMLElement {
         transactionDrawer,
         entityDrawer,
         investmentAccountDrawer,
-        investmentMonthDrawer,
-        investmentLedgerDrawer,
         tooltip,
         refresh,
         splash,
@@ -149,9 +141,6 @@ export class OverlayManager extends HTMLElement {
       entityKind: null,
       entityId: null,
       investmentAccountId: null,
-      investmentMonth: null,
-      investmentReviewId: null,
-      investmentLedgerId: null,
       investmentLedgerSource: null,
       accountDraftName: null,
       accountCreateRequestId: null,

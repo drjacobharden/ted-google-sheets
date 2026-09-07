@@ -1,13 +1,5 @@
 /* The element css is for elements that don't need to be instantiated through a web component and can instead have a global style applied. */
 
-svg {
-  height: 16px;
-  width: 16px;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .form-field {
   display: grid;
   min-width: 0;

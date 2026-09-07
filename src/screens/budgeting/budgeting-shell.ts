@@ -1,4 +1,5 @@
 import { appState, type BudgetingContext } from "../../state/app-state";
+import { APIs } from "../../api/api";
 import { router } from "../../router/router";
 import type {
   BudgetingRouteName,
@@ -6,18 +7,18 @@ import type {
   RouteParams,
 } from "../../router/types";
 import type {
-  DropdownMenu,
-  DropdownSelectionEvent,
-} from "../../components/dropdown-menu/dropdown-menu";
-import type {
   SegmentedControl,
   SegmentedControlSelectionEvent,
 } from "../../components/segmented-control/segmented-control";
-import { CustomButton } from "../../components/button/button";
+import type { YearSelector } from "../../components/year-selector/year-selector";
+import {
+  addListener,
+  handleCustomEvent,
+  removeListener,
+} from "../../utilities/event-utilities";
 import {
   BUDGETING_CONTENT_ROUTES,
   getBudgetingRouteDefinition,
-  type HeaderAction,
 } from "./route-definitions";
 import templateString from "./template.html" with { type: "text" };
 
@@ -30,8 +31,6 @@ const OVERLAY_PARAMS = new Set([
   "entityKind",
   "entityId",
   "investmentAccountId",
-  "investmentMonth",
-  "investmentReviewId",
   "accountDraftName",
   "accountCreateRequestId",
 ]);
@@ -39,7 +38,7 @@ const OVERLAY_PARAMS = new Set([
 function availableYears(): number[] {
   const currentYear = new Date().getFullYear();
   const overview = appState.get("budgetOverview");
-  const years = Object.entries(overview.monthlyTransactionSummaries)
+  const budgetingYears = Object.entries(overview.monthlyTransactionSummaries)
     .filter(([year, rows]) => {
       const numericYear = Number(year);
       const deductionMonths =
@@ -53,8 +52,17 @@ function availableYears(): number[] {
       );
     })
     .map(([year]) => Number(year));
+  const accountYears = [
+    ...APIs.accounts.activity().map((item) => Number(String(item.date).slice(0, 4))),
+    ...APIs.accounts.balances().map((item) => Number(String(item.month).slice(0, 4))),
+  ].filter((year) => Number.isInteger(year) && year <= currentYear);
+  const years = [...new Set([...budgetingYears, ...accountYears])];
   if (years.length === 0) years.push(currentYear);
-  return years.sort((left, right) => right - left);
+  const firstYear = Math.min(...years);
+  return Array.from(
+    { length: currentYear - firstYear + 1 },
+    (_, index) => currentYear - index,
+  );
 }
 
 function validYear(value: unknown, choices: number[]): number | null {
@@ -81,11 +89,7 @@ export class BudgetingHeader
   implements EventListenerObject
 {
   #sectionSelector!: SegmentedControl;
-  #yearSelector!: DropdownMenu;
-  #scope!: HTMLElement;
-  #previousYearButton!: CustomButton;
-  #nextYearButton!: CustomButton;
-  #actions!: HTMLElement;
+  #yearSelector!: YearSelector;
   #route: RouteChangedEventDetail | null = null;
   #listening = false;
 
@@ -99,9 +103,8 @@ export class BudgetingHeader
       this.#listening = true;
       this.#sectionSelector.addListener(this);
       this.#sectionSelector.addEventListener("click", this);
-      this.#yearSelector.addListener(this);
-      this.#scope.addEventListener("click", this);
-      this.#actions.addEventListener("click", this);
+      addListener("year-selection-changed", this.#yearSelector, this);
+      window.addEventListener("click", this);
       window.addEventListener("app:route-changed", this);
       window.addEventListener("budget:reference-data-changed", this);
       window.addEventListener("budget:transactions-loaded", this);
@@ -121,9 +124,8 @@ export class BudgetingHeader
     this.#listening = false;
     this.#sectionSelector.removeListener(this);
     this.#sectionSelector.removeEventListener("click", this);
-    this.#yearSelector.removeListener(this);
-    this.#scope.removeEventListener("click", this);
-    this.#actions.removeEventListener("click", this);
+    removeListener("year-selection-changed", this.#yearSelector, this);
+    window.removeEventListener("click", this);
     window.removeEventListener("app:route-changed", this);
     window.removeEventListener("budget:reference-data-changed", this);
     window.removeEventListener("budget:transactions-loaded", this);
@@ -137,11 +139,19 @@ export class BudgetingHeader
       this.#handleSectionSelection(event as SegmentedControlSelectionEvent);
       return;
     }
-    if (event.type === "dropdown-selection") {
-      this.#handleSelection(event as DropdownSelectionEvent);
+    if (event.type === "year-selection-changed") {
+      handleCustomEvent("year-selection-changed", event, ({ year }) => {
+        router.replaceParams({ year });
+      });
       return;
     }
     if (event.type === "click") {
+      if (
+        event.currentTarget === window &&
+        !(event.target as Element | null)?.closest("[data-header-action]")
+      ) {
+        return;
+      }
       const section = (event.target as Element | null)?.closest<HTMLElement>(
         ".segmented-control__item",
       );
@@ -158,7 +168,6 @@ export class BudgetingHeader
           return;
         }
       }
-      if (this.#handleYearStep(event)) return;
       this.#handleAction(event);
       return;
     }
@@ -181,10 +190,6 @@ export class BudgetingHeader
   #captureElements(): void {
     this.#sectionSelector = this.querySelector("#budgeting-section-selector")!;
     this.#yearSelector = this.querySelector("#budgeting-year-selector")!;
-    this.#scope = this.querySelector(".budgeting-header__scope")!;
-    this.#previousYearButton = this.querySelector("#budgeting-year-previous")!;
-    this.#nextYearButton = this.querySelector("#budgeting-year-next")!;
-    this.#actions = this.querySelector("#budgeting-header-actions")!;
   }
 
   #applyRoute(detail: RouteChangedEventDetail): void {
@@ -234,7 +239,6 @@ export class BudgetingHeader
     params: RouteParams,
   ): void {
     const definition = getBudgetingRouteDefinition(route, params);
-    const config = definition.getHeaderConfig(context, params);
     this.#sectionSelector.items = BUDGETING_CONTENT_ROUTES.map((item) => ({
       key: item.route,
       title: item.title,
@@ -245,49 +249,8 @@ export class BudgetingHeader
         (item) => item.contentKey === definition.contentKey,
       )?.route ?? null;
     const years = availableYears();
-    this.#yearSelector.items = years.map((year) => ({
-      key: String(year),
-      title: String(year),
-      isDefaultValue: year === context.year,
-    }));
-    const ascendingYears = [...years].sort((left, right) => left - right);
-    const yearIndex = ascendingYears.indexOf(context.year);
-    const previousYear = yearIndex > 0 ? ascendingYears[yearIndex - 1] : null;
-    const nextYear =
-      yearIndex >= 0 && yearIndex < ascendingYears.length - 1
-        ? ascendingYears[yearIndex + 1]
-        : null;
-    this.#setYearStepState(
-      this.#previousYearButton,
-      previousYear,
-      "Previous",
-    );
-    this.#setYearStepState(this.#nextYearButton, nextYear, "Next");
-    this.#actions.replaceChildren(
-      ...config.actions.map((action) => this.#createAction(action)),
-    );
-  }
-
-  #createAction(action: HeaderAction): CustomButton {
-    const button = document.createElement("custom-button") as CustomButton;
-    button.classList.add(
-      action.kind === "primary" ? "primary-button" : "tertiary",
-    );
-    button.dataset.headerAction = action.id;
-
-    if (action.label) {
-      button.label = action.label;
-      button.setAttribute("aria-label", action.label);
-    } else {
-      button.classList.add("square");
-    }
-
-    if (action.id === "new-transaction") {
-      button.classList.add("budgeting-header__compact-action", "square");
-    }
-
-    if (action.icon) button.leadingIcon = action.icon;
-    return button;
+    this.#yearSelector.years = years;
+    this.#yearSelector.selectedYear = String(context.year);
   }
 
   #scopeParams(): RouteParams {
@@ -304,38 +267,6 @@ export class BudgetingHeader
     );
   }
 
-  #handleSelection(event: DropdownSelectionEvent): void {
-    if (event.target === this.#yearSelector) {
-      router.replaceParams({ year: event.detail.value });
-      return;
-    }
-  }
-
-  #setYearStepState(
-    button: CustomButton,
-    year: number | null,
-    direction: "Previous" | "Next",
-  ): void {
-    if (year === null) delete button.dataset.year;
-    else button.dataset.year = String(year);
-    button.toggleAttribute("disabled", year === null);
-    button.setAttribute("aria-disabled", String(year === null));
-    button.setAttribute(
-      "aria-label",
-      year === null ? `No ${direction.toLowerCase()} year available` : `${direction} year, ${year}`,
-    );
-  }
-
-  #handleYearStep(event: Event): boolean {
-    const button = (event.target as Element | null)?.closest<HTMLElement>(
-      "[data-year-step]",
-    );
-    if (!button) return false;
-    const year = Number(button.dataset.year);
-    if (!Number.isInteger(year) || button.hasAttribute("disabled")) return true;
-    router.replaceParams({ year: String(year) });
-    return true;
-  }
 
   #handleAction(event: Event): void {
     const anchor = (event.target as Element | null)?.closest<HTMLElement>(

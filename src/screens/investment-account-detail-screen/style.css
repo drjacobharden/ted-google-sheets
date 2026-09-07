@@ -179,5 +179,20 @@
       grid-column: 2;
       grid-row: 1;
     }
+
+    .investment-account-detail__activity-tools dropdown-menu {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+
+    .investment-account-detail__activity-tools search-bar {
+      grid-column: 1;
+      grid-row: 2;
+    }
+
+    .investment-account-detail__activity-tools filter-bar {
+      grid-column: 2;
+      grid-row: 2;
+    }
   }
 }

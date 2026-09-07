@@ -1,5 +1,11 @@
 import { APIs } from "../../api/api";
 import type { DataChart } from "../../components/data-chart/data-chart";
+import type { SpendingHeatmapChart } from "../../components/spending-heatmap-chart/spending-heatmap-chart";
+import type {
+  InsightItem,
+  SpendingInsightSelectionEvent,
+  SpendingInsights,
+} from "../../components/spending-insights/spending-insights";
 import type {
   DropdownMenu,
   DropdownSelectionEvent,
@@ -13,6 +19,12 @@ import {
   type InvestmentOverviewChartDisplay,
 } from "../../utilities/investment-overview-chart";
 import { escapeHTML, money, netFlows } from "../../utilities/view-formatters";
+import { buildAnnualInvestmentHeatmap } from "../../utilities/annual-investment-heatmap";
+import {
+  analyzeInvestmentActivity,
+  getInvestmentInsights,
+  sortInvestmentInsights,
+} from "../../utilities/investment-activity-insights";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -76,6 +88,8 @@ export class InvestmentOverviewScreen
   #tableBody!: HTMLElement;
   #tableFooter!: HTMLElement;
   #empty!: HTMLElement;
+  #activityHeatmap!: SpendingHeatmapChart;
+  #activityInsights!: SpendingInsights;
   #chartDisplay: InvestmentOverviewChartDisplay = "balance";
   #year = new Date().getFullYear();
   #listening = false;
@@ -97,6 +111,12 @@ export class InvestmentOverviewScreen
       this.#tableBody = this.querySelector("#investment-account-totals")!;
       this.#tableFooter = this.querySelector("#investment-account-footer")!;
       this.#empty = this.querySelector("#investment-accounts-empty")!;
+      this.#activityHeatmap = this.querySelector<SpendingHeatmapChart>(
+        "#investment-activity-heatmap",
+      )!;
+      this.#activityInsights = this.querySelector<SpendingInsights>(
+        "#investment-activity-insights",
+      )!;
     }
     if (this.#listening) return;
     this.#listening = true;
@@ -106,6 +126,7 @@ export class InvestmentOverviewScreen
     this.addEventListener("click", this);
     this.addEventListener("keydown", this);
     this.#chartMode.addEventListener("dropdown-selection", this);
+    this.#activityInsights.addEventListener("spending-insight-change", this);
     this.#readYear();
     this.#render();
   }
@@ -114,6 +135,7 @@ export class InvestmentOverviewScreen
     if (!this.#listening) return;
     this.#listening = false;
     this.#chartMode.removeEventListener("dropdown-selection", this);
+    this.#activityInsights.removeEventListener("spending-insight-change", this);
     window.removeEventListener("app:route-changed", this);
     window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("budget:accounts-loaded", this);
@@ -122,6 +144,15 @@ export class InvestmentOverviewScreen
   }
 
   handleEvent(event: Event): void {
+    if (
+      event.type === "spending-insight-change" &&
+      event.target === this.#activityInsights
+    ) {
+      const selection = event as SpendingInsightSelectionEvent;
+      this.#activityHeatmap.highlightedDayIds =
+        selection.detail.insight.dayIds ?? [];
+      return;
+    }
     if (event.type === "dropdown-selection" && event.target === this.#chartMode) {
       const value = (event as DropdownSelectionEvent).detail.value as InvestmentOverviewChartDisplay;
       this.#chartDisplay = value;
@@ -288,6 +319,18 @@ export class InvestmentOverviewScreen
     );
     this.#renderTrend();
     this.#renderAccounts(range);
+    this.#renderActivity();
+  }
+
+  #renderActivity(): void {
+    const accounts = APIs.accounts.accounts();
+    const activities = APIs.accounts.investmentActivity();
+    const balances = APIs.accounts.balances();
+    const heatmap = buildAnnualInvestmentHeatmap(activities, accounts, this.#year);
+    const metrics = analyzeInvestmentActivity(activities, balances, accounts, this.#year);
+    const insights = sortInvestmentInsights(getInvestmentInsights(metrics));
+    this.#activityHeatmap.data = heatmap;
+    this.#activityInsights.data = insights as readonly InsightItem[];
   }
 
   #renderAccounts(range: YearRange): void {

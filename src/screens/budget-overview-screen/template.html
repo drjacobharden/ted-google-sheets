@@ -5,7 +5,7 @@
   >
     <div class="overview-hero__balance">
       <span id="overview-total-balance-caption" class="type-eyebrow"
-        >Total balance</span
+        >Total savings</span
       >
       <strong
         id="overview-total-balance"
@@ -202,6 +202,24 @@
       </section>
     </div>
   </div>
+
+  <section
+    class="daily-spending-card editorial-section"
+    aria-labelledby="daily-spending-insights-title"
+  >
+    <header class="editorial-section-header daily-spending-card__header">
+      <h2 id="daily-spending-insights-title" class="type-section-title">
+        Insights
+      </h2>
+    </header>
+    <div class="daily-spending-card__frame editorial-surface">
+      <spending-heatmap-chart
+        id="budget-overview-spending-heatmap"
+        aria-label="Daily spending heatmap"
+      ></spending-heatmap-chart>
+      <spending-insights id="budget-overview-spending-insights"></spending-insights>
+    </div>
+  </section>
 
   <section
     class="monthly-table-card editorial-section"

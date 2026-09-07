@@ -1,6 +1,6 @@
 import { getIcon, IconKeys } from "../../icons";
 
-class Icon extends HTMLElement {
+export class Icon extends HTMLElement {
   connectedCallback(): void {
     this.#render();
   }

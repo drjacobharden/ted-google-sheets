@@ -70,7 +70,6 @@ export class InvestmentDebtDetailScreen
   #table!: DataTable<MonthlyDebtRow>;
   #search!: SearchBar;
   #filterBar!: FilterBar<MonthlyDebtRow>;
-  #empty!: HTMLElement;
   #summary!: HTMLElement;
   #overlayManager!: OverlayManager;
   #chart!: DataChart;
@@ -89,7 +88,6 @@ export class InvestmentDebtDetailScreen
       this.#table = this.querySelector("#debt-history-table")!;
       this.#search = this.querySelector("#debt-detail-search")!;
       this.#filterBar = this.querySelector("#debt-detail-filter")!;
-      this.#empty = this.querySelector("#debt-history-empty")!;
       this.#summary = this.querySelector(
         ".investment-account-detail__summary",
       )!;
@@ -360,7 +358,6 @@ export class InvestmentDebtDetailScreen
         matchesLedgerFilterGroups(row, this.#filters),
     );
     this.#rows = rows;
-    this.#empty.hidden = rows.length > 0;
 
     const totalPayments = allRows.reduce(
       (total, row) => total + row.payments,

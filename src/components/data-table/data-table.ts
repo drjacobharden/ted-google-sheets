@@ -62,13 +62,18 @@ export class DataTable<
   #sortKey: string | null = null;
   #sortDirection: DataTableSortDirection | null = null;
   #header!: HTMLElement;
+  #empty!: HTMLParagraphElement;
 
   connectedCallback(): void {
     if (this.#initialized) return;
     this.#initialized = true;
 
     const table = document.createElement("table");
-    this.append(table);
+    this.#empty = document.createElement("p");
+    this.#empty.className = "data-table__empty";
+    this.#empty.textContent = "There is no data to show in the current view.";
+    this.#empty.hidden = true;
+    this.append(table, this.#empty);
     this.#table = this.querySelector("table")!;
     this.#render();
 
@@ -180,6 +185,9 @@ export class DataTable<
 
   #render(): void {
     if (!this.#table) return;
+    const hasRows = this.#data.rows.length > 0;
+    this.#table.hidden = !hasRows;
+    this.#empty.hidden = hasRows;
     this.#renderHeader();
     this.#renderRows();
     this.#renderFooter();

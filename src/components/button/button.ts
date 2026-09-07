@@ -1,11 +1,14 @@
 import { getIcon, IconKeys } from "../../icons";
 
 export class CustomButton extends HTMLElement {
+  #initialized = false;
   #label!: HTMLElement;
   #leadingIcon: HTMLElement | null = null;
   #trailingIcon: HTMLElement | null = null;
 
   connectedCallback(): void {
+    if (this.#initialized) return;
+    this.#initialized = true;
     this.setAttribute("role", "button");
     this.style.cursor = "pointer";
     this.classList.add("button");

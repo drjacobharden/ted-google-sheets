@@ -2,6 +2,7 @@ import type { EntityKind } from "../api/budget-api";
 
 export type BudgetingRouteName =
   | "budget-overview"
+  | "money-flow"
   | "transactions"
   | "categories"
   | "vendors"
@@ -28,9 +29,7 @@ export type DrawerName =
   | "review"
   | "entity-new"
   | "entity-edit"
-  | "investment-account"
-  | "investment-month"
-  | "investment-ledger-entry";
+  | "investment-account";
 
 export interface KnownRouteParams {
   year?: string;
@@ -43,12 +42,10 @@ export interface KnownRouteParams {
   entityKind?: EntityKind;
   entityId?: string;
   investmentAccountId?: string;
-  investmentMonth?: string;
-  investmentReviewId?: string;
-  investmentLedgerId?: string;
   investmentLedgerSource?: string;
   accountDraftName?: string;
   accountCreateRequestId?: string;
+  transactionKind?: "expense" | "income" | "account";
 }
 
 export type RouteParams = Record<string, string> & Partial<KnownRouteParams>;
