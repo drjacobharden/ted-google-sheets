@@ -1,0 +1,80 @@
+horizontal-bar-chart {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 12rem;
+
+  .horizontal-bar-chart__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .horizontal-bar-chart__bar-row {
+    outline: none;
+  }
+
+  .horizontal-bar-chart__label {
+    fill: var(--color-text);
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+  }
+
+  .horizontal-bar-chart__track {
+    fill: var(--color-surface-subtle);
+  }
+
+  .horizontal-bar-chart__bar {
+    transition: fill 120ms ease;
+  }
+
+  .horizontal-bar-chart__bar-row.is-size-2 .horizontal-bar-chart__bar {
+    fill: var(--color-chart-expense);
+  }
+
+  .horizontal-bar-chart__bar-row.is-size-1 .horizontal-bar-chart__bar {
+    fill: var(--color-chart-expense-muted);
+  }
+
+  .horizontal-bar-chart__bar-row.is-size-0 .horizontal-bar-chart__bar {
+    fill: var(--color-chart-expense-lightest);
+  }
+
+  .horizontal-bar-chart__bar-row.is-active .horizontal-bar-chart__bar,
+  .horizontal-bar-chart__bar-row:hover .horizontal-bar-chart__bar {
+    fill: color-mix(in srgb, var(--color-chart-expense) 76%, var(--color-text));
+  }
+
+  .horizontal-bar-chart__bar-row:focus-visible .horizontal-bar-chart__bar {
+    stroke: var(--color-focus);
+    stroke-width: 2;
+  }
+
+  .horizontal-bar-chart__tooltip-anchor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .horizontal-bar-chart__empty {
+    display: grid;
+    min-height: 12rem;
+    place-items: center;
+    margin: 0;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+}
+
+tool-tip .horizontal-bar-chart__tooltip-percentage {
+  margin-top: var(--space-2xs);
+  color: var(--color-text-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}

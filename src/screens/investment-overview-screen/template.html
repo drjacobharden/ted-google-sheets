@@ -1,8 +1,114 @@
-<page-title eyebrow="Long-term savings" title="Investment overview" subtitle="Balances, contributions, and contribution-adjusted growth for retirement planning."></page-title>
-<date-range-picker preset="month"></date-range-picker>
-<div class="summary-grid" id="investment-summary"></div>
-<section class="ledger-card investment-overview-screen__chart-card">
-  <div class="table-header"><div><h2>Balance trend</h2><p id="investment-coverage">No investment history yet.</p></div></div>
-  <div id="investment-trend" class="investment-overview-screen__chart"></div>
-  <div id="investment-allocation" class="investment-overview-screen__allocation" aria-label="Investment allocation"></div>
-</section>
+<div class="content-container editorial-theme">
+  <section
+    class="investment-overview-screen__hero"
+    aria-labelledby="liquid-net-worth-caption"
+  >
+    <div class="investment-overview-screen__net-worth">
+      <span id="liquid-net-worth-caption" class="type-eyebrow"
+        >Total investment balance</span
+      >
+      <strong
+        id="investment-liquid-net-worth"
+        class="type-number type-number--hero"
+        aria-live="polite"
+        >—</strong
+      >
+    </div>
+    <dl
+      class="investment-overview-screen__metrics"
+      aria-label="Annual investment totals"
+    >
+      <div>
+        <dt>Portfolio balance</dt>
+        <dd id="investment-total-balance">—</dd>
+        <small id="investment-balance-comparison">—</small>
+      </div>
+      <div>
+        <dt>Investment contributions</dt>
+        <dd id="investment-total-contributions">—</dd>
+        <small id="investment-contributions-comparison">—</small>
+      </div>
+      <div>
+        <dt>Debts</dt>
+        <dd id="investment-total-debt">—</dd>
+        <small id="investment-debt-comparison">—</small>
+      </div>
+    </dl>
+  </section>
+
+  <section
+    class="investment-overview-screen__trend editorial-section"
+    aria-labelledby="investment-trend-title"
+  >
+    <header class="editorial-section-header">
+      <h2 id="investment-trend-title" class="type-section-title">
+        Investment trends <span class="type-meta">— fig. 01</span>
+      </h2>
+      <dropdown-menu
+        id="investment-trend-chart-mode"
+        variant="ghost"
+        label="Balance"
+        aria-label="Investment trend chart presentation"
+      ></dropdown-menu>
+    </header>
+    <div class="investment-overview-screen__chart-frame editorial-surface">
+      <data-chart
+        id="investment-trend"
+        class="investment-overview-screen__chart"
+        aria-label="Investment overview chart"
+      ></data-chart>
+    </div>
+  </section>
+
+  <section
+    class="investment-overview-screen__accounts editorial-section"
+    aria-labelledby="investment-accounts-title"
+  >
+    <header class="editorial-section-header">
+      <h2 id="investment-accounts-title" class="type-section-title">
+        Accounts at a glance <span class="type-meta">— fig. 02</span>
+      </h2>
+    </header>
+    <div class="investment-overview-screen__table-wrap">
+      <table class="investment-overview-screen__table">
+        <thead>
+          <tr>
+            <th scope="col">Account</th>
+            <th scope="col">Source</th>
+            <th scope="col" class="is-number">Contributions</th>
+            <th scope="col" class="is-number">Ending balance</th>
+            <th scope="col" class="is-number">Account growth</th>
+            <th scope="col" class="is-number">ROI</th>
+          </tr>
+        </thead>
+        <tbody id="investment-account-totals"></tbody>
+        <tfoot id="investment-account-footer"></tfoot>
+      </table>
+      <p
+        id="investment-accounts-empty"
+        class="investment-overview-screen__empty"
+        hidden
+      >
+        No investment accounts yet.
+      </p>
+    </div>
+  </section>
+
+  <section
+    class="investment-overview-screen__activity editorial-section"
+    aria-labelledby="investment-activity-title"
+  >
+    <header class="editorial-section-header">
+      <h2 id="investment-activity-title" class="type-section-title">
+        Insights
+      </h2>
+    </header>
+    <div class="investment-overview-screen__activity-frame editorial-surface">
+      <spending-heatmap-chart
+        id="investment-activity-heatmap"
+        aria-label="Daily investment contributions"
+      ></spending-heatmap-chart>
+      <spending-insights id="investment-activity-insights"></spending-insights>
+    </div>
+  </section>
+</div>

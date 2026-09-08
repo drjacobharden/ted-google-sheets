@@ -146,7 +146,7 @@ TED fully supports collaboration and multiple household members entering and edi
 
 ## CSV imports
 
-Open **Import** from the Budgeting navigation to upload a CSV, select or create a reusable profile, map its columns, and review staged rows. Budget mapping can optionally reuse source Vendor, Category, and Person names, staging any missing records for the final commit. Exact saved profile matches jump directly to review. Investment imports map one ending balance plus any number of contribution/withdrawal columns into the existing monthly account model.
+Open **Import** from the Budgeting navigation to upload a CSV, select or create a reusable profile, map its columns, and review staged rows grouped by source description. Profiles describe the CSV format rather than a budget or investment target. During review, **Vendor / Account** can route each group to a vendor, investment account, or debt account; linked account category and assignment values are derived automatically. Exact saved profile matches jump directly to review, and learned vendor/account and person associations are reused on later imports. Account balances remain managed from the investment and debt balance screens.
 
 CSV files are parsed entirely in the browser and staging is discarded on refresh. Profiles, mappings, new reference records, and rows remain in memory until **Commit import**. The progress view creates dependencies in order, queues records through the existing local-first Sync workflow, and reports completion only after every selected row is confirmed in Google Sheets. Writes remain limited to batches of 50.
 

@@ -1,0 +1,101 @@
+vendor-pie-chart {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 30rem;
+  overflow-x: auto;
+
+  .vendor-pie-chart__svg {
+    display: block;
+    width: 100%;
+    min-width: 48rem;
+    height: auto;
+    overflow: visible;
+  }
+
+  .vendor-pie-chart__slice {
+    cursor: default;
+    outline: none;
+  }
+
+  .vendor-pie-chart__path {
+    fill-rule: evenodd;
+    stroke: var(--color-surface);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+    transition: opacity 120ms ease, filter 120ms ease;
+  }
+
+  .vendor-pie-chart__slice.is-size-3 .vendor-pie-chart__path {
+    fill: var(--color-chart-expense);
+  }
+
+  .vendor-pie-chart__slice.is-size-2 .vendor-pie-chart__path {
+    fill: var(--color-chart-expense-debt);
+  }
+
+  .vendor-pie-chart__slice.is-size-1 .vendor-pie-chart__path {
+    fill: var(--color-chart-expense-muted);
+  }
+
+  .vendor-pie-chart__slice.is-size-0 .vendor-pie-chart__path {
+    fill: var(--color-chart-expense-lightest);
+  }
+
+  .vendor-pie-chart__center {
+    fill: var(--color-surface);
+    stroke: var(--color-surface);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .vendor-pie-chart__slice:hover .vendor-pie-chart__path,
+  .vendor-pie-chart__slice.is-active .vendor-pie-chart__path,
+  .vendor-pie-chart__slice:focus-visible .vendor-pie-chart__path {
+    filter: brightness(0.88);
+  }
+
+  .vendor-pie-chart__slice:focus-visible .vendor-pie-chart__path {
+    stroke: var(--color-focus);
+    stroke-width: 3;
+  }
+
+  .vendor-pie-chart__leader {
+    fill: none;
+    stroke: var(--color-rule-strong);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .vendor-pie-chart__label {
+    fill: var(--color-text);
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+  }
+
+  .vendor-pie-chart__percentage {
+    fill: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .vendor-pie-chart__tooltip-anchor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .vendor-pie-chart__empty {
+    display: grid;
+    min-height: 20rem;
+    place-items: center;
+    margin: 0;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+}

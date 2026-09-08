@@ -1,0 +1,125 @@
+money-flow-chart {
+  position: relative;
+  display: block;
+  min-width: 1180px;
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .money-flow-chart__link {
+    opacity: 0.24;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+  }
+
+  .money-flow-chart__node-bar {
+    stroke: color-mix(in srgb, var(--color-text) 28%, transparent);
+    stroke-width: 0.75;
+    transition: opacity 120ms ease;
+  }
+
+  .money-flow-chart__node-hit {
+    fill: transparent;
+    cursor: crosshair;
+    outline: none;
+  }
+
+  .money-flow-chart__node-hit:focus-visible {
+    fill: color-mix(in srgb, var(--color-focus) 12%, transparent);
+    stroke: var(--color-focus);
+    stroke-width: 1.5;
+  }
+
+  .is-palette-income.money-flow-chart__link,
+  .is-palette-income .money-flow-chart__node-bar {
+    fill: var(--color-chart-income);
+  }
+
+  .is-palette-expense.money-flow-chart__link,
+  .is-palette-expense .money-flow-chart__node-bar {
+    fill: var(--color-chart-expense);
+  }
+
+  .is-palette-savings.money-flow-chart__link,
+  .is-palette-savings .money-flow-chart__node-bar {
+    fill: var(--color-chart-savings);
+  }
+
+  .is-palette-debt.money-flow-chart__link,
+  .is-palette-debt .money-flow-chart__node-bar {
+    fill: var(--color-chart-debt);
+  }
+
+  .money-flow-chart__link.is-active {
+    opacity: 0.52;
+  }
+
+  .money-flow-chart__link.is-muted,
+  .money-flow-chart__node.is-muted {
+    opacity: 0.25;
+  }
+
+  .money-flow-chart__label {
+    display: flex;
+    box-sizing: border-box;
+    height: 100%;
+    flex-direction: column;
+    gap: 3px;
+    justify-content: center;
+    color: var(--color-text);
+    font-family: var(--font-display);
+    line-height: var(--leading-snug);
+    pointer-events: none;
+  }
+
+  .money-flow-chart__label.is-right {
+    text-align: right;
+  }
+
+  .money-flow-chart__label strong {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-tight);
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .money-flow-chart__label span {
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .money-flow-chart__tooltip-anchor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+}
+
+tool-tip .money-flow-chart__tooltip {
+  .data-chart__tooltip-row i.is-palette-debt {
+    --data-chart-swatch-fill: var(--color-chart-debt);
+  }
+
+  .data-chart__tooltip-row i.is-detail {
+    visibility: hidden;
+  }
+
+  .money-flow-chart__tooltip-relationship .data-chart__tooltip-label {
+    grid-column: 2 / -1;
+  }
+}

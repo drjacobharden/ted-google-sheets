@@ -1,20 +1,33 @@
 import type {
-  DropdownMenu,
-  DropdownMenuItem,
-  DropdownSelectionEvent,
-} from "../../components/dropdown-menu/dropdown-menu";
-import type {
   SegmentedControl,
   SegmentedControlSelectionEvent,
 } from "../../components/segmented-control/segmented-control";
-import { type SpendTrendPeriod } from "../../utilities/spend-trend";
+import type {
+  DropdownMenu,
+  DropdownSelectionEvent,
+} from "../../components/dropdown-menu/dropdown-menu";
+import type {
+  DataTable,
+  DataTableCellClasses,
+  DataTableData,
+} from "../../components/data-table/data-table";
+import type { SpendTrendPeriod } from "../../utilities/spend-trend";
 import { appState } from "../../state/app-state";
 import { appController } from "../../state/app-controller";
-import { escapeHTML, money } from "../../utilities/view-formatters";
+import { APIs } from "../../api/api";
+import type { DataChart } from "../../components/data-chart/data-chart";
+import type { SpendingHeatmapChart } from "../../components/spending-heatmap-chart/spending-heatmap-chart";
+import type {
+  SpendingInsightSelectionEvent,
+  SpendingInsights,
+} from "../../components/spending-insights/spending-insights";
 import {
-  monthlyNetDifference,
-  type MonthlyTransactionSummaryRow,
-} from "../../utilities/monthly-transaction-summary";
+  budgetOverviewChartData,
+  buildBudgetOverviewChartMonths,
+  type BudgetOverviewChartDisplay,
+} from "../../utilities/budget-overview-chart";
+import { escapeHTML, money } from "../../utilities/view-formatters";
+import type { MonthlyTransactionSummaryRow } from "../../utilities/monthly-transaction-summary";
 import type {
   AnnualBudgetOverview,
   AnnualSpendingRank,
@@ -31,16 +44,32 @@ import type {
 } from "../../utilities/annual-spend-trend";
 import { buildCurrencyAxisScale } from "../../utilities/currency-axis-scale";
 import {
+  activeMonthAverage,
   savingsRateBreakdown,
-  savingsRateChange,
 } from "../../utilities/savings-rate-breakdown";
+import { deductedInvestmentSavings } from "../../utilities/activity-effects";
+import { buildAnnualSpendingHeatmap } from "../../utilities/annual-spending-heatmap";
+import { buildBudgetSpendingInsights } from "../../utilities/budget-spending-insights";
 import templateString from "./template.html" with { type: "text" };
 
 import { DateUtils } from "../../utilities/date-utilities";
-import { handleCustomEvent } from "../../utilities/event-utilities";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
+
+let selectedBudgetOverviewChart: BudgetOverviewChartDisplay =
+  "cumulative-savings";
+
+interface MonthlySummaryTableRow {
+  month: string;
+  income: string;
+  spend: string;
+  amount: string;
+  comparison: string;
+  amountValue: number;
+  comparisonValue: number | null;
+  hasData: boolean;
+}
 
 const shortDate = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -84,7 +113,7 @@ const legendPercentage = new Intl.NumberFormat("en-US", {
 const DONUT_CENTER_X = 90;
 const DONUT_CENTER_Y = 90;
 const DONUT_RADIUS = 70;
-const DONUT_SEGMENT_GAP = 4;
+const DONUT_SEGMENT_GAP = 2.5;
 const DONUT_SEGMENT_CORNER_RADIUS = 2;
 
 interface DonutPoint {
@@ -109,8 +138,11 @@ function donutSegmentPath(
   endPercent: number,
   width: number,
 ): string {
-  const startAngle = Math.PI * (1 - startPercent / 100);
-  const endAngle = Math.PI * (1 - endPercent / 100);
+  const sweepPercent = Math.min(99.999, Math.max(0, endPercent - startPercent));
+  const adjustedEndPercent = startPercent + sweepPercent;
+  const startAngle = Math.PI / 2 - Math.PI * 2 * (startPercent / 100);
+  const endAngle = Math.PI / 2 - Math.PI * 2 * (adjustedEndPercent / 100);
+  const largeArc = sweepPercent > 50 ? 1 : 0;
   const outerRadius = DONUT_RADIUS + width / 2;
   const innerRadius = DONUT_RADIUS - width / 2;
   const arcLength = Math.max(0, (startAngle - endAngle) * innerRadius);
@@ -137,11 +169,11 @@ function donutSegmentPath(
 
   return [
     `M ${donutCoordinate(outerStart)}`,
-    `A ${outerRadius} ${outerRadius} 0 0 1 ${donutCoordinate(outerEnd)}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${donutCoordinate(outerEnd)}`,
     `Q ${donutCoordinate(outerEndCorner)} ${donutCoordinate(endOuterCap)}`,
     `L ${donutCoordinate(endInnerCap)}`,
     `Q ${donutCoordinate(innerEndCorner)} ${donutCoordinate(innerEnd)}`,
-    `A ${innerRadius} ${innerRadius} 0 0 0 ${donutCoordinate(innerStart)}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${donutCoordinate(innerStart)}`,
     `Q ${donutCoordinate(innerStartCorner)} ${donutCoordinate(startInnerCap)}`,
     `L ${donutCoordinate(startOuterCap)}`,
     `Q ${donutCoordinate(outerStartCorner)} ${donutCoordinate(outerStart)}`,
@@ -168,12 +200,38 @@ const ANNUAL_CARD_HELP: Record<AnnualSummaryMetricKey, string> = {
   income: "The total amount you earned during the year",
   paycheckDeductions: "Savings deducted directly from your paycheck",
   totalSavings:
-    "The total amount saved. Calculated as your paycheck deductions plus the difference between income and spend",
+    "The total amount saved. Calculated as total income minus total spend",
 };
 
 function signedMoney(value: number): string {
   if (Math.abs(value) < 0.005) return money(0);
   return `${value > 0 ? "+ " : "− "}${money(Math.abs(value), false)}`;
+}
+
+function summaryTableMoney(value: number): string {
+  return money(value, Math.abs(value) < 1);
+}
+
+function signedSummaryTableMoney(value: number): string {
+  if (Math.abs(value) < 0.005) return summaryTableMoney(0);
+  return `${value > 0 ? "+ " : "− "}${summaryTableMoney(Math.abs(value))}`;
+}
+
+function percentChange(current: number, previous: number): number | null {
+  if (
+    !Number.isFinite(current) ||
+    !Number.isFinite(previous) ||
+    previous === 0
+  ) {
+    return null;
+  }
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+function signedPercentage(value: number | null): string {
+  if (value === null) return "—";
+  if (Math.abs(value) < 0.05) return "0%";
+  return `${value > 0 ? "+" : "−"}${percentage.format(Math.abs(value))}%`;
 }
 
 function stackedTooltip(
@@ -663,46 +721,6 @@ function mountChart(
   };
 }
 
-function getAvailableYears(): DropdownMenuItem[] {
-  const summaries = appState.get("budgetOverview").monthlyTransactionSummaries;
-
-  const currentYear = DateUtils.today.getFullYear();
-
-  const availableYears = Object.keys(summaries)
-    .map(Number)
-    .filter((year) => Number.isInteger(year) && year <= currentYear);
-
-  if (!availableYears.includes(currentYear)) {
-    availableYears.push(currentYear);
-  }
-
-  return availableYears
-    .sort((a, b) => b - a)
-    .map((y) => ({
-      key: y.toString(),
-      title: y.toString(),
-      isDefaultValue: y === currentYear,
-    }));
-}
-
-function getAvailableAssignments(): DropdownMenuItem[] {
-  const selectedId = appState.get("budgetOverview").assignmentId;
-  const assignments = appController.getBudgetOverviewAssignments();
-
-  return [
-    {
-      key: "all",
-      title: "All assignments",
-      isDefaultValue: selectedId === null,
-    },
-    ...assignments.map((assignment) => ({
-      key: assignment.id,
-      title: assignment.name,
-      isDefaultValue: assignment.id === selectedId,
-    })),
-  ];
-}
-
 type ChartRangeAction = "start" | "move" | "end";
 
 interface ChartRangeDrag {
@@ -718,21 +736,20 @@ export class BudgetOverviewScreen
   extends HTMLElement
   implements EventListenerObject
 {
-  #yearControl!: DropdownMenu;
   #selectedYear = new Date().getFullYear();
 
-  #assignmentControl!: DropdownMenu;
-
-  #contentControl!: DropdownMenu;
-
+  // Retained only for the legacy helper methods below; the active chart is monthly-only.
   #periodControl!: SegmentedControl;
-  #chart!: HTMLElement;
+  #period: SpendTrendPeriod = "monthly";
+  #chart!: DataChart;
+  #chartMode!: DropdownMenu;
   #metrics!: HTMLElement;
   #totalBalance!: HTMLElement;
   #totalBalanceCaption!: HTMLElement;
   #totalSpend!: HTMLElement;
   #totalIncome!: HTMLElement;
-  #totalDeductions!: HTMLElement;
+  #totalSpendComparison!: HTMLElement;
+  #totalIncomeComparison!: HTMLElement;
   #range!: HTMLElement;
   #rangeTrack!: HTMLElement;
   #rangeSelection!: HTMLElement;
@@ -747,12 +764,11 @@ export class BudgetOverviewScreen
   #legend!: HTMLElement;
   #legendTotal!: HTMLElement;
   #previousLegend!: HTMLElement;
-  #monthlySummaryYear!: HTMLElement;
-  #monthlySummaryCaption!: HTMLElement;
-  #monthlySummaryBody!: HTMLTableSectionElement;
-  #monthlySummaryComparisonLabel!: HTMLElement;
-  #previousYearButton!: HTMLButtonElement;
-  #nextYearButton!: HTMLButtonElement;
+  #monthlySummaryTable!: DataTable<MonthlySummaryTableRow>;
+  #monthlySummaryAssignmentSelector!: DropdownMenu;
+  #monthlySummaryAssignmentId: string | null = null;
+  #spendingHeatmap!: SpendingHeatmapChart;
+  #spendingInsights!: SpendingInsights;
   #topVendorsList!: HTMLOListElement;
   #topVendorsEmpty!: HTMLElement;
   #topCategoriesList!: HTMLOListElement;
@@ -764,18 +780,24 @@ export class BudgetOverviewScreen
   #savingsRateSpentRing!: SVGPathElement;
   #savingsRatePaycheckRing!: SVGPathElement;
   #savingsRateBudgetRing!: SVGPathElement;
-  #savingsRateSegments: SVGPathElement[] = [];
   #savingsRateDescription!: SVGDescElement;
   #savingsRateValue!: HTMLElement;
-  #savingsRateChange!: HTMLElement;
-  #savingsRateSubtitle!: HTMLElement;
   #savingsLegendRate!: HTMLElement;
+  #savingsLegendAmount!: HTMLElement;
+  #savingsLegendAverage!: HTMLElement;
+  #savingsLegendFill!: HTMLElement;
   #deductionsLegendRate!: HTMLElement;
+  #deductionsLegendAmount!: HTMLElement;
+  #deductionsLegendAverage!: HTMLElement;
+  #deductionsLegendFill!: HTMLElement;
   #spendLegendRate!: HTMLElement;
+  #spendLegendAmount!: HTMLElement;
+  #spendLegendAverage!: HTMLElement;
+  #spendLegendFill!: HTMLElement;
   #annualSummaryCards!: HTMLElement;
 
   #overlayManager!: OverlayManager;
-  #period: SpendTrendPeriod = "weekly";
+  #chartDisplay: BudgetOverviewChartDisplay = selectedBudgetOverviewChart;
 
   #rangeStart = 0;
   #rangeEnd = -1;
@@ -789,32 +811,22 @@ export class BudgetOverviewScreen
   #unsubscribeBudgetingContext: (() => void) | null = null;
   #listening = false;
 
-  #yearSelector!: DropdownMenu;
-
   connectedCallback(): void {
     if (!this.dataset.initialized) {
       this.dataset.initialized = "true";
       this.classList.add("screen");
+      this.classList.add("editorial-theme");
       this.dataset.screen = "budget-overview";
       this.append(template.content.cloneNode(true));
       this.#captureElements();
-
-      //
-      this.#initialize.capture();
-      this.#initialize.setup();
       this.#selectedYear = appState.get("budgetingContext").year;
     }
     if (this.#listening) return;
     this.#listening = true;
-    this.#periodControl.addListener(this);
-    this.#range.addEventListener("pointerdown", this);
-    this.#range.addEventListener("pointermove", this);
-    this.#range.addEventListener("pointerup", this);
-    this.#range.addEventListener("pointercancel", this);
-    this.#range.addEventListener("keydown", this);
+    this.#monthlySummaryAssignmentSelector.addListener(this);
+    this.#chartMode.addEventListener("dropdown-selection", this);
+    this.#spendingInsights.addEventListener("spending-insight-change", this);
 
-    this.#previousYearButton.addEventListener("click", this);
-    this.#nextYearButton.addEventListener("click", this);
     this.#annualSummaryCards.addEventListener("pointerover", this);
     this.#annualSummaryCards.addEventListener("pointerout", this);
     this.#annualSummaryCards.addEventListener("focusin", this);
@@ -823,10 +835,6 @@ export class BudgetOverviewScreen
     this.#insightsGrid.addEventListener("pointerout", this);
     this.#insightsGrid.addEventListener("focusin", this);
     this.#insightsGrid.addEventListener("focusout", this);
-    this.#savingsRateSegments.forEach((segment) => {
-      segment.addEventListener("focus", this);
-      segment.addEventListener("blur", this);
-    });
     this.#unsubscribeBudgetOverview = appState.subscribe("budgetOverview", () =>
       this.#renderOverview(),
     );
@@ -839,8 +847,6 @@ export class BudgetOverviewScreen
       (context) => {
         if (this.#selectedYear === context.year) return;
         this.#selectedYear = context.year;
-        this.#rangeStart = 0;
-        this.#rangeEnd = -1;
         this.#renderOverview();
       },
     );
@@ -850,15 +856,10 @@ export class BudgetOverviewScreen
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    this.#periodControl.removeListener(this);
-    this.#range.removeEventListener("pointerdown", this);
-    this.#range.removeEventListener("pointermove", this);
-    this.#range.removeEventListener("pointerup", this);
-    this.#range.removeEventListener("pointercancel", this);
-    this.#range.removeEventListener("keydown", this);
+    this.#monthlySummaryAssignmentSelector.removeListener(this);
+    this.#chartMode.removeEventListener("dropdown-selection", this);
+    this.#spendingInsights.removeEventListener("spending-insight-change", this);
 
-    this.#previousYearButton.removeEventListener("click", this);
-    this.#nextYearButton.removeEventListener("click", this);
     this.#annualSummaryCards.removeEventListener("pointerover", this);
     this.#annualSummaryCards.removeEventListener("pointerout", this);
     this.#annualSummaryCards.removeEventListener("focusin", this);
@@ -867,10 +868,6 @@ export class BudgetOverviewScreen
     this.#insightsGrid.removeEventListener("pointerout", this);
     this.#insightsGrid.removeEventListener("focusin", this);
     this.#insightsGrid.removeEventListener("focusout", this);
-    this.#savingsRateSegments.forEach((segment) => {
-      segment.removeEventListener("focus", this);
-      segment.removeEventListener("blur", this);
-    });
     this.#overlayManager.hideTooltip();
     this.#unsubscribeBudgetOverview?.();
     this.#unsubscribeBudgetOverview = null;
@@ -883,36 +880,50 @@ export class BudgetOverviewScreen
   }
 
   handleEvent(event: Event): void {
-    switch (event.type) {
-      case "dropdown-selection":
-        this.#eventHandlers.dropdownSelection(event);
-        return;
-
-      default:
-        break;
-    }
-
-    if (event.currentTarget === this.#range) {
-      if (event instanceof PointerEvent) this.#handleRangePointer(event);
-      else if (event instanceof KeyboardEvent) this.#handleRangeKeydown(event);
+    if (
+      event.type === "spending-insight-change" &&
+      event.target === this.#spendingInsights
+    ) {
+      const selection = event as SpendingInsightSelectionEvent;
+      this.#spendingHeatmap.highlightedDayIds =
+        selection.detail.insight.dayIds ?? [];
+      this.#spendingHeatmap.highlightZeroSpendDays =
+        selection.detail.insight.highlightZeroSpendDays === true;
       return;
     }
     if (
-      event.currentTarget instanceof SVGElement &&
-      event.currentTarget.matches("[data-donut-segment]")
+      event.type === "dropdown-selection" &&
+      event.target === this.#monthlySummaryAssignmentSelector
     ) {
-      const segment = event.currentTarget;
-      if (event.type === "focus") {
-        this.#overlayManager.showTooltip(
-          segment as unknown as HTMLElement,
-          stackedTooltip(
-            segment.dataset.tooltipName ?? "",
-            `${segment.dataset.tooltipAmount ?? "—"} · ${segment.dataset.tooltipPercent ?? "—"}`,
-          ),
-          { side: "top", align: "center", gap: 8 },
-        );
-      } else if (event.type === "blur") {
-        this.#overlayManager.hideTooltip();
+      const selection = event as DropdownSelectionEvent;
+      this.#monthlySummaryAssignmentId =
+        selection.detail.value === "all" ? null : selection.detail.value;
+      this.#renderMonthlySummary();
+      return;
+    }
+    if (
+      event.type === "dropdown-selection" &&
+      event.target === this.#chartMode
+    ) {
+      const value = (event as DropdownSelectionEvent).detail
+        .value as BudgetOverviewChartDisplay;
+      if (
+        [
+          "total-savings",
+          "income-vs-expense",
+          "monthly-income",
+          "monthly-spend",
+          "monthly-savings-rate",
+          "cumulative-income",
+          "cumulative-spend",
+          "cumulative-income-vs-spend",
+          "cumulative-savings-rate",
+          "cumulative-savings",
+        ].includes(value)
+      ) {
+        this.#chartDisplay = value;
+        selectedBudgetOverviewChart = value;
+        this.#renderTrend();
       }
       return;
     }
@@ -920,20 +931,6 @@ export class BudgetOverviewScreen
       event.currentTarget === this.#insightsGrid &&
       (event.type === "pointerover" || event.type === "focusin")
     ) {
-      const donutSegment = (
-        event.target as Element | null
-      )?.closest<SVGElement>("[data-donut-segment]");
-      if (donutSegment && this.#insightsGrid.contains(donutSegment)) {
-        this.#overlayManager.showTooltip(
-          donutSegment as unknown as HTMLElement,
-          stackedTooltip(
-            donutSegment.dataset.tooltipName ?? "",
-            `${donutSegment.dataset.tooltipAmount ?? "—"} · ${donutSegment.dataset.tooltipPercent ?? "—"}`,
-          ),
-          { side: "top", align: "center", gap: 8 },
-        );
-        return;
-      }
       const anchor = (event.target as Element | null)?.closest<HTMLElement>(
         "[data-insight-help]",
       );
@@ -956,12 +953,12 @@ export class BudgetOverviewScreen
       (event.type === "pointerout" || event.type === "focusout")
     ) {
       const leaving = (event.target as Element | null)?.closest(
-        "[data-insight-help], [data-donut-segment]",
+        "[data-insight-help]",
       );
       const entering = (event as MouseEvent | FocusEvent).relatedTarget;
       const next =
         entering instanceof Element
-          ? entering.closest("[data-insight-help], [data-donut-segment]")
+          ? entering.closest("[data-insight-help]")
           : null;
       if (leaving && !next) this.#overlayManager.hideTooltip();
       return;
@@ -1013,122 +1010,76 @@ export class BudgetOverviewScreen
       if (leaving && !nextAnchor) this.#overlayManager.hideTooltip();
       return;
     }
-    if (
-      event.type === "dropdown-selection" &&
-      event.target === this.#assignmentControl
-    ) {
-      const selection = event as DropdownSelectionEvent;
-      appController.setBudgetOverviewAssignment(
-        selection.detail.value === "all" ? null : selection.detail.value,
-      );
-      return;
-    }
-    if (
-      event.type === "segmented-control-selection" &&
-      event.target === this.#periodControl
-    ) {
-      const value = (event as SegmentedControlSelectionEvent).detail.value;
-      if (value === "weekly" || value === "monthly") this.#period = value;
-      this.#rangeStart = 0;
-      this.#rangeEnd = -1;
-      this.#renderTrend();
-      return;
-    }
-    if (
-      event.type === "click" &&
-      event.currentTarget === this.#previousYearButton
-    ) {
-      this.#selectedYear -= 1;
-      this.#rangeStart = 0;
-      this.#rangeEnd = -1;
-      this.#renderOverview();
-    } else if (
-      event.type === "click" &&
-      event.currentTarget === this.#nextYearButton
-    ) {
-      this.#selectedYear += 1;
-      this.#rangeStart = 0;
-      this.#rangeEnd = -1;
-      this.#renderOverview();
-    }
   }
 
-  #initialize = {
-    capture: () => {
-      this.#contentControl = this.querySelector("#content-selector")!;
-      this.#assignmentControl = this.querySelector("#assignment-selector")!;
-      this.#yearControl = this.querySelector("#year-selector")!;
-    },
-    setup: () => {
-      this.#update.assignmentControl();
-      this.#update.contentControl();
-      this.#update.yearControl();
-    },
-    addListeners: () => {},
-    teardown: () => {},
-  };
-
-  #update = {
-    assignmentControl: () => {
-      this.#assignmentControl.items = getAvailableAssignments();
-    },
-    contentControl: () => {
-      this.#contentControl.items = [
-        {
-          key: "overview",
-          title: "Overview",
-          icon: "dashboard",
-          isDefaultValue: true,
-        },
-        { key: "transactions", title: "Transactions", icon: "transactions" },
-        { key: "categories", title: "Categories", icon: "label" },
-        { key: "vendors", title: "Vendors", icon: "cart" },
-        { key: "assignments", title: "People", icon: "people" },
-      ];
-    },
-    yearControl: () => {
-      this.#yearControl.items = getAvailableYears();
-    },
-  };
-
-  #eventHandlers = {
-    dropdownSelection: (event: Event) => {
-      handleCustomEvent("dropdown-selection", event, ({ value, title, id }) => {
-        switch (id) {
-          case "content-selector":
-            console.log({ value, title });
-            break;
-
-          case "year-selector":
-            this.#selectedYear = Number(value);
-            this.#rangeStart = 0;
-            this.#rangeEnd = -1;
-            this.#renderOverview();
-            console.log({ value, title });
-            break;
-
-          case "assignment-selector":
-            appController.setBudgetOverviewAssignment(
-              value === "all" ? null : value,
-            );
-            break;
-
-          default:
-            break;
-        }
-      });
-    },
-  };
-
   #captureElements(): void {
-    this.#periodControl = this.querySelector<SegmentedControl>(
-      "#spend-trend-period",
+    this.#chart = this.querySelector<DataChart>("#weekly-spend-chart")!;
+    this.#chartMode = this.querySelector<DropdownMenu>(
+      "#spend-trend-chart-mode",
     )!;
-    this.#periodControl.items = [
-      { key: "weekly", title: "Weekly", isDefaultValue: true },
-      { key: "monthly", title: "Monthly" },
+    this.#chartMode.items = [
+      {
+        key: "cumulative-savings",
+        title: "Savings",
+        selectionLabel: "Cumulative savings",
+        group: "Cumulative",
+        isDefaultValue: true,
+      },
+      {
+        key: "cumulative-income",
+        title: "Income",
+        selectionLabel: "Cumulative income",
+        group: "Cumulative",
+      },
+      {
+        key: "cumulative-spend",
+        title: "Spend",
+        selectionLabel: "Cumulative spend",
+        group: "Cumulative",
+      },
+      {
+        key: "cumulative-income-vs-spend",
+        title: "Income vs Spend",
+        selectionLabel: "Cumulative Income vs Spend",
+        group: "Cumulative",
+      },
+      {
+        key: "cumulative-savings-rate",
+        title: "Savings rate",
+        selectionLabel: "Cumulative savings rate",
+        group: "Cumulative",
+      },
+      {
+        key: "total-savings",
+        title: "Savings",
+        selectionLabel: "Monthly savings",
+        group: "Monthly",
+      },
+      {
+        key: "monthly-income",
+        title: "Income",
+        selectionLabel: "Monthly income",
+        group: "Monthly",
+      },
+      {
+        key: "monthly-spend",
+        title: "Spend",
+        selectionLabel: "Monthly spend",
+        group: "Monthly",
+      },
+      {
+        key: "monthly-savings-rate",
+        title: "Savings rate",
+        selectionLabel: "Monthly savings rate",
+        group: "Monthly",
+      },
+      {
+        key: "income-vs-expense",
+        title: "Income vs Spend",
+        selectionLabel: "Monthly Income vs Spend",
+        group: "Monthly",
+      },
     ];
-    this.#chart = this.querySelector<HTMLElement>("#weekly-spend-chart")!;
     this.#metrics = this.querySelector<HTMLElement>("#spend-trend-metrics")!;
     this.#totalBalance = this.querySelector<HTMLElement>(
       "#overview-total-balance",
@@ -1142,30 +1093,11 @@ export class BudgetOverviewScreen
     this.#totalIncome = this.querySelector<HTMLElement>(
       "#overview-total-income",
     )!;
-    this.#totalDeductions = this.querySelector<HTMLElement>(
-      "#overview-total-deductions",
+    this.#totalSpendComparison = this.querySelector<HTMLElement>(
+      "#overview-total-spend-comparison",
     )!;
-    this.#range = this.querySelector<HTMLElement>("#spend-trend-range")!;
-    this.#rangeTrack = this.querySelector<HTMLElement>(
-      "#spend-trend-range-track",
-    )!;
-    this.#rangeSelection = this.querySelector<HTMLElement>(
-      "#spend-trend-range-selection",
-    )!;
-    this.#rangeStartHandle = this.querySelector<HTMLButtonElement>(
-      '[data-range-action="start"]',
-    )!;
-    this.#rangeMoveHandle = this.querySelector<HTMLButtonElement>(
-      '[data-range-action="move"]',
-    )!;
-    this.#rangeEndHandle = this.querySelector<HTMLButtonElement>(
-      '[data-range-action="end"]',
-    )!;
-    this.#rangeStartTooltip = this.querySelector<HTMLOutputElement>(
-      "#spend-trend-range-start-tooltip",
-    )!;
-    this.#rangeEndTooltip = this.querySelector<HTMLOutputElement>(
-      "#spend-trend-range-end-tooltip",
+    this.#totalIncomeComparison = this.querySelector<HTMLElement>(
+      "#overview-total-income-comparison",
     )!;
     this.#empty = this.querySelector<HTMLElement>("#weekly-spend-empty")!;
     this.#emptyTitle = this.querySelector<HTMLElement>(
@@ -1174,33 +1106,17 @@ export class BudgetOverviewScreen
     this.#emptyCopy = this.querySelector<HTMLElement>(
       "#weekly-spend-empty-copy",
     )!;
-    this.#legend = this.querySelector<HTMLElement>("#weekly-spend-legend")!;
-    this.#legendTotal = this.querySelector<HTMLElement>(
-      "#spend-trend-legend-total",
+    this.#monthlySummaryTable = this.querySelector<
+      DataTable<MonthlySummaryTableRow>
+    >("#monthly-summary-table")!;
+    this.#monthlySummaryAssignmentSelector = this.querySelector<DropdownMenu>(
+      "#monthly-summary-assignment-selector",
     )!;
-    this.#previousLegend = this.querySelector<HTMLElement>(
-      "#spend-trend-previous-legend",
+    this.#spendingHeatmap = this.querySelector<SpendingHeatmapChart>(
+      "#budget-overview-spending-heatmap",
     )!;
-
-    this.#monthlySummaryCaption = this.querySelector<HTMLElement>(
-      "#monthly-summary-caption",
-    )!;
-    this.#monthlySummaryBody = this.querySelector<HTMLTableSectionElement>(
-      "#monthly-summary-body",
-    )!;
-    this.#monthlySummaryComparisonLabel = this.querySelector<HTMLElement>(
-      "#monthly-summary-comparison-label",
-    )!;
-
-    // Buttons to control year navigation
-    this.#previousYearButton = this.querySelector(
-      '.page-header-wrapper [data-action="prevYear"]',
-    )!;
-    this.#nextYearButton = this.querySelector(
-      '.page-header-wrapper [data-action="nextYear"]',
-    )!;
-    this.#monthlySummaryYear = this.querySelector(
-      '.page-header-wrapper [data-id="summary-year"]',
+    this.#spendingInsights = this.querySelector<SpendingInsights>(
+      "#budget-overview-spending-insights",
     )!;
 
     this.#topVendorsList =
@@ -1232,31 +1148,46 @@ export class BudgetOverviewScreen
     this.#savingsRateBudgetRing = this.querySelector<SVGPathElement>(
       "#savings-rate-budget-ring",
     )!;
-    this.#savingsRateSegments = [
-      this.#savingsRateSpentRing,
-      this.#savingsRatePaycheckRing,
-      this.#savingsRateBudgetRing,
-    ];
     this.#savingsRateDescription = this.querySelector<SVGDescElement>(
       "#savings-rate-chart-description",
     )!;
     this.#savingsRateValue = this.querySelector<HTMLElement>(
       "#savings-rate-value",
     )!;
-    this.#savingsRateChange = this.querySelector<HTMLElement>(
-      "#savings-rate-change",
-    )!;
-    this.#savingsRateSubtitle = this.querySelector<HTMLElement>(
-      "#savings-rate-subtitle",
-    )!;
     this.#savingsLegendRate = this.querySelector<HTMLElement>(
       "#savings-legend-rate",
+    )!;
+    this.#savingsLegendAmount = this.querySelector<HTMLElement>(
+      "#savings-legend-amount",
+    )!;
+    this.#savingsLegendAverage = this.querySelector<HTMLElement>(
+      "#savings-legend-average",
+    )!;
+    this.#savingsLegendFill = this.querySelector<HTMLElement>(
+      "#savings-legend-fill",
     )!;
     this.#deductionsLegendRate = this.querySelector<HTMLElement>(
       "#deductions-legend-rate",
     )!;
+    this.#deductionsLegendAmount = this.querySelector<HTMLElement>(
+      "#deductions-legend-amount",
+    )!;
+    this.#deductionsLegendAverage = this.querySelector<HTMLElement>(
+      "#deductions-legend-average",
+    )!;
+    this.#deductionsLegendFill = this.querySelector<HTMLElement>(
+      "#deductions-legend-fill",
+    )!;
     this.#spendLegendRate =
       this.querySelector<HTMLElement>("#spend-legend-rate")!;
+    this.#spendLegendAmount = this.querySelector<HTMLElement>(
+      "#spend-legend-amount",
+    )!;
+    this.#spendLegendAverage = this.querySelector<HTMLElement>(
+      "#spend-legend-average",
+    )!;
+    this.#spendLegendFill =
+      this.querySelector<HTMLElement>("#spend-legend-fill")!;
     this.#annualSummaryCards = this.querySelector<HTMLElement>(
       "#annual-summary-cards",
     )!;
@@ -1270,6 +1201,7 @@ export class BudgetOverviewScreen
   #renderOverview(): void {
     // this.#renderAssignmentFilter();
     this.#renderMonthlySummary();
+    this.#renderDailySpendingInsights();
     this.#renderAnnualSummaryCards();
     this.#renderTrend();
     this.#renderInsights();
@@ -1339,435 +1271,119 @@ export class BudgetOverviewScreen
       .forEach((button) => button.append(getIcon("info")!));
   }
 
-  #renderPeriodControl(): void {
-    this.#periodControl.selection = this.#period;
-  }
-
-  #rangeSeries(): AnnualSpendTrendSeries | undefined {
-    return appState.get("budgetOverview").annualSpendTrendsByYear[
-      this.#selectedYear
-    ]?.[this.#period];
-  }
-
-  #rangeUnitFromPointer(event: PointerEvent): number {
-    const bounds = this.#rangeTrack.getBoundingClientRect();
-    const progress = bounds.width
-      ? (event.clientX - bounds.left) / bounds.width
-      : 0;
-    return Math.max(
-      0,
-      Math.min(this.#rangePointCount, progress * this.#rangePointCount),
-    );
-  }
-
-  #updateRangeFromPointer(event: PointerEvent): void {
-    const drag = this.#rangeDrag;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const pointerUnit = this.#rangeUnitFromPointer(event);
-    if (drag.action === "start") {
-      this.#rangeVisualStart = Math.max(
-        0,
-        Math.min(
-          drag.endBoundary - 1,
-          drag.startBoundary + pointerUnit - drag.pointerUnit,
-        ),
-      );
-      this.#rangeVisualEnd = drag.endBoundary;
-    } else if (drag.action === "end") {
-      this.#rangeVisualStart = drag.startBoundary;
-      this.#rangeVisualEnd = Math.min(
-        this.#rangePointCount,
-        Math.max(
-          drag.startBoundary + 1,
-          drag.endBoundary + pointerUnit - drag.pointerUnit,
-        ),
-      );
-    } else {
-      const length = drag.endBoundary - drag.startBoundary;
-      const requestedDelta = pointerUnit - drag.pointerUnit;
-      const delta = Math.max(
-        -drag.startBoundary,
-        Math.min(this.#rangePointCount - drag.endBoundary, requestedDelta),
-      );
-      this.#rangeVisualStart = drag.startBoundary + delta;
-      this.#rangeVisualEnd = this.#rangeVisualStart + length;
-    }
-    const series = this.#rangeSeries();
-    if (series) {
-      this.#renderRangeSelector(series);
-      this.#renderRangeBarSelection(
-        this.#rangeVisualStart,
-        this.#rangeVisualEnd,
-      );
-    }
-  }
-
-  #handleRangePointer(event: PointerEvent): void {
-    if (event.type === "pointerdown") {
-      const control = (event.target as Element | null)?.closest<HTMLElement>(
-        "[data-range-action]",
-      );
-      if (!control || !this.#range.contains(control)) return;
-      const action = control.dataset.rangeAction as ChartRangeAction;
-      event.preventDefault();
-      this.#rangeDrag = {
-        action,
-        pointerId: event.pointerId,
-        pointerUnit: this.#rangeUnitFromPointer(event),
-        startBoundary: this.#rangeStart,
-        endBoundary: this.#rangeEnd + 1,
-      };
-      this.#rangeVisualStart = this.#rangeStart;
-      this.#rangeVisualEnd = this.#rangeEnd + 1;
-      this.#range.classList.add("is-dragging");
-      this.#range.setPointerCapture?.(event.pointerId);
-      return;
-    }
-    if (!this.#rangeDrag || this.#rangeDrag.pointerId !== event.pointerId)
-      return;
-    if (event.type === "pointermove") {
-      this.#updateRangeFromPointer(event);
-      return;
-    }
-    if (event.type === "pointercancel") {
-      const series = this.#rangeSeries();
-      this.#rangeDrag = null;
-      this.#rangeVisualStart = this.#rangeStart;
-      this.#rangeVisualEnd = this.#rangeEnd + 1;
-      this.#range.classList.remove("is-dragging");
-      if (series) {
-        this.#renderRangeSelector(series);
-        this.#renderRangeBarSelection(
-          this.#rangeVisualStart,
-          this.#rangeVisualEnd,
-        );
-      }
-      return;
-    }
-    if (event.type === "pointerup") {
-      this.#updateRangeFromPointer(event);
-      this.#range.releasePointerCapture?.(event.pointerId);
-      const drag = this.#rangeDrag;
-      this.#rangeDrag = null;
-      if (drag?.action === "move") {
-        const length = drag.endBoundary - drag.startBoundary;
-        this.#rangeStart = Math.max(
-          0,
-          Math.min(
-            this.#rangePointCount - length,
-            Math.round(this.#rangeVisualStart),
-          ),
-        );
-        this.#rangeEnd = this.#rangeStart + length - 1;
-      } else {
-        this.#rangeStart = Math.max(
-          0,
-          Math.min(
-            this.#rangePointCount - 1,
-            Math.round(this.#rangeVisualStart),
-          ),
-        );
-        const endExclusive = Math.max(
-          this.#rangeStart + 1,
-          Math.min(this.#rangePointCount, Math.round(this.#rangeVisualEnd)),
-        );
-        this.#rangeEnd = endExclusive - 1;
-      }
-      this.#rangeVisualStart = this.#rangeStart;
-      this.#rangeVisualEnd = this.#rangeEnd + 1;
-      this.#range.classList.remove("is-dragging");
-      const series = this.#rangeSeries();
-      if (series) {
-        this.#renderRangeSelector(series);
-        this.#renderRangeBarSelection(
-          this.#rangeVisualStart,
-          this.#rangeVisualEnd,
-        );
-        this.#renderSelectedRangeTotals(series);
-      }
-    }
-  }
-
-  #handleRangeKeydown(event: KeyboardEvent): void {
-    const control = (event.target as Element | null)?.closest<HTMLElement>(
-      "[data-range-action]",
-    );
-    if (!control || !this.#range.contains(control)) return;
-    const action = control.dataset.rangeAction as ChartRangeAction;
-    const direction =
-      event.key === "ArrowLeft" || event.key === "ArrowDown"
-        ? -1
-        : event.key === "ArrowRight" || event.key === "ArrowUp"
-          ? 1
-          : 0;
-    if (!direction && event.key !== "Home" && event.key !== "End") return;
-    event.preventDefault();
-    if (action === "start") {
-      this.#rangeStart =
-        event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? this.#rangeEnd
-            : Math.max(
-                0,
-                Math.min(this.#rangeEnd, this.#rangeStart + direction),
-              );
-    } else if (action === "end") {
-      this.#rangeEnd =
-        event.key === "Home"
-          ? this.#rangeStart
-          : event.key === "End"
-            ? this.#rangePointCount - 1
-            : Math.max(
-                this.#rangeStart,
-                Math.min(this.#rangePointCount - 1, this.#rangeEnd + direction),
-              );
-    } else {
-      const length = this.#rangeEnd - this.#rangeStart;
-      const maximumStart = this.#rangePointCount - 1 - length;
-      const nextStart =
-        event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? maximumStart
-            : Math.max(0, Math.min(maximumStart, this.#rangeStart + direction));
-      this.#rangeStart = nextStart;
-      this.#rangeEnd = nextStart + length;
-    }
-    const series = this.#rangeSeries();
-    if (!series) return;
-    this.#rangeVisualStart = this.#rangeStart;
-    this.#rangeVisualEnd = this.#rangeEnd + 1;
-    this.#renderRangeSelector(series);
-    this.#renderRangeBarSelection(this.#rangeVisualStart, this.#rangeVisualEnd);
-    this.#renderSelectedRangeTotals(series);
-  }
-
-  #rangeDates(
-    series: AnnualSpendTrendSeries,
-    startIndex: number,
-    endIndex: number,
-  ): { start: string; end: string } {
-    const first = series.points[startIndex];
-    const last = series.points[endIndex];
-    const yearStart = `${series.year}-01-01`;
-    const yearEnd = `${series.year}-12-31`;
-    return {
-      start: first
-        ? first.periodStart < yearStart
-          ? yearStart
-          : first.periodStart
-        : yearStart,
-      end: last
-        ? last.periodEnd > yearEnd
-          ? yearEnd
-          : last.periodEnd
-        : yearEnd,
-    };
-  }
-
-  #selectedRangeDates(series: AnnualSpendTrendSeries): {
-    start: string;
-    end: string;
-  } {
-    return this.#rangeDates(series, this.#rangeStart, this.#rangeEnd);
-  }
-
-  #renderRangeSelector(series: AnnualSpendTrendSeries): void {
-    const count = series.points.length;
-    if (!count) return;
-    const left = (this.#rangeVisualStart / count) * 100;
-    const width =
-      ((this.#rangeVisualEnd - this.#rangeVisualStart) / count) * 100;
-    this.#rangeSelection.style.left = `${left}%`;
-    this.#rangeSelection.style.width = `${width}%`;
-    const visualStartIndex = Math.max(
-      0,
-      Math.min(count - 1, Math.round(this.#rangeVisualStart)),
-    );
-    const visualEndIndex = Math.max(
-      visualStartIndex,
-      Math.min(count - 1, Math.round(this.#rangeVisualEnd) - 1),
-    );
-    const { start, end } = this.#rangeDates(
-      series,
-      visualStartIndex,
-      visualEndIndex,
-    );
-    const startLabel = shortDate.format(new Date(`${start}T00:00:00Z`));
-    const endLabel = shortDate.format(new Date(`${end}T00:00:00Z`));
-    this.#rangeStartTooltip.textContent = startLabel;
-    this.#rangeEndTooltip.textContent = endLabel;
-    this.#rangeStartTooltip.style.left = `calc(${left}% + 7px)`;
-    this.#rangeEndTooltip.style.left = `calc(${left + width}% - 7px)`;
-    [this.#rangeStartHandle, this.#rangeEndHandle].forEach((handle) => {
-      handle.setAttribute("aria-valuemin", "1");
-      handle.setAttribute("aria-valuemax", String(count));
-      handle.setAttribute("aria-orientation", "horizontal");
-    });
-    this.#rangeStartHandle.setAttribute(
-      "aria-valuenow",
-      String(visualStartIndex + 1),
-    );
-    this.#rangeStartHandle.setAttribute("aria-valuetext", startLabel);
-    this.#rangeEndHandle.setAttribute(
-      "aria-valuenow",
-      String(visualEndIndex + 1),
-    );
-    this.#rangeEndHandle.setAttribute("aria-valuetext", endLabel);
-    this.#rangeMoveHandle.setAttribute(
-      "aria-label",
-      `Move selected range, ${startLabel} through ${endLabel}`,
-    );
-  }
-
-  #renderRangeBarSelection(start: number, end: number): void {
-    const selectedStart = Math.max(
-      0,
-      Math.min(this.#rangePointCount - 1, Math.round(start)),
-    );
-    const selectedEnd = Math.max(
-      selectedStart + 1,
-      Math.min(this.#rangePointCount, Math.round(end)),
-    );
-    this.#chart
-      .querySelectorAll<SVGRectElement>("[data-period-index]")
-      .forEach((bar) => {
-        const index = Number(bar.dataset.periodIndex);
-        const selected = index >= selectedStart && index < selectedEnd;
-        bar.classList.toggle("is-outside-range", !selected);
-      });
-  }
-
-  #renderSelectedRangeTotals(series: AnnualSpendTrendSeries): void {
-    const overview = appState.get("budgetOverview");
-    const summary = overview.annualSummaryCards[this.#selectedYear];
-    const { start, end } = this.#selectedRangeDates(series);
-    const assignmentId = overview.assignmentId;
-    const today = DateUtils.today;
-    const todayId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const dataEnd = end > todayId ? todayId : end;
-    const transactions = appController
-      .getTransactions()
-      .filter(
-        (transaction) =>
-          transaction.date >= start &&
-          transaction.date <= dataEnd &&
-          (assignmentId === null || transaction.assignmentId === assignmentId),
-      );
-    const spend = transactions.reduce(
-      (total, transaction) =>
-        transaction.type === "expense"
-          ? total + Number(transaction.amount || 0)
-          : total,
-      0,
-    );
-    const income = transactions.reduce(
-      (total, transaction) =>
-        transaction.type === "income"
-          ? total + Number(transaction.amount || 0)
-          : total,
-      0,
-    );
-    const startMonth = start.slice(0, 7);
-    const endMonth = end.slice(0, 7);
-    const deductions =
-      summary?.metrics.paycheckDeductions.months.reduce(
-        (total, month) =>
-          month.monthId >= startMonth && month.monthId <= endMonth
-            ? total + (month.value ?? 0)
-            : total,
-        0,
-      ) ?? 0;
-    const balance = income - spend + deductions;
-    const isFullYear =
-      this.#rangeStart === 0 && this.#rangeEnd === series.points.length - 1;
-    const startLabel = shortDate.format(new Date(`${start}T00:00:00Z`));
-    const endLabel = shortDate.format(new Date(`${end}T00:00:00Z`));
-    this.#totalBalance.textContent = money(balance, false);
-    this.#totalBalanceCaption.textContent = isFullYear
-      ? `Total balance in ${this.#selectedYear}`
-      : `Total balance · ${startLabel}–${endLabel}`;
-    this.#totalSpend.textContent = money(spend, false);
-    this.#totalIncome.textContent = money(income, false);
-    this.#totalDeductions.textContent = money(deductions, false);
-    this.#metrics.setAttribute(
-      "aria-label",
-      `Financial totals from ${startLabel} through ${endLabel}`,
-    );
+  #renderHeroComparison(
+    element: HTMLElement,
+    current: number,
+    previous: number,
+    hasPreviousData: boolean,
+    inverse: boolean,
+    previousYear: number,
+  ): void {
+    const change = hasPreviousData ? percentChange(current, previous) : null;
+    element.textContent =
+      change === null ? "—" : `${signedPercentage(change)} vs ${previousYear}`;
+    const favorable = change !== null && (inverse ? change < 0 : change > 0);
+    const unfavorable = change !== null && (inverse ? change > 0 : change < 0);
+    element.classList.toggle("is-positive", favorable);
+    element.classList.toggle("is-negative", unfavorable);
   }
 
   #renderTrend(): void {
-    const monthly = this.#period === "monthly";
-    const periodNoun = monthly ? "month" : "week";
-    const periodAdjective = monthly ? "monthly" : "weekly";
-    const overview = appState.get("budgetOverview");
-    const series =
-      overview.annualSpendTrendsByYear[this.#selectedYear]?.[this.#period];
-    this.#renderPeriodControl();
-
-    if (!series) {
-      this.#totalBalance.textContent = "—";
-      this.#totalBalanceCaption.textContent = `Total balance in ${this.#selectedYear}`;
-      this.#totalSpend.textContent = "—";
-      this.#totalIncome.textContent = "—";
-      this.#totalDeductions.textContent = "—";
-      this.#cleanupChart?.();
-      this.#cleanupChart = null;
-      this.#chart.replaceChildren();
-      this.#chart.hidden = true;
-      this.#range.hidden = true;
-      this.#legend.hidden = true;
+    const transactions = appController.getTransactions();
+    const accounts = APIs.accounts.accounts();
+    const rows = buildBudgetOverviewChartMonths(
+      transactions,
+      accounts,
+      this.#selectedYear,
+      DateUtils.today,
+    );
+    const previousRows = buildBudgetOverviewChartMonths(
+      transactions,
+      accounts,
+      this.#selectedYear - 1,
+      new Date(this.#selectedYear, 11, 31),
+    );
+    const hasData = rows.some((row) => row.hasData);
+    const totals = rows.reduce(
+      (total, row) => ({
+        income: total.income + (row.hasData ? row.income : 0),
+        spend: total.spend + (row.hasData ? row.spend : 0),
+        savings: total.savings + (row.hasData ? row.totalSavings : 0),
+      }),
+      { income: 0, spend: 0, savings: 0 },
+    );
+    const previousTotals = previousRows.reduce(
+      (total, row) => ({
+        income: total.income + (row.hasData ? row.income : 0),
+        spend: total.spend + (row.hasData ? row.spend : 0),
+        savings: total.savings + (row.hasData ? row.totalSavings : 0),
+      }),
+      { income: 0, spend: 0, savings: 0 },
+    );
+    const hasPreviousData = previousRows.some((row) => row.hasData);
+    this.#totalBalance.textContent = hasData
+      ? money(totals.savings, false)
+      : "—";
+    this.#totalBalanceCaption.textContent = `Total savings in ${this.#selectedYear}`;
+    this.#totalSpend.textContent = hasData ? money(totals.spend, false) : "—";
+    this.#totalIncome.textContent = hasData ? money(totals.income, false) : "—";
+    this.#renderHeroComparison(
+      this.#totalSpendComparison,
+      totals.spend,
+      previousTotals.spend,
+      hasData && hasPreviousData,
+      true,
+      this.#selectedYear - 1,
+    );
+    this.#renderHeroComparison(
+      this.#totalIncomeComparison,
+      totals.income,
+      previousTotals.income,
+      hasData && hasPreviousData,
+      false,
+      this.#selectedYear - 1,
+    );
+    this.#empty.hidden = hasData;
+    this.#chart.hidden = !hasData;
+    if (!hasData) {
+      this.#emptyTitle.textContent = "No financial history yet";
+      this.#emptyCopy.textContent =
+        "Monthly activity will appear here after you add transactions.";
+      this.#chart.data = { year: this.#selectedYear, series: [] };
       return;
     }
+    this.#chart.data = budgetOverviewChartData(
+      rows,
+      this.#chartDisplay,
+      this.#selectedYear,
+      previousRows,
+    );
+  }
 
-    this.#legendTotal.textContent = `${monthly ? "Monthly" : "Weekly"} spend`;
-    this.#previousLegend.hidden = !series.hasPriorYearTrend;
-    this.#cleanupChart?.();
-    this.#cleanupChart = null;
-    const empty = !series.hasExpenseHistory || series.latestTrend === null;
-    this.#emptyTitle.textContent = series.hasExpenseHistory
-      ? `First ${periodNoun} in progress`
-      : "No spending history yet";
-    this.#emptyCopy.textContent = series.hasExpenseHistory
-      ? `Your first ${periodAdjective} point will appear after the current ${periodNoun} ends.`
-      : `Completed ${periodNoun}s will appear here after you add expenses.`;
-    this.#empty.hidden = !empty;
-    this.#chart.hidden = empty;
-    this.#legend.hidden = empty;
-    this.#range.hidden = empty;
-    this.#rangePointCount = series.points.length;
-    if (
-      this.#rangeEnd < 0 ||
-      this.#rangeEnd >= this.#rangePointCount ||
-      this.#rangeStart > this.#rangeEnd
-    ) {
-      this.#rangeStart = 0;
-      this.#rangeEnd = Math.max(0, this.#rangePointCount - 1);
-    }
-    this.#rangeVisualStart = this.#rangeStart;
-    this.#rangeVisualEnd = this.#rangeEnd + 1;
-    this.#renderRangeSelector(series);
-    this.#renderSelectedRangeTotals(series);
-    if (!empty) {
-      this.#cleanupChart = mountChart(
-        this.#chart,
-        series,
-        this.#overlayManager,
-        () => ({
-          start: this.#rangeVisualStart,
-          end: this.#rangeVisualEnd,
-        }),
-      );
-    } else this.#chart.replaceChildren();
+  #renderDailySpendingInsights(): void {
+    const data = buildAnnualSpendingHeatmap(
+      appController.getTransactions(),
+      APIs.accounts.accounts(),
+      this.#selectedYear,
+    );
+    const { insights } = buildBudgetSpendingInsights({
+      data,
+      transactions: appController.getTransactions(),
+      accounts: APIs.accounts.accounts(),
+      categories: APIs.budget.listAllCategories(),
+      vendors: APIs.budget.listAllVendors(),
+      people: APIs.budget.listAllPeople(),
+    });
+    this.#spendingHeatmap.data = data;
+    this.#spendingInsights.data = insights;
   }
 
   #renderMonthlySummary(): void {
-    const summaries =
+    const overviewSummaries =
       appState.get("budgetOverview").monthlyTransactionSummaries;
     const currentDate = new Date();
     const currentYear = currentDate.getFullYear();
-    const availableYears = Object.keys(summaries)
+    const availableYears = Object.keys(overviewSummaries)
       .map(Number)
       .filter((year) => Number.isInteger(year) && year <= currentYear)
       .sort((a, b) => a - b);
@@ -1777,23 +1393,41 @@ export class BudgetOverviewScreen
       Math.min(currentYear, this.#selectedYear),
     );
 
-    this.#monthlySummaryYear.textContent = String(this.#selectedYear);
     const comparisonLabel = `vs ${this.#selectedYear - 1}`;
-    this.#monthlySummaryComparisonLabel.textContent = comparisonLabel;
     this.#topCategoriesComparisonLabel.textContent = comparisonLabel;
     this.#topVendorsComparisonLabel.textContent = comparisonLabel;
-    this.#monthlySummaryCaption.textContent = `Monthly transaction summary for ${this.#selectedYear}`;
-    this.#previousYearButton.disabled = this.#selectedYear <= earliestYear;
-    this.#nextYearButton.disabled = this.#selectedYear >= currentYear;
-    this.#previousYearButton.setAttribute(
-      "aria-label",
-      `Show ${this.#selectedYear - 1}`,
-    );
-    this.#nextYearButton.setAttribute(
-      "aria-label",
-      `Show ${this.#selectedYear + 1}`,
-    );
 
+    const assignments = appController.getBudgetOverviewAssignments();
+    if (
+      this.#monthlySummaryAssignmentId !== null &&
+      !assignments.some(({ id }) => id === this.#monthlySummaryAssignmentId)
+    ) {
+      this.#monthlySummaryAssignmentId = null;
+    }
+    this.#monthlySummaryAssignmentSelector.items = [
+      {
+        key: "all",
+        title: "All assignments",
+        isDefaultValue: this.#monthlySummaryAssignmentId === null,
+      },
+      ...assignments.map(({ id, name }) => ({
+        key: id,
+        title: name,
+        isDefaultValue: id === this.#monthlySummaryAssignmentId,
+      })),
+    ];
+
+    const selectedAssignment = assignments.find(
+      ({ id }) => id === this.#monthlySummaryAssignmentId,
+    );
+    this.#monthlySummaryTable.setAttribute(
+      "aria-label",
+      `Monthly transaction summary for ${this.#selectedYear}, ${selectedAssignment?.name ?? "all assignments"}`,
+    );
+    const ledger = appController.getMonthlyLedger(
+      this.#monthlySummaryAssignmentId,
+    );
+    const summaries = ledger.monthlyTransactionSummaries;
     const rows =
       summaries[this.#selectedYear] ??
       Array.from(
@@ -1807,56 +1441,109 @@ export class BudgetOverviewScreen
             hasData: false,
           }) satisfies MonthlyTransactionSummaryRow,
       );
-    const fragment = document.createDocumentFragment();
-    const previousYearRows = summaries[this.#selectedYear - 1];
-    rows.forEach((row, index) => {
-      const tableRow = document.createElement("tr");
+    const previousRows = summaries[this.#selectedYear - 1] ?? [];
+    const totals = {
+      income: 0,
+      spend: 0,
+      net: 0,
+      previousNet: 0,
+      hasPreviousData: false,
+    };
+    const tableRows: MonthlySummaryTableRow[] = rows.map((row, index) => {
       const isCurrentMonth =
         this.#selectedYear === currentYear && index === currentDate.getMonth();
-      if (isCurrentMonth) tableRow.classList.add("is-current");
-
-      const monthHeader = document.createElement("th");
-      monthHeader.scope = "row";
-      const monthLabel = document.createElement("span");
-      monthLabel.textContent = monthName.format(
+      const monthLabel = `${monthName.format(
         new Date(`${row.monthId}-01T00:00:00Z`),
-      );
-      monthHeader.append(monthLabel);
-      if (isCurrentMonth) {
-        const progress = document.createElement("small");
-        progress.textContent = "In progress";
-        monthHeader.append(progress);
+      )}${isCurrentMonth ? " · In progress" : ""}`;
+
+      const hasData = row.hasData;
+      const income = row.income ?? 0;
+      const spend = row.spend ?? 0;
+      const net = income - spend;
+      const previousRow = previousRows[index];
+      const previousHasData = Boolean(previousRow?.hasData);
+      const previousNet =
+        (previousRow?.income ?? 0) - (previousRow?.spend ?? 0);
+      const difference = hasData && previousHasData ? net - previousNet : null;
+      if (hasData) {
+        totals.income += income;
+        totals.spend += spend;
+        totals.net += net;
       }
-      tableRow.append(monthHeader);
-
-      const values = [row.spend, row.income, row.netBalance];
-      values.forEach((value, valueIndex) => {
-        const cell = document.createElement("td");
-        cell.textContent = row.hasData && value !== null ? money(value) : "—";
-        if (valueIndex === 2 && row.hasData && value !== null) {
-          if (value > 0) cell.classList.add("is-positive");
-          else if (value < 0) cell.classList.add("is-negative");
-        }
-        tableRow.append(cell);
-      });
-      const difference = monthlyNetDifference(row, previousYearRows?.[index]);
-
-      const comparisonCell = document.createElement("td");
-
-      comparisonCell.textContent =
-        difference === null ? "—" : signedMoney(difference);
-
-      comparisonCell.classList.add("comparison");
-
-      if (difference) {
-        if (difference > 0) comparisonCell.classList.add("is-positive");
-        if (difference < 0) comparisonCell.classList.add("is-negative");
+      if (previousHasData) {
+        totals.previousNet += previousNet;
+        totals.hasPreviousData = true;
       }
-
-      tableRow.append(comparisonCell);
-      fragment.append(tableRow);
+      return {
+        month: monthLabel,
+        income: hasData ? summaryTableMoney(income) : "—",
+        spend: hasData ? summaryTableMoney(spend) : "—",
+        amount: hasData ? summaryTableMoney(net) : "—",
+        comparison:
+          difference === null ? "—" : signedSummaryTableMoney(difference),
+        amountValue: net,
+        comparisonValue: difference,
+        hasData,
+      };
     });
-    this.#monthlySummaryBody.replaceChildren(fragment);
+    const yearDifference = totals.hasPreviousData
+      ? totals.net - totals.previousNet
+      : null;
+    const cellClass = (value: number | null): DataTableCellClasses =>
+      value !== null && value > 0
+        ? "is-positive"
+        : value !== null && value < 0
+          ? "is-negative"
+          : "";
+
+    const tableData: DataTableData<MonthlySummaryTableRow> = {
+      columns: [
+        { key: "month", title: "Month", cellClass: ["detail"] },
+        {
+          key: "income",
+          title: "Income",
+          cellClass: ["numeric", "align-right"],
+        },
+        { key: "spend", title: "Spend", cellClass: ["numeric", "align-right"] },
+        {
+          key: "amount",
+          title: "Net",
+          headerClass: "align-right",
+          cellClass: [
+            "numeric",
+            "align-right",
+            "strong",
+            (row) => cellClass(row.hasData ? row.amountValue : null),
+          ],
+        },
+        {
+          key: "comparison",
+          title: comparisonLabel,
+          headerClass: "align-right",
+          textAlign: "right",
+          sizing: "narrow",
+          cellClass: [
+            "comparison",
+            "align-right",
+            (row) => cellClass(row.comparisonValue),
+          ],
+        },
+      ],
+      rows: tableRows,
+      footer: {
+        cells: [
+          "Year total",
+          summaryTableMoney(totals.income),
+          summaryTableMoney(totals.spend),
+          summaryTableMoney(totals.net),
+          yearDifference === null
+            ? "—"
+            : signedSummaryTableMoney(yearDifference),
+        ],
+      },
+    };
+
+    this.#monthlySummaryTable.data = tableData;
   }
 
   #renderRanking(
@@ -1876,7 +1563,7 @@ export class BudgetOverviewScreen
       label.title = item.name;
       const value = document.createElement("strong");
       value.className = "rank-total";
-      value.textContent = money(item.total);
+      value.textContent = summaryTableMoney(item.total);
       const inflation = document.createElement("span");
       inflation.className = "rank-inflation";
       inflation.textContent =
@@ -1913,32 +1600,16 @@ export class BudgetOverviewScreen
     const budgetOverviewState = appState.get("budgetOverview");
     const summary = budgetOverviewState.annualSummaryCards[this.#selectedYear];
     const income = overview?.totalIncome ?? 0;
-    const budgetSavings = overview?.netBalance ?? 0;
-    const paycheckDeductions = summary?.metrics.paycheckDeductions.total ?? 0;
+    const deductedSavings = deductedInvestmentSavings(
+      appController.getTransactions(),
+      APIs.accounts.accounts(),
+      this.#selectedYear,
+    );
     const breakdown = savingsRateBreakdown({
       income,
       spend: overview?.totalSpend ?? 0,
-      deductions: paycheckDeductions,
+      deductions: deductedSavings,
     });
-    const previousBreakdown =
-      summary?.metrics.income.comparison !== null &&
-      summary?.metrics.income.comparison !== undefined
-        ? savingsRateBreakdown({
-            income:
-              summary.metrics.income.total - summary.metrics.income.comparison,
-            spend:
-              summary.metrics.spend.comparison === null
-                ? 0
-                : summary.metrics.spend.total -
-                  summary.metrics.spend.comparison,
-            deductions:
-              summary.metrics.paycheckDeductions.comparison === null
-                ? 0
-                : summary.metrics.paycheckDeductions.total -
-                  summary.metrics.paycheckDeductions.comparison,
-          })
-        : null;
-    const rateChange = savingsRateChange(breakdown, previousBreakdown);
     const segments: Array<[SVGPathElement, number]> = [
       [this.#savingsRateBudgetRing, breakdown.savingsPercent],
       [this.#savingsRatePaycheckRing, breakdown.deductionsPercent],
@@ -1959,16 +1630,15 @@ export class BudgetOverviewScreen
         getComputedStyle(this).getPropertyValue("--donut-track"),
       ) || 8;
     const halfGapPercent =
-      (DONUT_SEGMENT_GAP / 2 / (Math.PI * DONUT_RADIUS)) * 100;
+      (DONUT_SEGMENT_GAP / 2 / (Math.PI * 2 * DONUT_RADIUS)) * 100;
 
     positionedSegments.forEach(({ ring, length, start, end }) => {
       const visibleIndex = visibleSegments.findIndex(
         ({ ring: visibleRing }) => visibleRing === ring,
       );
       if (visibleIndex >= 0) {
-        let startInset = visibleIndex > 0 ? halfGapPercent : 0;
-        let endInset =
-          visibleIndex < visibleSegments.length - 1 ? halfGapPercent : 0;
+        let startInset = visibleSegments.length > 1 ? halfGapPercent : 0;
+        let endInset = visibleSegments.length > 1 ? halfGapPercent : 0;
         if (startInset + endInset >= length) {
           const scale = (length * 0.8) / (startInset + endInset);
           startInset *= scale;
@@ -1982,62 +1652,66 @@ export class BudgetOverviewScreen
         ring.removeAttribute("d");
       }
       ring.style.visibility = length > 0 ? "visible" : "hidden";
-      ring.style.pointerEvents = length > 0 ? "fill" : "none";
-      ring.tabIndex = length > 0 ? 0 : -1;
+      ring.style.pointerEvents = "none";
     });
-    const semanticSegments: Array<[SVGPathElement, string, number, number]> = [
-      [
-        this.#savingsRateSpentRing,
-        "Spend",
-        overview?.totalSpend ?? 0,
-        breakdown.spendPercent,
-      ],
-      [
-        this.#savingsRatePaycheckRing,
-        "Deductions",
-        paycheckDeductions,
-        breakdown.deductionsPercent,
-      ],
-      [
-        this.#savingsRateBudgetRing,
-        "Savings",
-        Math.max(0, budgetSavings),
-        breakdown.savingsPercent,
-      ],
-    ];
-    semanticSegments.forEach(([ring, name, amount, segmentPercentage]) => {
-      const formattedAmount = money(Math.abs(amount));
-      const formattedPercentage = `${percentage.format(segmentPercentage)}%`;
-      ring.dataset.tooltipName = name;
-      ring.dataset.tooltipAmount = formattedAmount;
-      ring.dataset.tooltipPercent = formattedPercentage;
-      ring.setAttribute(
-        "aria-label",
-        `${name}: ${formattedAmount}, ${formattedPercentage}`,
-      );
-    });
+
+    const activeMonths = summary?.metrics.totalSavings.months ?? [];
+    const activeMonthCount = activeMonths.filter(
+      ({ hasData }) => hasData,
+    ).length;
+    const updateLegend = (
+      rateElement: HTMLElement,
+      amountElement: HTMLElement,
+      averageElement: HTMLElement,
+      fillElement: HTMLElement,
+      amount: number,
+      segmentPercentage: number,
+    ): void => {
+      const normalizedAmount = Math.max(0, amount);
+      const average = activeMonthAverage(normalizedAmount, activeMonths);
+      rateElement.textContent = `${legendPercentage.format(segmentPercentage)}%`;
+      // amountElement.textContent = money(normalizedAmount, false) + " total";
+      averageElement.textContent =
+        average === null
+          ? "No monthly average"
+          : `${money(average, false)} per month`;
+      fillElement.style.width = `${Math.min(
+        100,
+        Math.max(0, segmentPercentage),
+      )}%`;
+    };
+
+    updateLegend(
+      this.#savingsLegendRate,
+      this.#savingsLegendAmount,
+      this.#savingsLegendAverage,
+      this.#savingsLegendFill,
+      breakdown.amountSaved,
+      breakdown.savingsPercent,
+    );
+    updateLegend(
+      this.#deductionsLegendRate,
+      this.#deductionsLegendAmount,
+      this.#deductionsLegendAverage,
+      this.#deductionsLegendFill,
+      deductedSavings,
+      breakdown.deductionsPercent,
+    );
+    updateLegend(
+      this.#spendLegendRate,
+      this.#spendLegendAmount,
+      this.#spendLegendAverage,
+      this.#spendLegendFill,
+      overview?.totalSpend ?? 0,
+      breakdown.spendPercent,
+    );
+
     this.#savingsRateValue.textContent =
       breakdown.rate === null ? "—" : `${percentage.format(breakdown.rate)}%`;
-    this.#savingsRateChange.hidden = rateChange === null;
-    this.#savingsRateChange.classList.toggle(
-      "is-negative",
-      rateChange !== null && rateChange < 0,
-    );
-    this.#savingsRateChange.textContent =
-      rateChange === null
-        ? ""
-        : `${rateChange > 0 ? "+" : rateChange < 0 ? "−" : ""}${percentage.format(Math.abs(rateChange))}%`;
-    this.#savingsRateSubtitle.textContent =
-      breakdown.rate === null
-        ? "No income data"
-        : `${money(Math.floor(breakdown.amountSaved), false)} of ${money(Math.floor(breakdown.totalIncome), false)} saved`;
-    this.#savingsLegendRate.textContent = `${legendPercentage.format(breakdown.savingsPercent)}%`;
-    this.#deductionsLegendRate.textContent = `${legendPercentage.format(breakdown.deductionsPercent)}%`;
-    this.#spendLegendRate.textContent = `${legendPercentage.format(breakdown.spendPercent)}%`;
     this.#savingsRateDescription.textContent =
       breakdown.rate === null
         ? `No income data for ${this.#selectedYear}.`
-        : `${percentage.format(breakdown.rate)} percent of income saved in ${this.#selectedYear}. Savings ${legendPercentage.format(breakdown.savingsPercent)} percent, deductions ${legendPercentage.format(breakdown.deductionsPercent)} percent, and spend ${legendPercentage.format(breakdown.spendPercent)} percent.`;
+        : `${percentage.format(breakdown.rate)} percent of income saved in ${this.#selectedYear}. Budget savings ${legendPercentage.format(breakdown.savingsPercent)} percent, deducted savings ${legendPercentage.format(breakdown.deductionsPercent)} percent, and spend ${legendPercentage.format(breakdown.spendPercent)} percent. Monthly averages use ${activeMonthCount} ${activeMonthCount === 1 ? "month" : "months"} with data.`;
   }
 }
 

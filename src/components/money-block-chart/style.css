@@ -1,0 +1,130 @@
+money-block-chart {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+
+  .money-block-chart__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .money-block-chart__section-label {
+    fill: var(--color-text);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .money-block-chart__section-title {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-wider);
+  }
+
+  .money-block-chart__section-rate {
+    fill: var(--color-text-subtle);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-regular);
+  }
+
+  .money-block-chart__section-amount {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .money-block-chart__rect {
+    cursor: pointer;
+    stroke: var(--color-surface);
+    stroke-width: 2;
+    transition: fill 120ms ease;
+  }
+
+  .money-block-chart__block.is-income .money-block-chart__rect {
+    fill: var(--color-chart-income);
+  }
+
+  .money-block-chart__block.is-spent .money-block-chart__rect {
+    fill: var(--color-warning);
+  }
+
+  .money-block-chart__block.is-saved .money-block-chart__rect {
+    fill: var(--color-chart-savings);
+  }
+
+  .money-block-chart__block.is-income.is-active .money-block-chart__rect,
+  .money-block-chart__block.is-income:hover .money-block-chart__rect {
+    fill: color-mix(in srgb, var(--color-chart-income) 78%, var(--color-text));
+  }
+
+  .money-block-chart__block.is-spent.is-active .money-block-chart__rect,
+  .money-block-chart__block.is-spent:hover .money-block-chart__rect {
+    fill: color-mix(in srgb, var(--color-warning) 78%, var(--color-text));
+  }
+
+  .money-block-chart__block.is-saved.is-active .money-block-chart__rect,
+  .money-block-chart__block.is-saved:hover .money-block-chart__rect {
+    fill: color-mix(in srgb, var(--color-chart-savings) 78%, var(--color-text));
+  }
+
+  .money-block-chart__block:focus-visible .money-block-chart__rect {
+    stroke: var(--color-focus);
+    stroke-width: 3;
+  }
+
+  .money-block-chart__arrow {
+    fill: none;
+    pointer-events: none;
+    stroke: var(--color-text);
+    stroke-width: 1.5;
+  }
+
+  marker path {
+    fill: var(--color-text);
+  }
+
+  .money-block-chart__tooltip-anchor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .money-block-chart__empty {
+    min-height: 12rem;
+    margin: 0;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+}
+
+tool-tip .money-block-chart__tooltip-detail {
+  margin-top: var(--space-2xs);
+  color: var(--color-text-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+tool-tip .money-block-chart__tooltip-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+tool-tip .money-block-chart__tooltip-swatch.is-income {
+  background: var(--color-chart-income);
+}
+
+tool-tip .money-block-chart__tooltip-swatch.is-spent {
+  background: var(--color-warning);
+}
+
+tool-tip .money-block-chart__tooltip-swatch.is-saved {
+  background: var(--color-chart-savings);
+}

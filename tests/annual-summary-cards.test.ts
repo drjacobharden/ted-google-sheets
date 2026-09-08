@@ -21,7 +21,8 @@ function transaction(date: string, amount: number, type: TransactionType): Budge
 const paycheckAccount: InvestmentAccount = {
   id: "paycheck",
   name: "401(k)",
-  source: "paycheck",
+  source: "deduction",
+  type: "investment",
   assignmentId: "shared",
   active: true,
   createdAt: "2025-01-01",
@@ -46,6 +47,7 @@ function contribution(
     accountId,
     month,
     amount,
+    source: accountId.includes("paycheck") ? "deduction" : "manual",
     createdAt: `${month}-01`,
     createdBy: "user",
     updatedAt: `${month}-01`,

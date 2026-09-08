@@ -1,6 +1,8 @@
 export interface SavingsRateBreakdownInput {
+  /** Gross income, including all deduction-sourced income. */
   income: number;
   spend: number;
+  /** The portion of gross income represented by deducted savings. */
   deductions: number;
 }
 
@@ -11,6 +13,10 @@ export interface SavingsRateBreakdown {
   savingsPercent: number;
   deductionsPercent: number;
   spendPercent: number;
+}
+
+export interface ActiveMonth {
+  hasData: boolean;
 }
 
 const finite = (value: number): number =>
@@ -27,9 +33,9 @@ export function savingsRateBreakdown({
   const normalizedIncome = finite(income);
   const normalizedSpend = finite(spend);
   const normalizedDeductions = finite(deductions);
-  const totalIncome = normalizedIncome + normalizedDeductions;
+  const totalIncome = normalizedIncome;
   const amountSaved =
-    normalizedIncome - normalizedSpend + normalizedDeductions;
+    normalizedIncome - normalizedSpend - normalizedDeductions;
 
   if (totalIncome <= 0) {
     return {
@@ -42,18 +48,18 @@ export function savingsRateBreakdown({
     };
   }
 
-  const rate = (amountSaved / totalIncome) * 100;
-  const spendPercent = clamp((normalizedSpend / totalIncome) * 100, 0, 100);
-  const remainingAfterSpend = 100 - spendPercent;
+  const spendPercent = (normalizedSpend / totalIncome) * 100;
   const deductionsPercent = clamp(
     (normalizedDeductions / totalIncome) * 100,
     0,
-    remainingAfterSpend,
+    100,
   );
-  const savingsPercent = Math.max(
+  const savingsPercent = clamp(
+    (amountSaved / totalIncome) * 100,
     0,
-    100 - spendPercent - deductionsPercent,
+    100,
   );
+  const rate = savingsPercent + deductionsPercent;
 
   return {
     amountSaved,
@@ -63,6 +69,15 @@ export function savingsRateBreakdown({
     deductionsPercent,
     spendPercent,
   };
+}
+
+/** Divides a yearly total only by months that contain financial data. */
+export function activeMonthAverage(
+  total: number,
+  months: ReadonlyArray<ActiveMonth>,
+): number | null {
+  const activeMonths = months.filter(({ hasData }) => hasData).length;
+  return activeMonths === 0 ? null : finite(total) / activeMonths;
 }
 
 /** Returns the signed percentage-point change when both years have income. */

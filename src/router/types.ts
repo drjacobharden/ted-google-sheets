@@ -1,31 +1,35 @@
 import type { EntityKind } from "../api/budget-api";
 
 export type BudgetingRouteName =
-  | "budgeting/overview"
-  | "budgeting/transactions"
-  | "budgeting/categories"
-  | "budgeting/vendors"
-  | "budgeting/people"
-  | "budgeting/entity-detail"
-  | "budgeting/entity-archive";
+  | "budget-overview"
+  | "money-flow"
+  | "transactions"
+  | "categories"
+  | "vendors"
+  | "people"
+  | "entity-detail"
+  | "entity-archive";
 
 export type RouteName =
   | BudgetingRouteName
   | "dashboard"
+  | "new-transaction"
   | "import"
   | "sync"
   | "settings"
   | "investment-overview"
   | "investment-accounts"
-  | "investment-account-detail";
+  | "investment-debts"
+  | "investment-ledger"
+  | "investment-account-detail"
+  | "investment-debt-detail";
 
 export type DrawerName =
-  | "new"
   | "edit"
   | "review"
+  | "entity-new"
   | "entity-edit"
-  | "investment-account"
-  | "investment-month";
+  | "investment-account";
 
 export interface KnownRouteParams {
   year?: string;
@@ -38,8 +42,10 @@ export interface KnownRouteParams {
   entityKind?: EntityKind;
   entityId?: string;
   investmentAccountId?: string;
-  investmentMonth?: string;
-  investmentReviewId?: string;
+  investmentLedgerSource?: string;
+  accountDraftName?: string;
+  accountCreateRequestId?: string;
+  transactionKind?: "expense" | "income" | "account";
 }
 
 export type RouteParams = Record<string, string> & Partial<KnownRouteParams>;

@@ -7,48 +7,38 @@ import type {
   RouteParams,
 } from "./types";
 
-export const DEFAULT_ROUTE: RouteName = "budgeting/overview";
+export const DEFAULT_ROUTE: RouteName = "budget-overview";
+
+const BUDGETING_ROUTES = new Set<BudgetingRouteName>([
+  "budget-overview", "money-flow", "transactions", "categories", "vendors", "people",
+  "entity-detail", "entity-archive",
+]);
 
 const ROUTES = new Set<RouteName>([
-  "budgeting/overview",
-  "budgeting/transactions",
-  "budgeting/categories",
-  "budgeting/vendors",
-  "budgeting/people",
-  "budgeting/entity-detail",
-  "budgeting/entity-archive",
+  ...BUDGETING_ROUTES,
   "dashboard",
+  "new-transaction",
   "import",
   "sync",
   "settings",
   "investment-overview",
   "investment-accounts",
+  "investment-debts",
+  "investment-ledger",
   "investment-account-detail",
+  "investment-debt-detail",
 ]);
 
-const LEGACY_BUDGET_ROUTES: Record<string, BudgetingRouteName> = {
-  "budget-overview": "budgeting/overview",
-  transactions: "budgeting/transactions",
-  categories: "budgeting/categories",
-  vendors: "budgeting/vendors",
-  people: "budgeting/people",
-  "entity-detail": "budgeting/entity-detail",
-  "entity-archive": "budgeting/entity-archive",
+const NESTED_BUDGET_ROUTES: Record<string, BudgetingRouteName> = {
+  "budgeting/overview": "budget-overview",
+  "budgeting/flow": "money-flow",
+  "budgeting/transactions": "transactions",
+  "budgeting/categories": "categories",
+  "budgeting/vendors": "vendors",
+  "budgeting/people": "people",
+  "budgeting/entity-detail": "entity-detail",
+  "budgeting/entity-archive": "entity-archive",
 };
-
-const ENTITY_PATHS = {
-  category: "categories",
-  vendor: "vendors",
-  assignment: "people",
-} as const;
-
-function entityPath(kind: string | undefined): string {
-  return kind === "vendor"
-    ? ENTITY_PATHS.vendor
-    : kind === "assignment"
-      ? ENTITY_PATHS.assignment
-      : ENTITY_PATHS.category;
-}
 
 let navigationGuard: NavigationGuard | null = null;
 let started = false;
@@ -61,7 +51,7 @@ function decodePathPart(value: string): string {
   }
 }
 
-function parseBudgetingPath(
+function parseNestedBudgetingPath(
   path: string,
   params: RouteParams,
 ): ParsedRoute | null {
@@ -80,18 +70,18 @@ function parseBudgetingPath(
 
   if (!tail) {
     return {
-      name: `budgeting/${collection}` as BudgetingRouteName,
+      name: collection as BudgetingRouteName,
       params,
     };
   }
   if (tail === "archive") {
     return {
-      name: "budgeting/entity-archive",
+      name: "entity-archive",
       params: { ...params, kind },
     };
   }
   return {
-    name: "budgeting/entity-detail",
+    name: "entity-detail",
     params: { ...params, kind, id: decodePathPart(tail) },
   };
 }
@@ -102,10 +92,10 @@ export function parseRoute(hash = location.hash): ParsedRoute {
   const params = Object.fromEntries(
     new URLSearchParams(query),
   ) as RouteParams;
-  const legacy = LEGACY_BUDGET_ROUTES[requestedPath];
-  if (legacy) return { name: legacy, params };
+  const nested = NESTED_BUDGET_ROUTES[requestedPath];
+  if (nested) return { name: nested, params };
 
-  const budgeting = parseBudgetingPath(requestedPath, params);
+  const budgeting = parseNestedBudgetingPath(requestedPath, params);
   if (budgeting) return budgeting;
 
   const name = ROUTES.has(requestedPath as RouteName)
@@ -117,7 +107,7 @@ export function parseRoute(hash = location.hash): ParsedRoute {
 export function isBudgetingRoute(
   name: RouteName,
 ): name is BudgetingRouteName {
-  return name.startsWith("budgeting/");
+  return BUDGETING_ROUTES.has(name as BudgetingRouteName);
 }
 
 export function currentRoute(): RouteName {
@@ -128,42 +118,19 @@ export function currentParams(): RouteParams {
   return { ...parseRoute().params };
 }
 
-function budgetingPath(name: BudgetingRouteName, params: RouteParams): string {
-  if (name === "budgeting/entity-detail") {
-    const collection = entityPath(params.kind);
-    return params.id
-      ? `budgeting/${collection}/${encodeURIComponent(params.id)}`
-      : `budgeting/${collection}`;
-  }
-  if (name === "budgeting/entity-archive") {
-    const collection = entityPath(params.kind);
-    return `budgeting/${collection}/archive`;
-  }
-  return name;
-}
-
 export function routeHash(
   name: RouteName,
   params: Partial<Record<string, unknown>> = {},
 ): string {
   const destination = ROUTES.has(name) ? name : DEFAULT_ROUTE;
-  const routeParams = { ...params } as RouteParams;
-  const path = isBudgetingRoute(destination)
-    ? budgetingPath(destination, routeParams)
-    : destination;
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    const pathParam =
-      isBudgetingRoute(destination) &&
-      (destination === "budgeting/entity-detail" ||
-        destination === "budgeting/entity-archive") &&
-      (key === "kind" || key === "id");
-    if (value !== undefined && value !== null && value !== "" && !pathParam) {
+    if (value !== undefined && value !== null && value !== "") {
       query.set(key, String(value));
     }
   });
   const suffix = query.toString();
-  return `#/${path}${suffix ? `?${suffix}` : ""}`;
+  return `#/${destination}${suffix ? `?${suffix}` : ""}`;
 }
 
 function dispatchRoute(parsed = parseRoute()): void {

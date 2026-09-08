@@ -1,11 +1,121 @@
-<page-title eyebrow="Details" title="Entity" hidden>
-  <button class="primary-button compact" id="edit-entity" type="button">Edit entity</button>
-</page-title>
-<div class="summary-grid entity-detail-screen__summary" id="entity-summary-grid" aria-label="Entity summary"></div>
-<div class="ledger-card entity-detail-screen__card">
-  <div class="table-header"><div><h2>Activity</h2><p id="entity-transaction-count">0 transactions</p></div></div>
-  <div class="transaction-state" id="entity-transaction-state"></div>
-  <div class="table-wrap" id="entity-transaction-table-wrap" hidden>
-    <table><thead><tr><th scope="col">Date</th><th scope="col">Category</th><th scope="col">Vendor</th><th scope="col">Assignment</th><th scope="col">Note</th><th scope="col" class="amount-cell">Amount</th></tr></thead><tbody id="entity-transaction-list"></tbody></table>
-  </div>
-</div>
+<article class="entity-detail editorial-theme">
+  <header class="tab-header">
+    <div class="tab-header-title">
+      <div class="tab-header-title__row">
+        <h1 id="entity-detail-title">Entity</h1>
+        <custom-button
+          class="tertiary circle"
+          leading-icon="pencil"
+          data-header-action="edit-entity"
+          aria-label="Edit entity"
+        ></custom-button>
+      </div>
+      <p id="entity-detail-subtitle">Viewing summary for the selected year.</p>
+    </div>
+  </header>
+
+  <dl
+    class="entity-detail__focus-grid"
+    id="entity-detail-focus-grid"
+    aria-label="Entity summary"
+  >
+    <div>
+      <dt id="entity-detail-total-label">Total</dt>
+      <dd id="entity-detail-total">—</dd>
+      <small
+        id="entity-detail-total-subline"
+        class="entity-detail__focus-subline"
+        hidden
+      ></small>
+    </div>
+    <div>
+      <dt id="entity-detail-average-label">Average transaction</dt>
+      <dd id="entity-detail-average">—</dd>
+      <small
+        id="entity-detail-average-subline"
+        class="entity-detail__focus-subline"
+        hidden
+      ></small>
+    </div>
+    <div>
+      <dt id="entity-detail-count-label">Transaction count</dt>
+      <dd id="entity-detail-count">—</dd>
+      <small
+        id="entity-detail-count-subline"
+        class="entity-detail__focus-subline"
+        hidden
+      ></small>
+    </div>
+    <div>
+      <dt id="entity-detail-comparison-label">vs previous year</dt>
+      <dd id="entity-detail-comparison">—</dd>
+      <small
+        id="entity-detail-comparison-subline"
+        class="entity-detail__focus-subline"
+        hidden
+      ></small>
+    </div>
+  </dl>
+
+  <section
+    class="entity-detail__chart-section editorial-section"
+    aria-labelledby="entity-monthly-summary-title"
+  >
+    <header class="editorial-section-header">
+      <h2 id="entity-monthly-summary-title" class="type-section-title">
+        Trends <span class="type-meta">— fig. 01</span>
+      </h2>
+      <dropdown-menu
+        id="entity-chart-mode"
+        variant="ghost"
+        label="Monthly spend"
+        aria-label="Select entity chart presentation"
+      ></dropdown-menu>
+    </header>
+    <div class="entity-detail__chart-frame editorial-surface">
+      <data-chart
+        id="entity-monthly-chart"
+        class="entity-monthly-chart"
+        aria-label="Monthly entity totals"
+      ></data-chart>
+    </div>
+  </section>
+
+  <section
+    class="entity-detail__transactions editorial-section"
+    aria-labelledby="entity-transactions-title"
+  >
+    <header class="entity-detail__transactions-header">
+      <h2 id="entity-transactions-title" class="type-section-title">
+        Transactions
+      </h2>
+      <div
+        class="entity-detail__tools"
+        aria-label="Entity transaction controls"
+      >
+        <dropdown-menu
+          id="entity-transaction-month-selector"
+          variant="editorial"
+          label="All months"
+          aria-label="Select transaction month"
+        ></dropdown-menu>
+        <search-bar
+          id="entity-transaction-search"
+          variant="editorial"
+          placeholder="search"
+          aria-label="Search transactions by name"
+        ></search-bar>
+        <filter-bar
+          id="entity-transaction-filter"
+          variant="editorial"
+        ></filter-bar>
+      </div>
+    </header>
+    <data-table
+      id="entity-transaction-table"
+      sortable
+      interactive
+      aria-label="Entity transactions"
+    ></data-table>
+  </section>
+</article>

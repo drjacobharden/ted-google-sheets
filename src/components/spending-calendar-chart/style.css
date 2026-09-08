@@ -1,0 +1,115 @@
+spending-calendar-chart {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 20rem;
+
+  .spending-calendar-chart__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .spending-calendar-chart__month {
+    outline: none;
+  }
+
+  .spending-calendar-chart__month-label,
+  .spending-calendar-chart__quarter-label {
+    fill: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .spending-calendar-chart__month-label {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+  }
+
+  .spending-calendar-chart__quarter-label {
+    font-size: var(--text-2xs);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+  }
+
+  .spending-calendar-chart__quarter-value {
+    fill: var(--color-text);
+    font-size: var(--text-xs);
+  }
+
+  .spending-calendar-chart__balance {
+    stroke: var(--color-surface);
+    stroke-width: 2;
+    transition: fill 120ms ease;
+  }
+
+  .spending-calendar-chart__month.is-positive .spending-calendar-chart__balance {
+    fill: var(--color-chart-income);
+  }
+
+  .spending-calendar-chart__month.is-negative .spending-calendar-chart__balance {
+    fill: var(--color-warning);
+  }
+
+  .spending-calendar-chart__month.is-neutral .spending-calendar-chart__balance {
+    fill: var(--color-surface-subtle);
+  }
+
+  .spending-calendar-chart__balance-value {
+    fill: var(--color-text-inverse);
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    pointer-events: none;
+  }
+
+  .spending-calendar-chart__month.is-neutral .spending-calendar-chart__balance-value {
+    fill: var(--color-text-muted);
+  }
+
+  .spending-calendar-chart__month:hover .spending-calendar-chart__balance,
+  .spending-calendar-chart__month.is-active .spending-calendar-chart__balance {
+    fill: color-mix(in srgb, var(--color-text) 18%, currentColor);
+  }
+
+  .spending-calendar-chart__month.is-positive:hover .spending-calendar-chart__balance,
+  .spending-calendar-chart__month.is-positive.is-active .spending-calendar-chart__balance {
+    fill: color-mix(in srgb, var(--color-chart-income) 78%, var(--color-text));
+  }
+
+  .spending-calendar-chart__month.is-negative:hover .spending-calendar-chart__balance,
+  .spending-calendar-chart__month.is-negative.is-active .spending-calendar-chart__balance {
+    fill: color-mix(in srgb, var(--color-warning) 78%, var(--color-text));
+  }
+
+  .spending-calendar-chart__month.is-neutral:hover .spending-calendar-chart__balance,
+  .spending-calendar-chart__month.is-neutral.is-active .spending-calendar-chart__balance {
+    fill: color-mix(in srgb, var(--color-surface-subtle) 78%, var(--color-text));
+  }
+
+  .spending-calendar-chart__month:focus-visible .spending-calendar-chart__balance {
+    stroke: var(--color-focus);
+    stroke-width: 3;
+  }
+
+  .spending-calendar-chart__tooltip-anchor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .spending-calendar-chart__empty {
+    display: grid;
+    min-height: 18rem;
+    place-items: center;
+    margin: 0;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+}

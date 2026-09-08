@@ -4,6 +4,7 @@ export const filterBarTemplate = `
     data-filter-action="toggle"
     label="Filters"
     leading-icon="filter"
+    aria-label="Filters"
     aria-haspopup="dialog"
     aria-expanded="false"
   ></custom-button>

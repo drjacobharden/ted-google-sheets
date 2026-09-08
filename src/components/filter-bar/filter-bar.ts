@@ -22,6 +22,7 @@ export interface AvailableFilter<T> {
   key: keyof T;
   title: string;
   dataType: FilterDataType;
+  searchable?: boolean;
 }
 
 export interface AppliedFilter<T> {
@@ -382,6 +383,9 @@ export class FilterBar<T> extends HTMLElement {
     dropdown.dataset.filterId = draft.id;
     dropdown.dataset.filterRole = role;
     dropdown.setAttribute("label", label);
+    if (this.getAttribute("variant") === "editorial") {
+      dropdown.setAttribute("variant", "editorial");
+    }
     return dropdown;
   }
 
@@ -390,11 +394,19 @@ export class FilterBar<T> extends HTMLElement {
     available: AvailableFilter<T> | null,
   ): HTMLElement {
     if (available && this.#dataTypeKind(available) === "enum") {
-      return this.#createDropdown(
+      const dropdown = this.#createDropdown(
         draft,
         "value",
         draft.value || "Select value",
       );
+      if (available.searchable) {
+        dropdown.toggleAttribute("searchable", true);
+        dropdown.setAttribute(
+          "search-placeholder",
+          `Search ${available.title.toLowerCase()}`,
+        );
+      }
+      return dropdown;
     }
 
     const input = document.createElement("input");
@@ -464,7 +476,7 @@ export class FilterBar<T> extends HTMLElement {
       return this.#availableFilters.map(({ key, title }) => ({
         key: key as string,
         title,
-        defaultValue: key === draft.key,
+        isDefaultValue: key === draft.key,
       }));
     }
 
@@ -474,7 +486,7 @@ export class FilterBar<T> extends HTMLElement {
         (operator) => ({
           key: operator,
           title: operator,
-          defaultValue: operator === draft.operator,
+          isDefaultValue: operator === draft.operator,
         }),
       );
     }
@@ -484,7 +496,7 @@ export class FilterBar<T> extends HTMLElement {
     return values.map((value) => ({
       key: value,
       title: value,
-      defaultValue: value === draft.value,
+      isDefaultValue: value === draft.value,
     }));
   }
 

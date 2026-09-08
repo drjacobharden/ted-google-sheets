@@ -1,0 +1,103 @@
+<section
+  class="new-transaction-page editorial-theme"
+  aria-labelledby="new-transaction-title"
+>
+  <header class="tab-header">
+    <div class="tab-header-title">
+      <h1 id="new-transaction-title">New transaction</h1>
+    </div>
+  </header>
+
+  <nav
+    class="budgeting-header__sections new-transaction-page__kind-nav"
+    aria-label="Transaction input actions"
+  >
+    <segmented-control
+      id="new-transaction-kind"
+      variant="section-tabs"
+      aria-label="Transaction type"
+    ></segmented-control>
+    <custom-button
+      class="ghost-button new-transaction-page__import-button"
+      leading-icon="import"
+      data-action="open-import"
+      label="Bulk import"
+      type="button"
+    ></custom-button>
+  </nav>
+
+  <form id="new-transaction-form" novalidate>
+    <input type="hidden" name="type" value="expense" />
+    <div class="new-transaction-page__grid">
+      <date-picker
+        id="new-transaction-date-inline"
+        class="new-transaction-page__calendar new-transaction-page__date--inline"
+        variant="inline"
+      ></date-picker>
+
+      <div class="new-transaction-page__fields">
+        <div class="new-transaction-page__amount-editor">
+          <currency-input
+            id="new-transaction-amount"
+            min="0.01"
+          ></currency-input>
+        </div>
+
+        <div class="new-transaction-page__detail-list">
+          <date-picker
+            id="new-transaction-date-compact"
+            class="new-transaction-page__date--compact"
+            name="date"
+            alignment="right"
+          ></date-picker>
+          <div
+            class="new-transaction-page__detail-row new-transaction-page__payment-type"
+          >
+            <span class="new-transaction-page__detail-label">Payment Type</span>
+            <payment-type-select
+              id="new-transaction-payment-type"
+              kind="expense"
+              value="positive"
+            ></payment-type-select>
+          </div>
+          <category-select></category-select>
+          <vendor-select></vendor-select>
+          <people-select></people-select>
+          <account-select
+            id="new-transaction-account"
+            label="Account"
+            account-type="all"
+            create-via-drawer
+            hidden
+          ></account-select>
+          <source-select id="new-transaction-source"></source-select>
+          <label class="form-field new-transaction-page__notes">
+            <span>Description<small>(optional)</small></span>
+            <input
+              id="new-transaction_notes"
+              name="notes"
+              type="text"
+              maxlength="500"
+              placeholder="enter note..."
+            />
+          </label>
+        </div>
+
+        <div class="new-transaction-page__footer">
+          <p
+            id="new-transaction-message"
+            class="form-message"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <custom-button
+            class="primary-button"
+            data-action="submit-transaction"
+            type="submit"
+            label="Add transaction"
+          ></custom-button>
+        </div>
+      </div>
+    </div>
+  </form>
+</section>

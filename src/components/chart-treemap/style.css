@@ -1,0 +1,139 @@
+treemap-chart {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 20rem;
+  height: clamp(20rem, 46vw, 34rem);
+  padding-inline: var(--space-md);
+
+  .treemap-chart__svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .treemap-chart__category {
+    --treemap-label-color: var(--color-text);
+    --treemap-subheading-color: var(--color-text-muted);
+    cursor: pointer;
+    outline: none;
+  }
+
+  .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-chart-growth-positive-lightest);
+    fill: var(--treemap-growth-fill);
+    stroke: var(--color-surface);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    transition:
+      fill 120ms ease,
+      opacity 120ms ease;
+  }
+
+  .treemap-chart__category.is-growth-positive-1 .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-chart-growth-positive-subdued);
+  }
+
+  .treemap-chart__category.is-growth-positive-2 .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-chart-growth-positive-muted);
+  }
+
+  .treemap-chart__category.is-growth-positive-3 .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-chart-growth-positive);
+  }
+
+  .treemap-chart__category.is-growth-negative-0 .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-chart-growth-negative-lightest);
+  }
+
+  .treemap-chart__category.is-growth-negative-1 .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-chart-growth-negative-subdued);
+  }
+
+  .treemap-chart__category.is-growth-negative-2 .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-chart-growth-negative-muted);
+  }
+
+  .treemap-chart__category.is-growth-negative-3 .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-chart-growth-negative);
+  }
+
+  .treemap-chart__category.is-growth-neutral .treemap-chart__rect {
+    --treemap-growth-fill: var(--color-surface-subtle);
+  }
+
+  .treemap-chart__category.is-growth-positive-1,
+  .treemap-chart__category.is-growth-positive-2,
+  .treemap-chart__category.is-growth-positive-3,
+  .treemap-chart__category.is-growth-negative-2,
+  .treemap-chart__category.is-growth-negative-3 {
+    --treemap-label-color: var(--color-text-inverse);
+    --treemap-subheading-color: color-mix(
+      in srgb,
+      var(--color-text-inverse) 72%,
+      transparent
+    );
+  }
+
+  .treemap-chart__category:hover .treemap-chart__rect,
+  .treemap-chart__category.is-active .treemap-chart__rect,
+  .treemap-chart__category:focus-visible .treemap-chart__rect {
+    fill: color-mix(in srgb, var(--treemap-growth-fill) 78%, var(--color-text));
+  }
+
+  .treemap-chart__category:focus-visible .treemap-chart__rect {
+    stroke: var(--color-focus);
+    stroke-width: 2.5;
+  }
+
+  .treemap-chart__label-group {
+    pointer-events: none;
+  }
+
+  .treemap-chart__label {
+    fill: var(--treemap-label-color);
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-tight);
+  }
+
+  .treemap-chart__percentage {
+    fill: var(--treemap-subheading-color);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .treemap-chart__tooltip-anchor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .treemap-chart__empty {
+    display: grid;
+    min-height: 20rem;
+    place-items: center;
+    margin: 0;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+}
+
+tool-tip .treemap-chart__tooltip {
+  .data-chart__tooltip-row i.is-detail {
+    visibility: hidden;
+  }
+}
+
+@media (max-width: 48rem) {
+  treemap-chart {
+    min-height: 18rem;
+    height: 26rem;
+  }
+}

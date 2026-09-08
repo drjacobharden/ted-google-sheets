@@ -1,13 +1,5 @@
 /* Fonts */
 @font-face {
-  font-family: "Chewy";
-  src: url("../assets/fonts/Chewy-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  letter-spacing: 0.2em;
-}
-
-@font-face {
   font-family: "Urbanist";
   src: url("../assets/fonts/Urbanist-Regular.woff2") format("woff2");
   font-weight: 400;
@@ -95,11 +87,6 @@ textarea {
   text-wrap: pretty;
 }
 
-.logo {
-  font-family: "Chewy";
-  line-height: 1;
-}
-
 /* Text presets */
 h1 {
   font-size: var(--text-size-700);
@@ -151,8 +138,7 @@ p {
 }
 
 input,
-span,
-td {
+span {
   font-size: var(--text-size-100);
   font-weight: 400;
   letter-spacing: 0.03em;

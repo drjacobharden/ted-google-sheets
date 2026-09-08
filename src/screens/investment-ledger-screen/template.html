@@ -1,0 +1,47 @@
+<section
+  class="transaction-ledger editorial-theme"
+  data-screen="investment-ledger"
+>
+  <header class="tab-header">
+    <div class="tab-header-title">
+      <div class="tab-header-title__row">
+        <h1>Account activity</h1>
+        <custom-button
+          class="tertiary circle"
+          leading-icon="plus"
+          data-ledger-entry
+          aria-label="Add investment activity"
+        ></custom-button>
+      </div>
+      <p id="investment-ledger-subtitle">
+        Showing investment activity for the selected year.
+      </p>
+    </div>
+    <div
+      class="transaction-ledger__tools"
+      aria-label="Investment ledger controls"
+    >
+      <dropdown-menu
+        id="investment-ledger-month"
+        variant="editorial"
+        label="All months"
+        aria-label="Select investment month"
+      ></dropdown-menu
+      ><search-bar
+        id="investment-ledger-search"
+        variant="editorial"
+        placeholder="search"
+        aria-label="Search investment ledger"
+      ></search-bar
+      ><filter-bar
+        id="investment-ledger-filter"
+        variant="editorial"
+      ></filter-bar>
+    </div>
+  </header>
+  <data-table
+    sortable
+    interactive
+    aria-label="Investment activity"
+  ></data-table>
+</section>

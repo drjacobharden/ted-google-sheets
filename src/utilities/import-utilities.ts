@@ -169,22 +169,29 @@
       match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       return match ? isoDate(match[1], match[2], match[3]) : null;
     }
-    const slash = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
-    if (!slash) return null;
-    if (format.endsWith("YYYY") && slash[3].length !== 4) return null;
+    const separator = format.includes("-") ? "-" : "/";
+    const separated = text.match(
+      new RegExp(`^(\\d{1,2})\\${separator}(\\d{1,2})\\${separator}(\\d{2}|\\d{4})$`),
+    );
+    if (!separated) return null;
+    if (format.endsWith("YYYY") && separated[3].length !== 4) return null;
     if (
       format.endsWith("YY") &&
       !format.endsWith("YYYY") &&
-      slash[3].length !== 2
+      separated[3].length !== 2
     )
       return null;
-    let year = Number(slash[3]);
+    let year = Number(separated[3]);
     if (year < 100) year += year >= 70 ? 1900 : 2000;
-    const dayFirst = format === "DD/MM/YYYY" || format === "DD/MM/YY";
+    const dayFirst =
+      format === "DD/MM/YYYY" ||
+      format === "DD/MM/YY" ||
+      format === "DD-MM-YYYY" ||
+      format === "DD-MM-YY";
     return isoDate(
       year,
-      dayFirst ? slash[2] : slash[1],
-      dayFirst ? slash[1] : slash[2],
+      dayFirst ? separated[2] : separated[1],
+      dayFirst ? separated[1] : separated[2],
     );
   }
 
@@ -227,6 +234,10 @@
       "MM/DD/YY",
       "DD/MM/YYYY",
       "DD/MM/YY",
+      "MM-DD-YYYY",
+      "MM-DD-YY",
+      "DD-MM-YYYY",
+      "DD-MM-YY",
     ].filter((format) =>
       values.every((value) => Boolean(parseDate(value, format))),
     );
@@ -242,6 +253,10 @@
       "MM/DD/YY",
       "DD/MM/YYYY",
       "DD/MM/YY",
+      "MM-DD-YYYY",
+      "MM-DD-YY",
+      "DD-MM-YYYY",
+      "DD-MM-YY",
     ].filter((format) =>
       values.every((value) => Boolean(parseDate(value, format))),
     );
@@ -432,6 +447,8 @@
       );
     const source = Number(row.sourceAmount);
     if (!Number.isFinite(source)) return Number.NaN;
+    if (row.amountSignConvention === "allPositiveRefundsNegative")
+      return Math.round(source * 100) / 100;
     const expensesNegative = row.amountSignConvention === "expensesNegative";
     const multiplier =
       type === "expense"
@@ -444,12 +461,27 @@
     return Math.round(source * multiplier * 100) / 100;
   }
 
+  function deriveAccountAmount(row) {
+    if (row.amountEdited) return row.amount;
+    if (row.sourceDirection === "debit")
+      return Math.round(Math.abs(Number(row.sourceAmount)) * 100) / 100;
+    if (row.sourceDirection === "credit")
+      return Math.round(-Math.abs(Number(row.sourceAmount)) * 100) / 100;
+    const source = Number(row.sourceAmount);
+    if (!Number.isFinite(source)) return Number.NaN;
+    if (row.amountSignConvention === "expensesNegative")
+      return Math.round(-source * 100) / 100;
+    return Math.round(source * 100) / 100;
+  }
+
   function suggestBudgetType(row) {
     if (row.type === "income" || row.type === "expense") return row.type;
     if (row.sourceDirection === "debit") return "expense";
     if (row.sourceDirection === "credit") return "income";
     const source = Number(row.sourceAmount);
     if (!Number.isFinite(source) || source === 0) return "expense";
+    if (row.amountSignConvention === "allPositiveRefundsNegative")
+      return "expense";
     return row.amountSignConvention === "expensesNegative"
       ? source < 0
         ? "expense"
@@ -498,7 +530,7 @@
     const vendorMappings = new Map(
       (bundle.vendorMappings || [])
         .filter((item) => item.active !== false)
-        .map((item) => [item.normalizedSourceDescription, item.vendorId]),
+        .map((item) => [item.normalizedSourceDescription, item]),
     );
     const personMappings = new Map(
       (bundle.personMappings || [])
@@ -551,6 +583,7 @@
       const amount = Number.isFinite(sourceAmount)
         ? Math.round(sourceAmount * 100) / 100
         : sourceAmount;
+      const savedPayee = vendorMappings.get(normalizedVendorDescription);
       const base = {
         stagingId: stagingId("budget", source.sourceRowNumber),
         sourceRowNumber: source.sourceRowNumber,
@@ -570,7 +603,13 @@
         normalizedCategoryDescription,
         personDescription,
         normalizedPersonDescription,
-        vendorId: vendorMappings.get(normalizedVendorDescription) || "",
+        vendorId: savedPayee?.vendorId || "",
+        accountId: savedPayee?.accountId || "",
+        payeeKind: savedPayee?.accountId
+          ? "account"
+          : savedPayee?.vendorId
+            ? "vendor"
+            : "",
         vendorResolution: vendorMappings.has(normalizedVendorDescription)
           ? "saved"
           : "unresolved",
@@ -588,6 +627,13 @@
         warnings: [],
         errors: [],
       };
+
+      if (base.accountId) {
+        const account = references.accounts.find((item) => item.id === base.accountId);
+        base.accountType = account?.type;
+        base.source = account?.source === "deduction" ? "deduction" : "manual";
+        base.personId = "";
+      }
 
       const inferredType = suggestBudgetType(base);
       if (mapping.autoPopulateCategory && normalizedCategoryDescription) {
@@ -608,6 +654,7 @@
       const effectiveType = base.type || inferredType;
       if (
         !base.vendorId &&
+        !base.accountId &&
         mapping.autoPopulateVendor &&
         normalizedVendorDescription &&
         effectiveType === "expense"
@@ -649,6 +696,29 @@
     const vendor = references.vendors.find(
       (item) => item.id === row.vendorId && item.active !== false,
     );
+    const account = references.accounts.find(
+      (item) => item.id === row.accountId && item.active !== false,
+    );
+    if (row.accountId) {
+      const amount = deriveAccountAmount(row);
+      if (!profile?.id) errors.push("Choose and save an import profile.");
+      if (!row.date) errors.push("Enter a valid date.");
+      if (!Number.isFinite(Number(amount)) || Number(amount) === 0)
+        errors.push("Enter a non-zero amount.");
+      if (row.amountLayoutError) errors.push(row.amountLayoutError);
+      if (!account) errors.push("Choose an active account.");
+      const accountCategory = references.categories.find(
+        (item) => item.id === account?.categoryId && item.active !== false && item.type === "expense",
+      );
+      const accountAssignment = references.people.find(
+        (item) => item.id === account?.assignmentId && item.active !== false,
+      );
+      if (account?.type === "debt" && !accountCategory)
+        errors.push("This debt account needs an expense category.");
+      if (account && !accountAssignment)
+        errors.push("This account needs an assignment.");
+      return { errors, warnings, type: "", amount };
+    }
     const type = category?.type || "";
     const amount = deriveBudgetAmount(row, type);
     if (!profile?.id) errors.push("Choose and save an import profile.");

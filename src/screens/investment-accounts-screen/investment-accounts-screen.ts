@@ -1,178 +1,184 @@
-import { router } from "../../router/router";
-import { appController } from "../../state/app-controller";
-import { InvestmentView } from "../../utilities/investment-view";
-import { createTransactionRow } from "../../utilities/transaction-row";
-import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
-import type { InvestmentAccount } from "../../api/investment-api";
-import { escapeHTML, messageFromError, money } from "../../utilities/view-formatters";
+import type { AvailableFilter } from "../../components/filter-bar/filter-bar";
+import type { DataTableColumn } from "../../components/data-table/data-table";
+import { router } from "../../router/router";
+import { InvestmentView } from "../../utilities/investment-view";
+import { signedPercent } from "../../utilities/entity-ledger";
+import { escapeHTML, netFlows, summaryMoney } from "../../utilities/view-formatters";
+import { EditorialEntityLedgerScreen } from "../editorial-entity-ledger";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
 
-/** Displays investment accounts and the account creation form. */
-export class InvestmentAccountsScreen extends HTMLElement implements EventListenerObject {
-  #form!: HTMLFormElement;
-  #message!: HTMLElement;
-  #list!: HTMLElement;
-  #count!: HTMLElement;
-  #includeArchived = false;
-  #listening = false;
+interface InvestmentAccountLedgerRow {
+  id: string;
+  name: string;
+  source: string;
+  assignment: string;
+  contributions: number;
+  balance: number;
+  previousBalance: number;
+  growth: number | null;
+  roi: number | null;
+}
 
-  /** Initializes the screen and subscribes to investment data events. */
-  connectedCallback(): void {
-    if (!this.dataset.initialized) {
-      this.dataset.initialized = "true";
-      this.classList.add("screen");
-      this.dataset.screen = "investment-accounts";
-      this.append(template.content.cloneNode(true));
-      this.#captureElements();
-    }
-    if (this.#listening) return;
-    this.#listening = true;
-    this.#form.addEventListener("submit", this);
-    this.#list.addEventListener("click", this);
-    this.#list.addEventListener("keydown", this);
-    window.addEventListener("budget:investments-changed", this);
-    window.addEventListener("budget:investments-loaded", this);
-    window.addEventListener("budget:people-changed", this);
-    this.#render();
+function endMonthForYear(year: number): string {
+  const today = new Date();
+  return year === today.getFullYear()
+    ? String(today.getMonth() + 1).padStart(2, "0")
+    : "12";
+}
+
+function percentageChange(current: number, previous: number): number | null {
+  return previous === 0
+    ? null
+    : ((current - previous) / Math.abs(previous)) * 100;
+}
+
+/** Displays investment accounts in the shared editorial entity-ledger format. */
+export class InvestmentAccountsScreen extends EditorialEntityLedgerScreen<InvestmentAccountLedgerRow> {
+  protected get screenName() { return "investment-accounts"; }
+  protected get screenTemplate() { return template; }
+  protected get monthSelectorId() { return null; }
+  protected get searchId() { return "#investment-account-search"; }
+  protected get filterId() { return "#investment-account-filter"; }
+  protected get subtitleId() { return "#investment-account-ledger-subtitle"; }
+
+  protected currentYear(): number {
+    const requested = Number(router.currentParams().year);
+    return Number.isInteger(requested) ? requested : new Date().getFullYear();
   }
 
-  /** Removes the listeners owned by this route screen. */
-  disconnectedCallback(): void {
-    if (!this.#listening) return;
-    this.#listening = false;
-    this.#form.removeEventListener("submit", this);
-    this.#list.removeEventListener("click", this);
-    this.#list.removeEventListener("keydown", this);
-    window.removeEventListener("budget:investments-changed", this);
-    window.removeEventListener("budget:investments-loaded", this);
-    window.removeEventListener("budget:people-changed", this);
+  protected dataEventNames(): string[] {
+    return [
+      "budget:accounts-changed",
+      "budget:accounts-loaded",
+      "budget:people-changed",
+      "budget:reference-data-changed",
+    ];
   }
 
-  /** Routes form, row, and application events to the corresponding behavior. */
-  handleEvent(event: Event): void {
-    if (event.type === "submit") this.#handleSubmit(event);
-    else if (event.type === "click") this.#handleListClick(event);
-    else if (event.type === "keydown") this.#handleListKeydown(event);
-    else {
-      this.#populateAssignments();
-      this.#render();
-    }
+  protected availableFilters(year: number): AvailableFilter<InvestmentAccountLedgerRow>[] {
+    const assignments = [...new Set(
+      APIs.budget.listAllPeople().map((item) => item.name),
+    )].sort((left, right) => left.localeCompare(right));
+    return [
+      { key: "name", title: "Name", dataType: "string" },
+      {
+        key: "source",
+        title: "Source",
+        dataType: ["Manual transfer", "Paycheck deduction"],
+      },
+      { key: "assignment", title: "Assignment", dataType: assignments },
+      { key: "contributions", title: "Contributions", dataType: "number" },
+      { key: "balance", title: "Balance", dataType: "number" },
+      { key: "growth", title: "Account growth", dataType: "number" },
+      { key: "roi", title: "ROI", dataType: "number" },
+    ];
   }
 
-  /** Captures the typed elements cloned from the screen template. */
-  #captureElements(): void {
-    this.#form = this.querySelector<HTMLFormElement>("#investment-account-form")!;
-    this.#message = this.querySelector<HTMLElement>(".investment-accounts-screen__message")!;
-    this.#list = this.querySelector<HTMLElement>("#investment-account-list")!;
-    this.#count = this.querySelector<HTMLElement>("#investment-account-count")!;
-    this.#populateAssignments();
+  protected columns(year: number): DataTableColumn<InvestmentAccountLedgerRow>[] {
+    return [
+      {
+        key: "name",
+        title: "Name",
+        sizing: 32,
+        cellClass: ["primary"],
+        formatter: (value) => escapeHTML(value),
+        subline: (row) => escapeHTML(`${row.source} · ${row.assignment}`),
+      },
+      {
+        key: "contributions",
+        title: "Contributions",
+        sizing: 17,
+        textAlign: "right",
+        formatter: (value) => summaryMoney(value),
+        cellClass: ["numeric", "align-right"],
+      },
+      {
+        key: "balance",
+        title: "Balance",
+        sizing: 17,
+        textAlign: "right",
+        formatter: (value) => summaryMoney(value),
+        cellClass: ["strong", "align-right"],
+      },
+      {
+        key: "growth",
+        title: "Account growth",
+        sizing: 17,
+        textAlign: "right",
+        formatter: (value) => signedPercent(value as number | null),
+        cellClass: ["comparison", "align-right", (row) => row.growth === null ? "is-muted" : row.growth >= 0 ? "is-positive" : "is-negative"],
+        sorter: (row) => row.growth ?? Number.NEGATIVE_INFINITY,
+      },
+      {
+        key: "roi",
+        title: "ROI",
+        sizing: 17,
+        textAlign: "right",
+        formatter: (value) => signedPercent(value as number | null),
+        cellClass: ["comparison", "align-right", (row) => row.roi === null ? "is-muted" : row.roi >= 0 ? "is-positive" : "is-negative"],
+        sorter: (row) => row.roi ?? Number.NEGATIVE_INFINITY,
+      },
+    ];
   }
 
-  #populateAssignments(): void {
-    const select = this.#form.elements.namedItem("assignmentId");
-    if (!(select instanceof HTMLSelectElement)) return;
-    const assignments = APIs.budget.listPeople();
-    select.replaceChildren(
-      ...assignments.map((assignment) => {
-        const option = document.createElement("option");
-        option.value = assignment.id;
-        option.textContent = assignment.name;
-        option.selected = assignment.id === APIs.budget.SHARED_ASSIGNMENT_ID;
-        return option;
-      }),
+  protected sourceRows(year: number): InvestmentAccountLedgerRow[] {
+    const month = endMonthForYear(year);
+    const end = `${year}-${month}`;
+    const previousEnd = `${year - 1}-${month}`;
+    const balances = InvestmentView.latestByAccount(end);
+    const previousBalances = InvestmentView.latestByAccount(previousEnd);
+    const contributions = APIs.accounts.investmentActivity();
+    const assignments = new Map(
+      APIs.budget.listAllPeople().map((item) => [item.id, item.name]),
     );
+
+    return APIs.accounts.accounts().filter((item) => item.type === "investment")
+      .filter((account) => account.active !== false)
+      .map((account) => {
+        const balance = Number(balances.get(account.id)?.balance ?? 0);
+        const previousBalance = Number(
+          previousBalances.get(account.id)?.balance ?? 0,
+        );
+        return {
+          id: account.id,
+          name: account.name,
+          source: InvestmentView.sourceLabel(account.source),
+          assignment: assignments.get(account.assignmentId) ?? "Shared",
+          contributions: netFlows(contributions.filter((item) =>
+            item.accountId === account.id &&
+            item.month >= `${year}-01` &&
+            item.month <= end,
+          )),
+          balance,
+          previousBalance,
+          growth: percentageChange(balance, previousBalance),
+          roi: (() => {
+            const rate = InvestmentView.accountPerformance(account.id, year).rate;
+            return rate === null ? null : rate * 100;
+          })(),
+        };
+      })
+      .sort((left, right) =>
+        right.balance - left.balance || left.name.localeCompare(right.name),
+      );
   }
 
-  /** Renders all active investment accounts and their latest balances. */
-  #render(): void {
-    const accounts = APIs.investment
-      .accounts()
-      .filter((account) => this.#includeArchived || account.active !== false);
-    const latest = InvestmentView.latestByAccount();
-    this.#count.textContent = `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`;
-    if (!accounts.length) {
-      this.#list.innerHTML = '<div class="investment-accounts-screen__empty">Add your first investment account.</div>';
-      return;
-    }
-    this.#list.replaceChildren(...accounts.map((account) => this.#createAccountRow(account, Number(latest.get(account.id)?.balance ?? 0))));
+  protected subtitle(year: number): string {
+    return `Investment balances and contributions in ${year}`;
   }
 
-  /** Creates an accessible row for an investment account. */
-  #createAccountRow(account: InvestmentAccount, balance: number): HTMLElement {
-    const row = document.createElement("article");
-    row.className = "investment-accounts-screen__item";
-    row.dataset.investmentAccount = account.id;
-    row.tabIndex = 0;
-    row.setAttribute("role", "button");
-    row.setAttribute("aria-label", `View ${account.name} balance history`);
-    const assignment = APIs.budget.listAllPeople().find(
-      (item) => item.id === account.assignmentId,
-    );
-    row.innerHTML = `<span class="investment-accounts-screen__avatar" aria-hidden="true">${escapeHTML(account.name.charAt(0).toUpperCase())}</span><div class="investment-accounts-screen__details"><strong>${escapeHTML(account.name)}</strong><p>${InvestmentView.sourceLabel(account.source)} · ${escapeHTML(assignment?.name ?? "Shared")}</p></div><strong class="investment-accounts-screen__balance">${money(balance)}</strong>`;
-    return row;
-  }
-
-  /** Navigates to an investment account selected by mouse or keyboard. */
-  #openAccount(row: HTMLElement | null): void {
-    const accountId = row?.dataset.investmentAccount;
-    if (accountId) router.navigate("investment-account-detail", { accountId });
-  }
-
-  /** Handles pointer activation inside the account list. */
-  #handleListClick(event: Event): void {
-    this.#openAccount(eventTargetElement(event)?.closest<HTMLElement>("[data-investment-account]") ?? null);
-  }
-
-  /** Handles keyboard activation inside the account list. */
-  #handleListKeydown(event: Event): void {
-    if (!(event instanceof KeyboardEvent) || (event.key !== "Enter" && event.key !== " ")) return;
-    const row = eventTargetElement(event)?.closest<HTMLElement>("[data-investment-account]") ?? null;
-    if (!row) return;
-    event.preventDefault();
-    this.#openAccount(row);
-  }
-
-  /** Creates a new investment account from validated form values. */
-  #handleSubmit(event: Event): void {
-    event.preventDefault();
-    this.#message.textContent = "";
-    if (!this.#form.checkValidity()) {
-      this.#form.reportValidity();
-      return;
-    }
-    const data = new FormData(this.#form);
-    const name = data.get("name");
-    const source = data.get("source");
-    const assignmentId = data.get("assignmentId");
-    if (
-      typeof name !== "string"
-      || !isInvestmentSource(source)
-      || typeof assignmentId !== "string"
-    ) return;
-    try {
-      const account = APIs.investment.addAccount({ name, source, assignmentId });
-      this.#form.reset();
-      const assignmentSelect = this.#form.elements.namedItem("assignmentId");
-      if (assignmentSelect instanceof HTMLSelectElement)
-        assignmentSelect.value = APIs.budget.SHARED_ASSIGNMENT_ID;
-      const nameInput = this.#form.elements.namedItem("name");
-      if (nameInput instanceof HTMLInputElement) nameInput.focus();
-      this.#setMessage(`${account.name} added. Syncing…`, "success");
-      this.#render();
-    } catch (error: unknown) {
-      this.#setMessage(messageFromError(error), "error");
-    }
-  }
-
-  /** Updates the accessible form message and visual state. */
-  #setMessage(message: string, state: "success" | "error"): void {
-    this.#message.className = `investment-accounts-screen__message ${state}`;
-    this.#message.textContent = message;
+  protected openRow(row: InvestmentAccountLedgerRow, year: number): void {
+    router.navigate("investment-account-detail", {
+      accountId: row.id,
+      year: String(year),
+    });
   }
 }
 
-if (!customElements.get("investment-accounts-screen")) customElements.define("investment-accounts-screen", InvestmentAccountsScreen);
+if (!customElements.get("investment-accounts-screen")) {
+  customElements.define("investment-accounts-screen", InvestmentAccountsScreen);
+}

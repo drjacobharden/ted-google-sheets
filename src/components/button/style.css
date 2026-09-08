@@ -1,13 +1,13 @@
 custom-button {
   height: var(--button-height);
   padding: 3.5px 15px 3.5px 12px;
-  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: 0;
   user-select: none;
+  border-radius: var(--radius-subtle);
   -webkit-user-select: none; /* Safari */
   -moz-user-select: none; /* Firefox */
   -ms-user-select: none; /* IE 10 and IE 11 */
@@ -30,19 +30,20 @@ custom-button {
   }
 
   &.secondary-button {
-    background-color: var(--secondary-button);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-text-subtle);
     color: var(--text);
 
     &:hover {
-      background-color: var(--secondary-button-hover);
+      background-color: var(--color-surface-raised);
     }
 
     &:active {
-      background-color: var(--secondary-button-active);
+      background-color: var(--color-surface);
     }
 
     &[active] {
-      background-color: var(--surface-highlight);
+      background-color: var(--color-surface-raised);
     }
   }
 
@@ -51,26 +52,26 @@ custom-button {
     color: var(--text);
 
     &:hover {
-      background-color: var(--secondary-button-hover);
+      background-color: var(--color-surface-raised);
     }
 
     &:active {
-      background-color: var(--secondary-button-active);
+      background-color: var(--color-surface-raised);
       opacity: 0.6;
     }
   }
 
   &.tertiary {
     background-color: transparent;
-    border: 1px solid var(--main-chart-gridline);
+    border: 1px solid var(--color-rule);
     color: var(--text);
 
     &:hover {
-      background-color: var(--main-chart-inactive);
+      background-color: var(--color-rule);
     }
 
     &:active {
-      background-color: var(--main-chart-active);
+      background-color: var(--color-background);
       opacity: 0.6;
     }
   }
@@ -84,12 +85,12 @@ custom-button {
     height: var(--button-height);
     width: var(--button-height);
     padding: 0;
-    border-radius: calc(var(--button-height) * 0.25);
   }
 
   &.circle {
     height: var(--button-height);
     width: var(--button-height);
     padding: 0;
+    border-radius: 999px;
   }
 }

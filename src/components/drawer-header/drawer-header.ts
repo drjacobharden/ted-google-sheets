@@ -1,28 +1,25 @@
-import { APIs } from "../../api/api";
-import { router } from "../../router/router";
-import { appController } from "../../state/app-controller";
-import { DateUtils } from "../../utilities/date-utilities";
 import { createEventHandler } from "../../utilities/event-utilities";
 import { CustomButton } from "../button/button";
-import { SelectCreateController } from "../select-create-controller/select-create-controller";
-import { showToast } from "../toast-stack/toast-service";
 
-class DrawerHeader extends HTMLElement {
+export class DrawerHeader extends HTMLElement {
   #initialized = false;
 
   #title: HTMLElement | null = null;
+  #titleText = "";
   #backButton!: CustomButton;
 
   set title(value: string) {
+    this.#titleText = String(value || "");
     if (this.#title) {
-      this.#title.textContent = value;
+      this.#title.textContent = this.#titleText;
     }
   }
 
   connectedCallback() {
     if (this.#initialized) return;
 
-    const title = this.getAttribute("title");
+    const title = this.#titleText || this.getAttribute("title") || "";
+    this.removeAttribute("title");
 
     const section = document.createElement("header");
     section.classList.add("horizontal-center", "justify-between", "width-100");

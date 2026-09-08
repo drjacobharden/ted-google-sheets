@@ -1,13 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import { parseRoute, routeHash } from "../src/router/router";
 import { filterForBudgetingContext } from "../src/screens/budgeting/budgeting-context";
 import type { BudgetTransaction } from "../src/api/budget-api";
 
-describe("nested budgeting routes", () => {
-  test("normalizes legacy screens and parses scoped detail paths", () => {
+describe("standard budgeting routes", () => {
+  test("parses flat screens and accepts old nested links", () => {
+    expect(parseRoute("#/money-flow?year=2026")).toEqual({
+      name: "money-flow",
+      params: { year: "2026" },
+    });
+    expect(parseRoute("#/budgeting/flow?year=2025")).toEqual({
+      name: "money-flow",
+      params: { year: "2025" },
+    });
     expect(parseRoute("#/categories?year=2025")).toEqual({
-      name: "budgeting/categories",
+      name: "categories",
       params: { year: "2025" },
     });
     expect(
@@ -15,7 +22,7 @@ describe("nested budgeting routes", () => {
         "#/budgeting/vendors/vendor%2F1?year=2024&assignment=person-1",
       ),
     ).toEqual({
-      name: "budgeting/entity-detail",
+      name: "entity-detail",
       params: {
         kind: "vendor",
         id: "vendor/1",
@@ -25,24 +32,22 @@ describe("nested budgeting routes", () => {
     });
   });
 
-  test("builds canonical detail and archive hashes", () => {
+  test("builds flat detail and archive hashes", () => {
     expect(
-      routeHash("budgeting/entity-detail", {
+      routeHash("entity-detail", {
         kind: "category",
         id: "food & drink",
         year: 2026,
         assignment: "all",
       }),
-    ).toBe(
-      "#/budgeting/categories/food%20%26%20drink?year=2026&assignment=all",
-    );
+    ).toBe("#/entity-detail?kind=category&id=food+%26+drink&year=2026&assignment=all");
     expect(
-      routeHash("budgeting/entity-archive", {
+      routeHash("entity-archive", {
         kind: "assignment",
         year: 2026,
         assignment: "all",
       }),
-    ).toBe("#/budgeting/people/archive?year=2026&assignment=all");
+    ).toBe("#/entity-archive?kind=assignment&year=2026&assignment=all");
   });
 });
 
@@ -53,35 +58,13 @@ describe("shared budgeting scope", () => {
     { id: "3", date: "2025-02-01", assignmentId: "a" },
   ] as BudgetTransaction[];
 
-  test("filters every child view by year and optional assignment", () => {
+  test("filters every child view by year", () => {
     expect(
       filterForBudgetingContext(transactions, {
         year: 2026,
-        assignmentId: null,
-        lastRoute: "budgeting/overview",
+        lastRoute: "budget-overview",
         lastParams: {},
       }).map((item) => item.id),
     ).toEqual(["1", "2"]);
-    expect(
-      filterForBudgetingContext(transactions, {
-        year: 2026,
-        assignmentId: "a",
-        lastRoute: "budgeting/overview",
-        lastParams: {},
-      }).map((item) => item.id),
-    ).toEqual(["1"]);
-  });
-
-  test("main keeps the budgeting shell mounted while views change", () => {
-    const main = readFileSync("src/main.ts", "utf8");
-    const shell = readFileSync(
-      "src/screens/budgeting/budgeting-shell.ts",
-      "utf8",
-    );
-    expect(main).toContain('mountedContentKey !== "budgeting"');
-    expect(main).toContain("shell.route = { name, route: name, params }");
-    expect(shell).toContain("router.replaceParams({ year:");
-    expect(shell).toContain("router.replaceParams({ assignment:");
-    expect(shell).toContain('event.detail.value as BudgetingRouteName');
   });
 });

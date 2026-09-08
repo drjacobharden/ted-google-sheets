@@ -1,3 +1,4 @@
+import { Account } from "../api/account-api";
 import { AppliedFilter } from "../components/filter-bar/filter-bar";
 import { DatePickerStep, DateRange } from "./date-utilities";
 
@@ -10,12 +11,19 @@ type EventDetails<T = any> = Readonly<{
   "date-range-changed": { range: DateRange; step: DatePickerStep };
   "checkbox-selection": { isOn: boolean };
   "dropdown-selection": { id: string; value: string; title: string };
+  "search-action-pressed": { input: string };
+  "search-changed": { value: string };
   "filters-changed": { filters: AppliedFilter<any>[] };
   "table-sort-request": { key: string };
   "segmented-control-selection": { value: string; title: string };
   "table-data-changed": { data: readonly T[] };
   "drawer:close-requested": {};
   "scroll-changed": { position: number };
+  "table-row-selected": { id: string };
+  "budget:account-created": { account: Account; requestId: string };
+  "date-changed": { value: string };
+  "year-selection-changed": { year: string };
+  "click": {};
 }>;
 
 export const addListener = (

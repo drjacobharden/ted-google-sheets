@@ -36,6 +36,12 @@ export function money(value: unknown, showCents = true): string {
   return currencyFormatter.format(Number.isFinite(amount) ? amount : 0);
 }
 
+/** Formats summary currency as whole dollars, retaining cents only below $1. */
+export function summaryMoney(value: unknown): string {
+  const amount = Number(value);
+  return money(amount, Number.isFinite(amount) && Math.abs(amount) < 1);
+}
+
 /** Sums the amount fields in a collection of cash-flow records. */
 export function netFlows(items: ReadonlyArray<{ amount?: number }>): number {
   return items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);

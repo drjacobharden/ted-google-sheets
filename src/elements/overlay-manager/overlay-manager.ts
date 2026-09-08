@@ -2,10 +2,6 @@ import { SplashIndicator } from "../../components/splash-indicator/splash-indica
 import { RefreshIndicator } from "../../components/refresh-indicator/refresh-indicator";
 import { Tooltip } from "../../components/tooltip/tooltip";
 import { DropdownMenu } from "../../components/dropdown-menu/dropdown-menu";
-import {
-  NewEntityOptions,
-  NewEntityPopover,
-} from "../new-entity-popover/new-entity-popover";
 import { PopoverOptions } from "../../components/popover-menu/popover-menu";
 import { appState } from "../../state/app-state";
 import type { ToastStack } from "../../components/toast-stack/toast-stack";
@@ -17,7 +13,6 @@ export class OverlayManager extends HTMLElement {
   #tooltip!: Tooltip;
   #refreshIndicator: RefreshIndicator | null = null;
   #splash: SplashIndicator | null = null;
-  #newEntityPopover!: NewEntityPopover;
 
   static get observedAttributes(): string[] {
     return [];
@@ -31,32 +26,38 @@ export class OverlayManager extends HTMLElement {
 
       // Add the tooltip to the manager layer
       const tooltip = document.createElement("tool-tip") as Tooltip;
-      manager.append(tooltip);
       this.#tooltip = tooltip;
 
       const refresh = document.createElement("reshresh-indicator");
-      manager.append(refresh);
       this.#refreshIndicator = refresh as RefreshIndicator;
 
       const splash = document.createElement("splash-indicator");
-      manager.append(splash);
       this.#splash = splash as SplashIndicator;
-
-      const newEntity = document.createElement(
-        "new-entity-popover",
-      ) as NewEntityPopover;
-      manager.append(newEntity);
-      this.#newEntityPopover = newEntity;
 
       const alert = document.createElement("app-alert");
       const toasts = document.createElement("toast-stack") as ToastStack;
       const syncNotifications = document.createElement("sync-notifications");
-      const transactionDrawer = document.createElement("transaction-drawer-screen");
+      const transactionDrawer = document.createElement(
+        "transaction-drawer-screen",
+      );
       const entityDrawer = document.createElement("entity-drawer-screen");
-      const investmentAccountDrawer = document.createElement("investment-account-drawer-screen");
-      const investmentMonthDrawer = document.createElement("investment-month-drawer-screen");
+      const investmentAccountDrawer = document.createElement(
+        "investment-account-drawer-screen",
+      );
+
       const onboarding = document.createElement("onboarding-overlay");
-      manager.append(alert, toasts, syncNotifications, transactionDrawer, entityDrawer, investmentAccountDrawer, investmentMonthDrawer, onboarding);
+      manager.append(
+        alert,
+        toasts,
+        syncNotifications,
+        transactionDrawer,
+        entityDrawer,
+        investmentAccountDrawer,
+        tooltip,
+        refresh,
+        splash,
+        onboarding,
+      );
       registerToastStack(toasts);
 
       this.append(manager);
@@ -98,13 +99,12 @@ export class OverlayManager extends HTMLElement {
         break;
 
       case "pointerdown":
-        if (!event.composedPath().some((item) => item instanceof DropdownMenu)) {
+        if (
+          !event.composedPath().some((item) => item instanceof DropdownMenu)
+        ) {
           appState.set("activeDropdownKey", null);
         }
 
-        if (!this.#newEntityPopover.containsFormInteraction(event)) {
-          this.hideEntityForm();
-        }
         break;
 
       case "drawer:close-requested":
@@ -122,7 +122,11 @@ export class OverlayManager extends HTMLElement {
     }
   }
 
-  showTooltip(anchor: HTMLElement, content: string | Node, options: PopoverOptions) {
+  showTooltip(
+    anchor: HTMLElement,
+    content: string | Node,
+    options: PopoverOptions,
+  ) {
     this.#tooltip.showTooltip(anchor, content, options);
   }
 
@@ -130,20 +134,17 @@ export class OverlayManager extends HTMLElement {
     this.#tooltip.hide();
   }
 
-  showEntityForm(
-    anchor: HTMLElement,
-    entity: NewEntityOptions,
-    options: PopoverOptions,
-  ) {
-    this.#newEntityPopover.showForm(anchor, entity, options);
-  }
-
-  hideEntityForm() {
-    this.#newEntityPopover.hideForm();
-  }
-
   #clearDrawerRoute(): void {
-    router.updateParams({ drawer: null, transactionId: null, entityKind: null, entityId: null, investmentAccountId: null, investmentMonth: null, investmentReviewId: null });
+    router.updateParams({
+      drawer: null,
+      transactionId: null,
+      entityKind: null,
+      entityId: null,
+      investmentAccountId: null,
+      investmentLedgerSource: null,
+      accountDraftName: null,
+      accountCreateRequestId: null,
+    });
   }
 
   #handleRefreshStarted(event: CustomEvent) {
@@ -166,21 +167,18 @@ export class OverlayManager extends HTMLElement {
   }
   #handleRefreshRetrying() {
     if (this.#splash && !this.#splash.hidden) {
-      this.#splash.state = "retrying";
-    } else if (this.#refreshIndicator) {
+      this.#splash.state = "idle";
+    }
+    if (this.#refreshIndicator) {
       this.#refreshIndicator.state = "retrying";
     }
   }
   #handleRefreshFailed(event: CustomEvent) {
-    if (!event.detail.connected) return;
-
     if (this.#splash && !this.#splash.hidden) {
-      if (!event.detail.showingCachedData) {
-        this.#splash.state = "failed";
-      } else {
-        this.#splash.state = "idle";
-      }
+      this.#splash.state = "idle";
     }
+
+    if (!event.detail.connected) return;
 
     if (this.#refreshIndicator) {
       this.#refreshIndicator.state = "failed";

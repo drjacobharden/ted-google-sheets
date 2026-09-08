@@ -1,44 +1,211 @@
-/* Fonts */
+/* Editorial font families */
 @font-face {
-  font-family: "Chewy";
-  src: url("../assets/fonts/Chewy-Regular.woff2") format("woff2");
+  font-family: "Fraunces";
+  src: url("../assets/fonts/Baskervville-Regular.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("../assets/fonts/Baskervville-Regular.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
   font-weight: 400;
-  font-style: normal;
-  letter-spacing: 0.2em;
 }
 
 @font-face {
-  font-family: "Urbanist";
-  src: url("../assets/fonts/Urbanist-Regular.woff2") format("woff2");
+  font-family: "Fraunces";
+  src: url("../assets/fonts/Baskervville-Italic.woff2") format("woff2");
+  font-display: swap;
+  font-style: italic;
   font-weight: 400;
-  font-style: normal;
 }
 
 @font-face {
-  font-family: "Urbanist";
-  src: url("../assets/fonts/Urbanist-Medium.woff2") format("woff2");
-  font-weight: 500;
+  font-family: "Fraunces";
+  src: url("../assets/fonts/Baskervville-SemiBold.woff2") format("woff2");
+  font-display: swap;
   font-style: normal;
-}
-
-@font-face {
-  font-family: "Urbanist";
-  src: url("../assets/fonts/Urbanist-SemiBold.woff2") format("woff2");
   font-weight: 600;
+}
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("../assets/fonts/Baskervville-Bold.woff2") format("woff2");
+  font-display: swap;
   font-style: normal;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "Work Sans";
+  src: url("../assets/fonts/WorkSans-Regular.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Work Sans";
+  src: url("../assets/fonts/WorkSans-Medium.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "Work Sans";
+  src: url("../assets/fonts/WorkSans-SemiBold.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/IBMPlexMono-Medium.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
 }
 
 :root {
-  --color-background: var(--parchment-100);
-  --color-border: var(--parchment-200);
+  /* Font roles */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body:
+    "Work Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
 
-  --max: 1200px;
-  --logo-text: var(--text-size-500);
-  --section-block-padding: 48px;
-  --section-inline-adding: 24px;
+  /* Semantic surfaces and text */
+  --color-canvas: var(--paper-400);
+  --color-surface: var(--paper-200);
+  --color-surface-subtle: var(--paper-300);
+  --color-surface-raised: var(--paper-100);
+  --color-surface-overlay: var(--paper-50);
+  --color-text: var(--paper-950);
+  --color-text-muted: #6e6255;
+  --color-text-subtle: #9c8e7c;
+  --color-text-inverse: var(--paper-100);
+  --color-rule: var(--paper-600);
+  --color-rule-strong: var(--paper-950);
+
+  /* Semantic accents */
+  --color-accent: var(--clay-500);
+  --color-accent-strong: var(--clay-700);
+  --color-positive: var(--moss-700);
+  --color-negative: var(--clay-700);
+  --color-negative-surface: var(--clay-500);
+  --color-negative-surface-hover: var(--clay-600);
+  --color-on-negative: var(--paper-50);
+  --color-neutral: var(--slate-600);
+  --color-warning: var(--ochre-600);
+  --color-focus: var(--slate-600);
+
+  /* Data visualization roles */
+  --color-chart-income: var(--moss-500);
+  --color-chart-income-muted: var(--moss-300);
+  --color-chart-expense: var(--clay-500);
+  --color-chart-expense-muted: var(--clay-300);
+  --color-chart-expense-debt: var(--clay-400);
+  --color-chart-expense-lightest: var(--clay-200);
+  --color-chart-growth-positive: var(--clay-500);
+  --color-chart-growth-positive-muted: var(--clay-400);
+  --color-chart-growth-positive-subdued: var(--clay-300);
+  --color-chart-growth-positive-lightest: var(--clay-200);
+  --color-chart-growth-negative: var(--moss-700);
+  --color-chart-growth-negative-muted: var(--moss-500);
+  --color-chart-growth-negative-subdued: var(--moss-300);
+  --color-chart-growth-negative-lightest: var(--moss-100);
+  --color-chart-savings: var(--slate-500);
+  --color-chart-savings-muted: var(--slate-300);
+  --color-chart-debt: var(--plum-500);
+  --color-chart-debt-muted: var(--plum-400);
+  --color-chart-trend: var(--color-chart-income);
+  --color-chart-bars: var(--color-chart-savings);
+  --color-chart-bars-muted: var(--plum-400);
+  --color-chart-bars-subdued: var(--slate-100);
+  --color-chart-negative-bars: var(--color-chart-expense-muted);
+  --color-chart-comparison: var(--charcoal-400);
+  --color-chart-deductions: var(--paper-950);
+  --color-chart-track: var(--paper-500);
+  --color-chart-grid: var(--paper-600);
+
+  /* Semantic type roles */
+  --type-display-family: var(--font-display);
+  --type-display-size: var(--text-5xl);
+  --type-display-weight: var(--weight-regular);
+  --type-display-leading: 0.96;
+
+  --type-title-family: var(--font-display);
+  --type-title-size: var(--text-3xl);
+  --type-title-weight: var(--weight-semibold);
+  --type-title-leading: var(--leading-tight);
+
+  --type-section-family: var(--font-display);
+  --type-section-size: var(--text-xl);
+  --type-section-weight: var(--weight-semibold);
+  --type-section-leading: var(--leading-snug);
+
+  --type-body-family: var(--font-body);
+  --type-body-size: var(--text-base);
+  --type-body-weight: var(--weight-regular);
+  --type-body-leading: var(--leading-normal);
+
+  --type-caption-family: var(--font-display);
+  --type-caption-size: var(--text-sm);
+  --type-caption-weight: var(--weight-regular);
+  --type-caption-leading: var(--leading-normal);
+
+  --type-label-family: var(--font-body);
+  --type-label-size: var(--text-xs);
+  --type-label-weight: var(--weight-medium);
+  --type-label-leading: var(--leading-snug);
+
+  --type-meta-family: var(--font-mono);
+  --type-meta-size: var(--text-2xs);
+  --type-meta-weight: var(--weight-regular);
+  --type-meta-leading: var(--leading-normal);
+
+  --type-number-family: var(--font-display);
+  --type-number-size: var(--text-4xl);
+  --type-number-weight: var(--weight-regular);
+  --type-number-leading: var(--leading-none);
+
+  /* Layout roles */
+  --page-max-width: var(--content-wide);
+  --top-nav-height: 72px;
+  --page-gutter: clamp(1.25rem, 4vw, 3.5rem);
+  --section-space: clamp(2rem, 6vw, 2.75rem);
+  --content-gap: clamp(1.5rem, 3vw, 3rem);
+
+  /* Compatibility aliases retained for the existing experimental theme. */
+  --color-background: var(--color-canvas);
+  --color-border: var(--color-rule);
+  --max: var(--page-max-width);
+  --section-block-padding: var(--section-space);
+  --section-inline-padding: var(--page-gutter);
 }
 
 [data-theme="dark"] {
-  --color-background: var(--parchment-950);
-  --color-border: var(--parchment-800);
+  --color-canvas: var(--paper-950);
+  --color-surface: var(--paper-900);
+  --color-surface-subtle: var(--paper-800);
+  --color-surface-raised: var(--paper-900);
+  --color-surface-overlay: var(--paper-800);
+  --color-text: var(--paper-100);
+  --color-text-muted: var(--paper-500);
+  --color-text-subtle: var(--paper-700);
+  --color-text-inverse: var(--paper-950);
+  --color-rule: var(--paper-800);
+  --color-rule-strong: var(--paper-100);
 }

@@ -1,4 +1,4 @@
-import type { InvestmentSource } from "../api/investment-api";
+import type { InvestmentSource } from "../api/investment-types";
 
 export interface DateRangeValue { preset?: string; start: string; end: string; label?: string; }
 export interface DateRangePickerElement extends HTMLElement { value: DateRangeValue; }
@@ -7,4 +7,4 @@ export function dateRangeDetail(event: Event): DateRangeValue | null {
   return event.detail as DateRangeValue;
 }
 export function eventTargetElement(event: Event): Element | null { return event.target instanceof Element ? event.target : null; }
-export function isInvestmentSource(value: FormDataEntryValue | null): value is InvestmentSource { return value === "manual" || value === "paycheck"; }
+export function isInvestmentSource(value: FormDataEntryValue | null): value is InvestmentSource { return value === "manual" || value === "deduction"; }

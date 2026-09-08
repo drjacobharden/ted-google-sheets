@@ -1,20 +1,20 @@
 import { BudgetAPI, configureBudgetIntegrations, type BudgetAPIContract, type SyncItem } from "./budget-api";
 import { ImportAPI, type ImportAPIContract } from "./import-api";
-import { InvestmentAPI, type InvestmentAPIContract } from "./investment-api";
+import { AccountAPI, type AccountAPIContract } from "./account-api";
 
 export interface AppAPIs {
   budget: BudgetAPIContract;
-  investment: InvestmentAPIContract;
+  accounts: AccountAPIContract;
   imports: ImportAPIContract;
   getSyncItems(): SyncItem[];
 }
 
 const budget = BudgetAPI();
-const investment = InvestmentAPI(budget);
+const accounts = AccountAPI(budget);
 const imports = ImportAPI(budget);
-configureBudgetIntegrations({ investment, imports });
+configureBudgetIntegrations({ accounts, imports });
 
 export const APIs: AppAPIs = {
-  budget, investment, imports,
-  getSyncItems: () => [...budget.getSyncItems(), ...investment.getSyncItems()],
+  budget, accounts, imports,
+  getSyncItems: () => [...budget.getSyncItems(), ...accounts.getSyncItems()],
 };

@@ -9,8 +9,16 @@ export interface PopoverOptions {
 }
 
 export class Popover extends HTMLElement {
-  #handleScroll = () => {
+  #handleScroll = (event: Event) => {
     if (!this.classList.contains("is-visible")) return;
+    if (event.target instanceof Node) {
+      if (this.contains(event.target)) return;
+      if (
+        getComputedStyle(this).position === "absolute" &&
+        event.target.contains(this)
+      )
+        return;
+    }
 
     this.hide();
     this.dispatchEvent(
@@ -23,10 +31,6 @@ export class Popover extends HTMLElement {
 
   connectedCallback(): void {
     this.classList.add("popover");
-
-    while (this.firstChild) {
-      this.appendChild(this.firstChild);
-    }
   }
 
   disconnectedCallback(): void {
@@ -66,8 +70,19 @@ export class Popover extends HTMLElement {
       Math.max(viewportMargin, viewportHeight - this.offsetHeight - viewportMargin),
     );
 
-    this.style.left = `${x}px`;
-    this.style.top = `${y}px`;
+    let localX = x;
+    let localY = y;
+    if (getComputedStyle(this).position === "absolute") {
+      const containingBlock = this.offsetParent;
+      if (containingBlock instanceof HTMLElement) {
+        const containingRect = containingBlock.getBoundingClientRect();
+        localX = x - containingRect.left + containingBlock.scrollLeft;
+        localY = y - containingRect.top + containingBlock.scrollTop;
+      }
+    }
+
+    this.style.left = `${localX}px`;
+    this.style.top = `${localY}px`;
     this.style.transformOrigin = this.getTransformOrigin(side, align);
 
     this.style.visibility = "";

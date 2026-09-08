@@ -1,5 +1,5 @@
-import { appController } from "../../state/app-controller";
 import { appState, type BudgetingContext } from "../../state/app-state";
+import { APIs } from "../../api/api";
 import { router } from "../../router/router";
 import type {
   BudgetingRouteName,
@@ -7,14 +7,18 @@ import type {
   RouteParams,
 } from "../../router/types";
 import type {
-  DropdownMenu,
-  DropdownSelectionEvent,
-} from "../../components/dropdown-menu/dropdown-menu";
-import { CustomButton } from "../../components/button/button";
+  SegmentedControl,
+  SegmentedControlSelectionEvent,
+} from "../../components/segmented-control/segmented-control";
+import type { YearSelector } from "../../components/year-selector/year-selector";
+import {
+  addListener,
+  handleCustomEvent,
+  removeListener,
+} from "../../utilities/event-utilities";
 import {
   BUDGETING_CONTENT_ROUTES,
   getBudgetingRouteDefinition,
-  type HeaderAction,
 } from "./route-definitions";
 import templateString from "./template.html" with { type: "text" };
 
@@ -27,18 +31,38 @@ const OVERLAY_PARAMS = new Set([
   "entityKind",
   "entityId",
   "investmentAccountId",
-  "investmentMonth",
-  "investmentReviewId",
+  "accountDraftName",
+  "accountCreateRequestId",
 ]);
 
 function availableYears(): number[] {
   const currentYear = new Date().getFullYear();
-  const summaries = appState.get("budgetOverview").monthlyTransactionSummaries;
-  const years = Object.keys(summaries)
-    .map(Number)
-    .filter((year) => Number.isInteger(year) && year <= currentYear);
-  if (!years.includes(currentYear)) years.push(currentYear);
-  return years.sort((left, right) => right - left);
+  const overview = appState.get("budgetOverview");
+  const budgetingYears = Object.entries(overview.monthlyTransactionSummaries)
+    .filter(([year, rows]) => {
+      const numericYear = Number(year);
+      const deductionMonths =
+        overview.annualSummaryCards[numericYear]?.metrics.paycheckDeductions
+          .months ?? [];
+      return (
+        Number.isInteger(numericYear) &&
+        numericYear <= currentYear &&
+        (rows.some((row) => row.hasData) ||
+          deductionMonths.some((month) => month.hasData))
+      );
+    })
+    .map(([year]) => Number(year));
+  const accountYears = [
+    ...APIs.accounts.activity().map((item) => Number(String(item.date).slice(0, 4))),
+    ...APIs.accounts.balances().map((item) => Number(String(item.month).slice(0, 4))),
+  ].filter((year) => Number.isInteger(year) && year <= currentYear);
+  const years = [...new Set([...budgetingYears, ...accountYears])];
+  if (years.length === 0) years.push(currentYear);
+  const firstYear = Math.min(...years);
+  return Array.from(
+    { length: currentYear - firstYear + 1 },
+    (_, index) => currentYear - index,
+  );
 }
 
 function validYear(value: unknown, choices: number[]): number | null {
@@ -53,42 +77,34 @@ function validYear(value: unknown, choices: number[]): number | null {
   return choices.length <= 1 || choices.includes(year) ? year : null;
 }
 
-function availableAssignments(): { id: string; name: string }[] {
-  return appController.getBudgetOverviewAssignments();
-}
-
 function withoutOverlayParams(params: RouteParams): RouteParams {
   return Object.fromEntries(
     Object.entries(params).filter(([key]) => !OVERLAY_PARAMS.has(key)),
   ) as RouteParams;
 }
 
-/** Owns the persistent budgeting header and swaps routed budgeting views. */
-export class BudgetingShell extends HTMLElement implements EventListenerObject {
-  #contentSelector!: DropdownMenu;
-  #yearSelector!: DropdownMenu;
-  #assignmentSelector!: DropdownMenu;
-  #breadcrumbTail!: HTMLElement;
-  #actions!: HTMLElement;
-  #outlet!: HTMLElement;
+/** Owns shared Budgeting scope, route navigation, and screen actions. */
+export class BudgetingHeader
+  extends HTMLElement
+  implements EventListenerObject
+{
+  #sectionSelector!: SegmentedControl;
+  #yearSelector!: YearSelector;
   #route: RouteChangedEventDetail | null = null;
-  #viewKey = "";
   #listening = false;
 
   connectedCallback(): void {
     if (!this.dataset.initialized) {
       this.dataset.initialized = "true";
-      this.classList.add("screen");
-      this.dataset.screen = "budgeting";
       this.append(template.content.cloneNode(true));
       this.#captureElements();
     }
     if (!this.#listening) {
       this.#listening = true;
-      this.#contentSelector.addListener(this);
-      this.#yearSelector.addListener(this);
-      this.#assignmentSelector.addListener(this);
-      this.#actions.addEventListener("click", this);
+      this.#sectionSelector.addListener(this);
+      this.#sectionSelector.addEventListener("click", this);
+      addListener("year-selection-changed", this.#yearSelector, this);
+      window.addEventListener("click", this);
       window.addEventListener("app:route-changed", this);
       window.addEventListener("budget:reference-data-changed", this);
       window.addEventListener("budget:transactions-loaded", this);
@@ -96,16 +112,20 @@ export class BudgetingShell extends HTMLElement implements EventListenerObject {
       window.addEventListener("budget:categories-changed", this);
       window.addEventListener("budget:vendors-changed", this);
     }
-    if (this.#route) this.#applyRoute(this.#route);
+    this.#applyRoute({
+      name: router.currentRoute(),
+      route: router.currentRoute(),
+      params: router.currentParams(),
+    });
   }
 
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    this.#contentSelector.removeListener(this);
-    this.#yearSelector.removeListener(this);
-    this.#assignmentSelector.removeListener(this);
-    this.#actions.removeEventListener("click", this);
+    this.#sectionSelector.removeListener(this);
+    this.#sectionSelector.removeEventListener("click", this);
+    removeListener("year-selection-changed", this.#yearSelector, this);
+    window.removeEventListener("click", this);
     window.removeEventListener("app:route-changed", this);
     window.removeEventListener("budget:reference-data-changed", this);
     window.removeEventListener("budget:transactions-loaded", this);
@@ -114,72 +134,88 @@ export class BudgetingShell extends HTMLElement implements EventListenerObject {
     window.removeEventListener("budget:vendors-changed", this);
   }
 
-  set route(detail: RouteChangedEventDetail) {
-    this.#route = detail;
-    if (this.isConnected) this.#applyRoute(detail);
-  }
-
   handleEvent(event: Event): void {
-    if (event.type === "dropdown-selection") {
-      this.#handleSelection(event as DropdownSelectionEvent);
+    if (event.type === "segmented-control-selection") {
+      this.#handleSectionSelection(event as SegmentedControlSelectionEvent);
+      return;
+    }
+    if (event.type === "year-selection-changed") {
+      handleCustomEvent("year-selection-changed", event, ({ year }) => {
+        router.replaceParams({ year });
+      });
       return;
     }
     if (event.type === "click") {
+      if (
+        event.currentTarget === window &&
+        !(event.target as Element | null)?.closest("[data-header-action]")
+      ) {
+        return;
+      }
+      const section = (event.target as Element | null)?.closest<HTMLElement>(
+        ".segmented-control__item",
+      );
+      const currentRoute = router.currentRoute();
+      if (section && (currentRoute === "entity-detail" || currentRoute === "entity-archive")) {
+        const kind = router.currentParams().kind;
+        const collection = kind === "vendor"
+          ? "vendors"
+          : kind === "assignment"
+            ? "people"
+            : "categories";
+        if (section.dataset.segmentKey === collection) {
+          router.navigate(collection, this.#scopeParams());
+          return;
+        }
+      }
       this.#handleAction(event);
       return;
     }
     if (event.type === "app:route-changed") {
       const detail = (event as CustomEvent<RouteChangedEventDetail>).detail;
-      if (router.isBudgetingRoute(detail.name)) this.route = detail;
+      if (router.isBudgetingRoute(detail.name)) this.#applyRoute(detail);
+      else {
+        this.#route = null;
+        this.hidden = true;
+      }
       return;
     }
-    if (this.#route) this.#applyRoute(this.#route, true);
+    this.#applyRoute({
+      name: router.currentRoute(),
+      route: router.currentRoute(),
+      params: router.currentParams(),
+    });
   }
 
   #captureElements(): void {
-    this.#contentSelector = this.querySelector("#budgeting-content-selector")!;
+    this.#sectionSelector = this.querySelector("#budgeting-section-selector")!;
     this.#yearSelector = this.querySelector("#budgeting-year-selector")!;
-    this.#assignmentSelector = this.querySelector(
-      "#budgeting-assignment-selector",
-    )!;
-    this.#breadcrumbTail = this.querySelector("#budgeting-breadcrumb-tail")!;
-    this.#actions = this.querySelector("#budgeting-header-actions")!;
-    this.#outlet = this.querySelector("#budgeting-view-outlet")!;
   }
 
-  #applyRoute(detail: RouteChangedEventDetail, validateLoaded = false): void {
-    if (!router.isBudgetingRoute(detail.name)) return;
+  #applyRoute(detail: RouteChangedEventDetail): void {
+    if (!router.isBudgetingRoute(detail.name)) {
+      this.hidden = true;
+      return;
+    }
+    this.hidden = false;
     const choices = availableYears();
     const stored = appState.get("budgetingContext");
     const requestedYear = validYear(detail.params.year, choices);
     const storedYear = validYear(stored.year, choices);
     const year = requestedYear ?? storedYear ?? choices[0];
 
-    const assignments = availableAssignments();
-    const requestedAssignment = detail.params.assignment;
-    let assignmentId =
-      requestedAssignment === undefined
-        ? stored.assignmentId
-        : requestedAssignment === "all"
-          ? null
-          : requestedAssignment;
-    if (
-      assignmentId &&
-      (validateLoaded || appController.isReferenceDataLoaded()) &&
-      !assignments.some((assignment) => assignment.id === assignmentId)
-    ) {
-      assignmentId = null;
-    }
-
+    const { assignment: _legacyAssignment, ...routeParams } = detail.params;
     const canonicalParams: RouteParams = {
-      ...detail.params,
+      ...routeParams,
       year: String(year),
-      assignment: assignmentId ?? "all",
     };
     if (
       detail.params.year !== canonicalParams.year ||
-      detail.params.assignment !== canonicalParams.assignment
+      detail.params.assignment !== undefined
     ) {
+      // The header can connect before #route-outlet has been parsed. Let the
+      // router's DOM-ready announcement perform this normalization instead.
+      if (!document.getElementById("route-outlet")) return;
       router.replace(detail.name, canonicalParams);
       return;
     }
@@ -187,17 +223,14 @@ export class BudgetingShell extends HTMLElement implements EventListenerObject {
     const lastParams = withoutOverlayParams(canonicalParams);
     const nextContext: BudgetingContext = {
       year,
-      assignmentId,
       lastRoute: detail.name,
       lastParams,
     };
     if (JSON.stringify(stored) !== JSON.stringify(nextContext)) {
       appState.set("budgetingContext", nextContext);
     }
-    appController.setBudgetOverviewAssignment(assignmentId);
     this.#route = { ...detail, params: canonicalParams };
     this.#renderHeader(nextContext, detail.name, canonicalParams);
-    this.#renderView(detail.name, canonicalParams);
   }
 
   #renderHeader(
@@ -206,98 +239,34 @@ export class BudgetingShell extends HTMLElement implements EventListenerObject {
     params: RouteParams,
   ): void {
     const definition = getBudgetingRouteDefinition(route, params);
-    const config = definition.getHeaderConfig(context, params);
-    this.#contentSelector.items = BUDGETING_CONTENT_ROUTES.map((item) => ({
+    this.#sectionSelector.items = BUDGETING_CONTENT_ROUTES.map((item) => ({
       key: item.route,
       title: item.title,
-      icon: item.icon,
       isDefaultValue: item.contentKey === definition.contentKey,
     }));
-    this.#contentSelector.icon = definition.icon;
-    this.#yearSelector.items = availableYears().map((year) => ({
-      key: String(year),
-      title: String(year),
-      isDefaultValue: year === context.year,
-    }));
-    this.#assignmentSelector.items = [
-      {
-        key: "all",
-        title: "All assignments",
-        isDefaultValue: context.assignmentId === null,
-      },
-      ...availableAssignments().map((assignment) => ({
-        key: assignment.id,
-        title: assignment.name,
-        isDefaultValue: assignment.id === context.assignmentId,
-      })),
-    ];
-
-    const crumbs = config.breadcrumbs.flatMap((crumb) => {
-      const separator = document.createElement("custom-icon");
-      separator.setAttribute("icon", "chevronRight");
-      separator.classList.add("muted");
-      const label = document.createElement("span");
-      label.className = "budgeting-shell__breadcrumb";
-      label.textContent = crumb.title;
-      return [separator, label];
-    });
-    this.#breadcrumbTail.replaceChildren(...crumbs);
-    this.#actions.replaceChildren(
-      ...config.actions.map((action) => this.#createAction(action)),
-    );
-  }
-
-  #createAction(action: HeaderAction): CustomButton {
-    const button = document.createElement("custom-button") as CustomButton;
-    button.classList.add(
-      action.kind === "primary" ? "primary-button" : "tertiary",
-    );
-    button.dataset.headerAction = action.id;
-
-    if (action.label) {
-      button.label = action.label;
-    } else {
-      button.classList.add("square");
-    }
-
-    if (action.icon) button.leadingIcon = action.icon;
-    return button;
-  }
-
-  #renderView(route: BudgetingRouteName, params: RouteParams): void {
-    const definition = getBudgetingRouteDefinition(route, params);
-    const viewKey = `${route}:${params.kind ?? ""}:${params.id ?? ""}`;
-    if (viewKey === this.#viewKey) return;
-    this.#viewKey = viewKey;
-    this.#outlet.replaceChildren(
-      document.createElement(definition.componentTag),
-    );
+    this.#sectionSelector.selection =
+      BUDGETING_CONTENT_ROUTES.find(
+        (item) => item.contentKey === definition.contentKey,
+      )?.route ?? null;
+    const years = availableYears();
+    this.#yearSelector.years = years;
+    this.#yearSelector.selectedYear = String(context.year);
   }
 
   #scopeParams(): RouteParams {
     const context = appState.get("budgetingContext");
     return {
       year: String(context.year),
-      assignment: context.assignmentId ?? "all",
     };
   }
 
-  #handleSelection(event: DropdownSelectionEvent): void {
-    if (event.target === this.#contentSelector) {
-      router.navigate(
-        event.detail.value as BudgetingRouteName,
-        this.#scopeParams(),
-      );
-      return;
-    }
-    if (event.target === this.#yearSelector) {
-      router.replaceParams({ year: event.detail.value });
-      return;
-    }
-    if (event.target === this.#assignmentSelector) {
-      router.replaceParams({ assignment: event.detail.value });
-    }
+  #handleSectionSelection(event: SegmentedControlSelectionEvent): void {
+    router.navigate(
+      event.detail.value as BudgetingRouteName,
+      this.#scopeParams(),
+    );
   }
+
 
   #handleAction(event: Event): void {
     const anchor = (event.target as Element | null)?.closest<HTMLElement>(
@@ -310,10 +279,26 @@ export class BudgetingShell extends HTMLElement implements EventListenerObject {
       return;
     }
     if (action === "new-transaction") {
-      router.updateParams({ drawer: "new", transactionId: null });
+      router.navigate("new-transaction");
       return;
     }
-    this.#outlet.firstElementChild?.dispatchEvent(
+    const entityKind = {
+      "new-category": "category",
+      "new-vendor": "vendor",
+      "new-person": "assignment",
+    }[action] as "category" | "vendor" | "assignment" | undefined;
+    if (entityKind) {
+      router.updateParams({
+        drawer: "entity-new",
+        entityKind,
+        entityId: null,
+      });
+      return;
+    }
+    const screen = Array.from(
+      document.getElementById("route-outlet")?.children ?? [],
+    ).find((element) => element !== this);
+    screen?.dispatchEvent(
       new CustomEvent("budgeting:header-action", {
         detail: { action, anchor },
       }),
@@ -321,6 +306,6 @@ export class BudgetingShell extends HTMLElement implements EventListenerObject {
   }
 }
 
-if (!customElements.get("budgeting-shell")) {
-  customElements.define("budgeting-shell", BudgetingShell);
+if (!customElements.get("budgeting-header")) {
+  customElements.define("budgeting-header", BudgetingHeader);
 }

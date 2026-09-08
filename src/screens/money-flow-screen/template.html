@@ -1,0 +1,77 @@
+<div class="content-container editorial-theme">
+  <section
+    class="money-flow-screen__section"
+    aria-labelledby="money-flow-title"
+  >
+    <header class="tab-header">
+      <div class="tab-header-title">
+        <h1 id="money-flow-title">Where'd My Money Go?</h1>
+        <p id="money-flow-description" class="type-body type-muted">
+          See how your spending evolved over the year with a series of fun
+          charts and visuals. Click a question below to get started.
+        </p>
+      </div>
+    </header>
+    <accordion-element
+      id="money-flow-accordion"
+      title="How did my money flow?"
+      subtitle="Track your money from when it first hit your account to where it ended up."
+    >
+      <div
+        id="money-flow-frame"
+        class="money-flow-screen__frame editorial-surface"
+        aria-describedby="money-flow-description"
+      >
+        <div
+          id="money-flow-scroll"
+          class="money-flow-screen__scroll"
+          tabindex="0"
+          aria-label="Scrollable annual money flow diagram"
+        >
+          <money-flow-chart id="money-flow-chart"></money-flow-chart>
+        </div>
+        <div id="money-flow-status" class="empty-state" role="status">
+          Loading annual money flow…
+        </div>
+      </div>
+    </accordion-element>
+    <accordion-element
+      id="spending-treemap-accordion"
+      title="What did I spend my money on?"
+      subtitle="See how your annual spending was distributed across categories."
+    >
+      <div
+        class="money-flow-screen__category-frame editorial-surface"
+        aria-label="Annual spending by category"
+      >
+        <treemap-chart id="spending-treemap"></treemap-chart>
+      </div>
+    </accordion-element>
+    <accordion-element
+      id="spending-horizontal-bar-vendors"
+      title="Who did I pay the most?"
+      subtitle="See who you paid the most to over the year."
+    >
+      <div
+        class="money-flow-screen__vendor-frame editorial-surface"
+        aria-label="Annual spending by vendor"
+      >
+        <horizontal-bar-chart id="vendor-spending-chart"></horizontal-bar-chart>
+      </div>
+    </accordion-element>
+    <accordion-element
+      id="spending-scatter-frequency"
+      title="Where did I spend most often?"
+      subtitle="Compare transaction frequency with average category spending."
+    >
+      <div
+        class="money-flow-screen__category-scatter-frame editorial-surface"
+        aria-label="Annual category spending by transaction frequency and total spend"
+      >
+        <category-scatter-chart
+          id="category-spending-scatter"
+        ></category-scatter-chart>
+      </div>
+    </accordion-element>
+  </section>
+</div>

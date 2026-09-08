@@ -62,6 +62,42 @@ table-list {
       border-right: 0;
     }
 
+    .table-cell-stack,
+    .table-cell-primary,
+    .table-cell-subline {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .table-cell-subline {
+      display: block;
+    }
+
+    .table-cell-inline {
+      display: inline-flex;
+      max-width: 100%;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .table-cell-inline__text {
+      min-width: 0;
+      overflow: hidden;
+      padding: 0;
+      border-radius: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .table-cell-inline svg {
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+    }
+
     th,
     td {
       white-space: nowrap;

@@ -1,0 +1,93 @@
+category-scatter-chart {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+
+  .category-scatter-chart__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .category-scatter-chart__axis {
+    stroke: var(--color-rule-strong);
+    stroke-width: 1;
+  }
+
+  .category-scatter-chart__gridline {
+    stroke: var(--color-rule);
+    stroke-dasharray: 3 4;
+    stroke-width: 1;
+    opacity: 0.72;
+  }
+
+  .category-scatter-chart__axis-title,
+  .category-scatter-chart__tick,
+  .category-scatter-chart__quadrant-label {
+    fill: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .category-scatter-chart__quadrant-label {
+    letter-spacing: 0.02em;
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-wider);
+    opacity: 0.72;
+    text-transform: uppercase;
+  }
+
+  .category-scatter-chart__tick-mark {
+    stroke: var(--color-rule-strong);
+    stroke-width: 1;
+  }
+
+  .category-scatter-chart__point {
+    outline: none;
+  }
+
+  .category-scatter-chart__point-hit {
+    fill: transparent;
+    cursor: pointer;
+  }
+
+  .category-scatter-chart__point-dot {
+    fill: var(--color-chart-expense);
+    stroke: var(--color-surface);
+    stroke-width: 2;
+    pointer-events: none;
+    transition: r 120ms ease, fill 120ms ease;
+  }
+
+  .category-scatter-chart__point.is-active .category-scatter-chart__point-dot,
+  .category-scatter-chart__point:hover .category-scatter-chart__point-dot {
+    fill: color-mix(in srgb, var(--color-chart-expense) 76%, var(--color-text));
+  }
+
+  .category-scatter-chart__point:focus-visible .category-scatter-chart__point-dot {
+    stroke: var(--color-focus);
+    stroke-width: 3;
+  }
+
+  .category-scatter-chart__tooltip-anchor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .category-scatter-chart__empty {
+    display: grid;
+    min-height: 26rem;
+    place-items: center;
+    margin: 0;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+}
