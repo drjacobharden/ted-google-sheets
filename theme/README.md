@@ -1,10 +1,11 @@
 # TED editorial theme
 
-The theme is organized into three layers:
+The theme is organized into four layers:
 
 1. `tokens.css` contains primitive palette, type-scale, spacing, and sizing values.
 2. `variables.css` registers the local fonts and maps primitives to semantic roles.
 3. `elements.css` provides opt-in typography, layout, surface, legend, and index-row classes.
+4. `legacy.css` preserves the pre-editorial selectors and custom properties still required by older screens. It is a compatibility layer only; do not add new UI to it unless moving an existing legacy rule out of application code.
 
 Apply `editorial-theme` to a screen wrapper before using the theme. Its base styles are intentionally scoped so these files can load without changing existing screens.
 
