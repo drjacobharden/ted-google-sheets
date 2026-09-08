@@ -5,9 +5,9 @@
   left: 50%;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 12px;
-  border-radius: 999px;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 0;
   background: var(--inverse-surface);
   box-shadow: 0 8px 22px rgba(35, 45, 36, 0.12);
   color: var(--inverse-text);
@@ -15,7 +15,8 @@
 }
 
 #app-refresh-text {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
   color: var(--inverse-text);
 }
 
@@ -27,7 +28,18 @@
   font-weight: 500;
   margin-left: 8px;
   pointer-events: auto;
-  font-size: 12px;
+  font-size: var(--text-2xs);
+}
+
+.app-refresh-indicator custom-button {
+  flex: 0 0 auto;
+  color: var(--inverse-text);
+}
+
+.app-refresh-indicator custom-button.circle {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
 }
 
 .app-refresh-indicator button:active {

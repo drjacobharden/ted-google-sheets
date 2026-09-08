@@ -471,11 +471,21 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     deleteButton.setAttribute("disabled", "");
     try {
-      if (balanceRecord) await APIs.accounts.deleteBalance(balanceRecord.id);
-      else await APIs.budget.deleteTransaction(transactionId, openedBase);
+      const deletion = balanceRecord
+        ? APIs.accounts.deleteBalance(balanceRecord.id)
+        : APIs.budget.deleteTransaction(transactionId, openedBase);
       drawerDirty = false;
-      showToast("Transaction deleted.");
+      showToast(
+        APIs.budget.getConfig().endpoint
+          ? "Transaction deleted. Syncing…"
+          : "Transaction deleted.",
+      );
       close(true);
+      void deletion?.catch((error) =>
+        showToast(error.message || "Unable to delete transaction.", {
+          type: "error",
+        }),
+      );
     } catch (error) {
       message.className = "form-message error";
       message.textContent = error.message;

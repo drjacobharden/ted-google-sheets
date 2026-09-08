@@ -98,6 +98,17 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
     return item.source === "investmentMonth" || item.source === "investmentSnapshot";
   }
 
+  /** Returns whether a sync item belongs to the unified account outbox. */
+  #isAccountSyncItem(item: SyncItem): boolean {
+    return item.source === "account" || item.source === "accountMonth" || item.source === "accountBalance";
+  }
+
+  /** Returns the account owner for an account-month sync record when it is cached. */
+  #accountForSyncItem(item: SyncItem): { name?: string; type?: string } | null {
+    const accountId = this.#recordString(item, "accountId");
+    return APIs.accounts.accounts().find((account) => account.id === accountId) || null;
+  }
+
   /** Builds the legacy sync-center markup for one queued item. */
   #actionMarkup(item: SyncItem): string {
     const failed = item.status === "failed";
@@ -170,6 +181,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   #retryItem(item: SyncItem): void {
     if (item.source === "transaction") APIs.budget.retryTransaction(item.id);
     else if (item.source === "investmentAccount" || item.source === "investmentMonth") APIs.accounts.retry(item.source, item.id);
+    else if (this.#isAccountSyncItem(item)) APIs.accounts.retry(item.source, item.id);
     else if (item.kind) APIs.budget.retryEntity(item.kind, item.id);
   }
 
@@ -177,6 +189,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   #discardItem(item: SyncItem): void {
     if (item.source === "transaction") APIs.budget.discardTransactionChange(item.id);
     else if (item.source === "investmentAccount" || item.source === "investmentMonth") APIs.accounts.discard(item.source, item.id);
+    else if (this.#isAccountSyncItem(item)) APIs.accounts.discard(item.source, item.id);
     else if (item.kind) APIs.budget.discardEntityChange(item.kind, item.id);
   }
 
@@ -184,6 +197,7 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   #discardLabel(item: SyncItem): string {
     if (item.source === "transaction") return "transaction change";
     if (this.#isInvestmentMonth(item)) return "investment update";
+    if (this.#isAccountSyncItem(item)) return "account update";
     if (item.source === "investmentAccount") return "investment account";
     return item.kind ?? "entity";
   }
@@ -197,15 +211,24 @@ export class SyncScreen extends HTMLElement implements EventListenerObject {
   }
 
   #itemTitle(item: SyncItem): string {
-    if (item.source === "transaction") return `${item.operation === "update" ? "Update" : "New"} transaction`;
+    if (item.source === "transaction") return `${item.operation === "update" ? "Update" : item.operation === "delete" ? "Delete" : "New"} transaction`;
     if (item.source === "investmentAccount") return "New investment account";
     if (this.#isInvestmentMonth(item)) return "Investment monthly update";
+    if (item.source === "accountMonth") {
+      const account = this.#accountForSyncItem(item);
+      return account?.type === "debt" ? "Debt monthly update" : account ? "Investment monthly update" : "Account monthly update";
+    }
+    if (item.source === "accountBalance") return "Delete account balance";
+    if (item.source === "account") return `${item.operation === "archive" ? "Archive" : "Update"} account`;
     return `${item.operation === "archive" ? "Archive" : item.operation === "reactivate" ? "Reactivate" : "New"} ${item.kind ? ({ category: "category", vendor: "vendor", assignment: "assignment" } as Record<EntityKind, string>)[item.kind] : "entity"}`;
   }
 
   #itemDetail(item: SyncItem): string {
     if (item.source === "transaction") return this.#transactionDescription(item.record as BudgetTransaction);
-    if (this.#isInvestmentMonth(item)) return `${this.#recordString(item, "month")} · ${this.#recordString(item, "accountName")} · ${money(this.#recordNumber(item, "balance"))}`;
+    if (this.#isInvestmentMonth(item) || item.source === "accountMonth") {
+      const accountName = this.#recordString(item, "accountName") || this.#accountForSyncItem(item)?.name || "";
+      return `${this.#recordString(item, "month")} · ${accountName} · ${money(this.#recordNumber(item, "balance"))}`;
+    }
     return this.#recordString(item, "name");
   }
 

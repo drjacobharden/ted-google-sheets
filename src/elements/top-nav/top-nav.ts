@@ -356,7 +356,8 @@ class TopNavBar extends HTMLElement {
       });
       return;
     }
-    router.navigate(route);
+    if ((route as string) === "sync") router.navigate("settings", { section: "sync" });
+    else router.navigate(route);
   }
 
   #openMobileNavigation(): void {
@@ -432,6 +433,8 @@ class TopNavBar extends HTMLElement {
       router.navigate(route as import("../../router/types").RouteName, {
         year: String(appState.get("budgetingContext").year),
       });
+    } else if (route === "sync") {
+      router.navigate("settings", { section: "sync" });
     } else if (route) {
       router.navigate(route as import("../../router/types").RouteName);
     }

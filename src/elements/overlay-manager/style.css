@@ -9,6 +9,6 @@
   }
 }
 
-#overlay-manager :is(.drawer-overlay, .overlay, .toast-stack, .app-notice) {
+#overlay-manager :is(.drawer-overlay, .overlay, .toast-stack, .app-notice, .app-refresh-indicator) {
   pointer-events: auto;
 }

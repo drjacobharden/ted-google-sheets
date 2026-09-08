@@ -29,6 +29,7 @@ import {
   type InvestmentOverviewChartDisplay,
 } from "../../utilities/investment-overview-chart";
 import type { OverlayManager } from "../../elements/overlay-manager/overlay-manager";
+import { TRANSACTION_DATA_EVENTS } from "../../utilities/transaction-events";
 import type { DataChart } from "../../components/data-chart/data-chart";
 import type {
   DropdownMenu,
@@ -151,6 +152,7 @@ export class InvestmentAccountDetailScreen
     this.#summary.addEventListener("focusout", this);
     window.addEventListener("budget:accounts-changed", this);
     window.addEventListener("budget:accounts-loaded", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.addEventListener(name, this));
     this.#render();
   }
 
@@ -171,6 +173,7 @@ export class InvestmentAccountDetailScreen
     this.#overlayManager.hideTooltip();
     window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("budget:accounts-loaded", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.removeEventListener(name, this));
   }
 
   handleEvent(event: Event): void {

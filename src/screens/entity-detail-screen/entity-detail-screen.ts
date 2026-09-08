@@ -40,6 +40,7 @@ import {
   type EntityChartDisplay,
 } from "../../utilities/entity-detail-chart";
 import { escapeHTML, money } from "../../utilities/view-formatters";
+import { TRANSACTION_DATA_EVENTS } from "../../utilities/transaction-events";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -81,12 +82,7 @@ const ENTITY_DETAIL_CONFIG: Record<EntityKind, EntityDetailSettings> = {
 };
 
 const RENDER_EVENTS = [
-  "budget:transaction-queued",
-  "budget:transaction-saved",
-  "budget:transaction-sync-changed",
-  "budget:transaction-restored",
-  "budget:transaction-removed",
-  "budget:transactions-loaded",
+  ...TRANSACTION_DATA_EVENTS,
   "budget:reference-data-changed",
   "budget:categories-changed",
   "budget:vendors-changed",

@@ -19,7 +19,6 @@ const ROUTES = new Set<RouteName>([
   "dashboard",
   "new-transaction",
   "import",
-  "sync",
   "settings",
   "investment-overview",
   "investment-accounts",
@@ -92,6 +91,9 @@ export function parseRoute(hash = location.hash): ParsedRoute {
   const params = Object.fromEntries(
     new URLSearchParams(query),
   ) as RouteParams;
+  if (requestedPath === "sync") {
+    return { name: "settings", params: { ...params, section: "sync" } };
+  }
   const nested = NESTED_BUDGET_ROUTES[requestedPath];
   if (nested) return { name: nested, params };
 

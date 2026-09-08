@@ -27,6 +27,7 @@ import {
 import { escapeHTML, money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 import { DateUtils } from "../../utilities/date-utilities";
+import { TRANSACTION_DATA_EVENTS } from "../../utilities/transaction-events";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -79,6 +80,7 @@ export class InvestmentLedgerScreen
     this.#search.addEventListener("search-changed", this);
     this.#table.rowSelection.addListener(this);
     window.addEventListener("budget:accounts-changed", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.addEventListener(name, this));
     window.addEventListener("app:route-changed", this);
     this.#refreshSourceRows();
     this.#configureFilters();
@@ -91,6 +93,7 @@ export class InvestmentLedgerScreen
     this.#search.removeEventListener("search-changed", this);
     this.#table.rowSelection.removeListener(this);
     window.removeEventListener("budget:accounts-changed", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.removeEventListener(name, this));
     window.removeEventListener("app:route-changed", this);
   }
 

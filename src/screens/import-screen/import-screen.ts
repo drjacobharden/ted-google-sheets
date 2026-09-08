@@ -3123,7 +3123,7 @@ function mount(root: ImportRoot): void {
           "Ready for another CSV.",
         );
       }
-      if (action === "open-sync") router.navigate("sync");
+      if (action === "open-sync") router.navigate("settings", { section: "sync" });
       if (action === "load-more") {
         handleLoadMore(event);
       }

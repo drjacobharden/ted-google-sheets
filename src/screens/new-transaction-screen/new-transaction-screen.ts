@@ -374,7 +374,7 @@ export class NewTransactionScreen extends HTMLElement {
   };
 
   #reset(date: string, announce: boolean): void {
-    this.#formController.reset();
+    const activeKind = this.#formController.kind;
     this.#expenseDraft = { categoryId: "", vendorId: "" };
     this.#incomeDraft = {
       categoryId: APIs.budget.INCOME_CATEGORY_ID,
@@ -391,8 +391,12 @@ export class NewTransactionScreen extends HTMLElement {
     this.#paymentType.value = "positive";
     this.#paymentType.accountType = null;
     this.#sourceSelect.value = "manual";
+    this.#vendorSelect.value = "";
     this.#peopleSelect.value = APIs.budget.SHARED_ASSIGNMENT_ID;
-    this.#setKind("expense");
+    this.#setKind(activeKind);
+    if (activeKind === "income") {
+      this.#categorySelect.value = APIs.budget.INCOME_CATEGORY_ID;
+    }
     this.#message.className = announce
       ? "form-message success"
       : "form-message";

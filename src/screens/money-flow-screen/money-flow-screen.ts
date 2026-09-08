@@ -16,6 +16,7 @@ import {
   collapseVendorSpending,
 } from "../../utilities/annual-vendor-spending";
 import { messageFromError, money } from "../../utilities/view-formatters";
+import { TRANSACTION_DATA_EVENTS } from "../../utilities/transaction-events";
 import templateString from "./template.html" with { type: "text" };
 
 const template = document.createElement("template");
@@ -48,7 +49,7 @@ export class MoneyFlowScreen
     }
     if (!this.#listening) {
       this.#listening = true;
-      window.addEventListener("budget:transactions-loaded", this);
+      TRANSACTION_DATA_EVENTS.forEach((name) => window.addEventListener(name, this));
       window.addEventListener("budget:accounts-changed", this);
       window.addEventListener("budget:reference-data-changed", this);
     }
@@ -59,7 +60,7 @@ export class MoneyFlowScreen
   disconnectedCallback(): void {
     if (!this.#listening) return;
     this.#listening = false;
-    window.removeEventListener("budget:transactions-loaded", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.removeEventListener(name, this));
     window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("budget:reference-data-changed", this);
   }

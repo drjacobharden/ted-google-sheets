@@ -1,19 +1,22 @@
 .toast-stack {
   position: fixed;
   z-index: 1200;
-  right: 24px;
-  bottom: 24px;
+  top: 18px;
+  left: 50%;
+  right: auto;
+  bottom: auto;
   display: grid;
   width: min(390px, calc(100vw - 48px));
   overflow: visible;
+  transform: translateX(-50%);
 }
 .toast {
   grid-area: 1 / 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-md) var(--space-lg);
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border: var(--rule-thin) solid var(--color-text);
   border-radius: 0;
   background: var(--color-text);
@@ -33,7 +36,7 @@
   margin: 0;
   color: inherit;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   line-height: var(--leading-normal);
 }
 .toast-actions {
@@ -48,12 +51,9 @@
   font-weight: var(--weight-semibold);
   cursor: pointer;
 }
-.toast.error button {
-  color: var(--color-negative);
-}
-.toast.error p {
-  color: var(--color-negative);
-}
+.toast.error button,
+.toast.error p { color: var(--color-text-inverse); }
+.toast-action { text-decoration: underline; text-underline-offset: 0.18em; }
 .toast.success button,
 .toast.success p {
   color: var(--color-positive);

@@ -209,7 +209,8 @@ class NavBar extends HTMLElement {
     const item = target.closest("[data-tab]");
     if (!item) return;
     const route = (item as HTMLElement).dataset.tab;
-    if (route) router.navigate(route as import("../../router/types").RouteName);
+    if (route === "sync") router.navigate("settings", { section: "sync" });
+    else if (route) router.navigate(route as import("../../router/types").RouteName);
   }
 
   #updateSyncBadge(): void {

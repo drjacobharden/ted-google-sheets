@@ -11,6 +11,7 @@ import {
   editorialMonthItems,
   matchesLedgerFilterGroups,
 } from "../utilities/entity-ledger";
+import { TRANSACTION_DATA_EVENTS } from "../utilities/transaction-events";
 
 export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name: string }>
   extends HTMLElement implements EventListenerObject {
@@ -45,15 +46,11 @@ export abstract class EditorialEntityLedgerScreen<Row extends { id: string; name
 
   protected dataEventNames(): string[] {
     return [
+      ...TRANSACTION_DATA_EVENTS,
       "budget:categories-changed",
       "budget:vendors-changed",
       "budget:people-changed",
       "budget:entity-sync-changed",
-      "budget:transaction-sync-changed",
-      "budget:transaction-saved",
-      "budget:transactions-loaded",
-      "budget:transaction-removed",
-      "budget:transaction-restored",
     ];
   }
 

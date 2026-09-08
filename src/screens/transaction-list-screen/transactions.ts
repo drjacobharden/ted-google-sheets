@@ -29,6 +29,7 @@ import {
 import templateString from "./template.html" with { type: "text" };
 import { budgetingActivities, activityEffects, ledgerVendorLabel } from "../../utilities/activity-effects";
 import { APIs } from "../../api/api";
+import { TRANSACTION_DATA_EVENTS } from "../../utilities/transaction-events";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -92,14 +93,7 @@ export class TransactionScreen
     this.#search.addEventListener("search-changed", this);
     this.#loadMore.addEventListener("click", this);
 
-    for (const eventName of [
-      "budget:transaction-sync-changed",
-      "budget:transaction-saved",
-      "budget:transactions-loaded",
-      "budget:transaction-removed",
-      "budget:transaction-restored",
-      "budget:transaction-queued",
-    ]) {
+    for (const eventName of TRANSACTION_DATA_EVENTS) {
       window.addEventListener(eventName, this);
     }
 
@@ -119,14 +113,7 @@ export class TransactionScreen
     this.#loadMore.removeEventListener("click", this);
     this.#table.rowSelection.removeListener(this);
 
-    for (const eventName of [
-      "budget:transaction-sync-changed",
-      "budget:transaction-saved",
-      "budget:transactions-loaded",
-      "budget:transaction-removed",
-      "budget:transaction-restored",
-      "budget:transaction-queued",
-    ]) {
+    for (const eventName of TRANSACTION_DATA_EVENTS) {
       window.removeEventListener(eventName, this);
     }
 

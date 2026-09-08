@@ -10,6 +10,7 @@ export class RefreshIndicator extends HTMLElement {
   #refreshIndicator: HTMLElement | null = null;
   #label: HTMLElement | null = null;
   #button: HTMLElement | null = null;
+  #dismissButton: HTMLElement | null = null;
   #spinner: HTMLElement | null = null;
 
   set state(value: RefreshStates) {
@@ -24,6 +25,7 @@ export class RefreshIndicator extends HTMLElement {
       this.#refreshIndicator.hidden = false;
       this.#spinner!.hidden = false;
       this.#button!.hidden = true;
+      this.#dismissButton!.hidden = true;
       this.#label!.textContent = "Refreshing data";
     }
 
@@ -31,6 +33,7 @@ export class RefreshIndicator extends HTMLElement {
       this.#refreshIndicator.hidden = false;
       this.#spinner!.hidden = false;
       this.#button!.hidden = true;
+      this.#dismissButton!.hidden = true;
       this.#label!.textContent = "Refresh failed. Trying again.";
     }
 
@@ -38,6 +41,7 @@ export class RefreshIndicator extends HTMLElement {
       this.#refreshIndicator.hidden = false;
       this.#spinner!.hidden = true;
       this.#button!.hidden = false;
+      this.#dismissButton!.hidden = false;
       this.#label!.textContent = "Google failed to refresh your data";
     }
   }
@@ -52,18 +56,23 @@ export class RefreshIndicator extends HTMLElement {
     this.#spinner = container.querySelector(".spinner");
     this.#label = container.querySelector("#app-refresh-text");
     this.#button = container.querySelector("#app-refresh-retry");
+    this.#dismissButton = container.querySelector("#app-refresh-dismiss");
     this.#button?.addEventListener("click", this);
+    this.#dismissButton?.addEventListener("click", this);
 
     this.append(container);
   }
 
   handleEvent(event: Event): void {
-    if (event.type === "click" && event.currentTarget === this.#button)
+    if (event.type !== "click") return;
+    if (event.currentTarget === this.#dismissButton) this.state = "idle";
+    else if (event.currentTarget === this.#button)
       void appController.initializeData({ refresh: true }).catch(() => {});
   }
 
   disconnectedCallback(): void {
     this.#button?.removeEventListener("click", this);
+    this.#dismissButton?.removeEventListener("click", this);
   }
 }
 

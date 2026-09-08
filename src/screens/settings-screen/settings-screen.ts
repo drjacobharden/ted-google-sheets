@@ -1,5 +1,6 @@
 import templateString from "./template.html" with { type: "text" };
 import type { SegmentedControl } from "../../components/segmented-control/segmented-control";
+import { router } from "../../router/router";
 
 const template = document.createElement("template");
 template.innerHTML = templateString;
@@ -29,6 +30,7 @@ export class SettingsScreen extends HTMLElement implements EventListenerObject {
     if (this.#listening) return;
     this.#listening = true;
     this.#sectionSelector.addEventListener("segmented-control-selection", this);
+    this.#applySection(router.currentParams().section === "sync" ? "sync" : "setup");
   }
 
   disconnectedCallback(): void {
@@ -43,7 +45,16 @@ export class SettingsScreen extends HTMLElement implements EventListenerObject {
   handleEvent(event: Event): void {
     if (event.type !== "segmented-control-selection") return;
     const value = (event as CustomEvent<{ value: string }>).detail.value;
-    const isSync = value === "sync";
+    const section = value === "sync" ? "sync" : "setup";
+    const isSync = section === "sync";
+    this.#setupPanel.hidden = isSync;
+    this.#syncPanel.hidden = !isSync;
+    router.replaceParams({ section: isSync ? "sync" : null });
+  }
+
+  #applySection(section: "setup" | "sync"): void {
+    this.#sectionSelector.selection = section;
+    const isSync = section === "sync";
     this.#setupPanel.hidden = isSync;
     this.#syncPanel.hidden = !isSync;
   }

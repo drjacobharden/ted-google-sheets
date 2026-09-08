@@ -57,7 +57,7 @@ export interface BudgetTransaction {
   createdByName?: string;
   syncStatus?: SyncState;
   syncError?: string;
-  syncOperation?: "create" | "update";
+  syncOperation?: "create" | "update" | "delete";
 }
 
 export interface BudgetTransactionInput extends Partial<
@@ -86,8 +86,8 @@ export interface SyncSummary {
 
 export interface SyncItem {
   key: string;
-  source: "transaction" | "entity" | "investmentAccount" | "investmentMonth" | "investmentSnapshot";
-  operation?: "create" | "update" | "archive" | "reactivate";
+  source: "transaction" | "entity" | "investmentAccount" | "investmentMonth" | "investmentSnapshot" | "account" | "accountMonth" | "accountBalance";
+  operation?: "create" | "update" | "delete" | "archive" | "reactivate";
   kind?: EntityKind;
   id: string;
   status: SyncState;
@@ -1741,7 +1741,9 @@ export function BudgetAPI(): BudgetAPIContract {
     const optimisticIds = new Set(remaining.map((item) => item.record.id));
     return [
       ...hydrated.filter((transaction) => !optimisticIds.has(transaction.id)),
-      ...remaining.map(outboxTransaction),
+      ...remaining
+        .filter((item) => item.operation !== "delete")
+        .map(outboxTransaction),
     ];
   }
 
@@ -1900,7 +1902,10 @@ export function BudgetAPI(): BudgetAPIContract {
     return readArray(KEYS.transactionOutbox)
       .map((item) => ({
         ...item,
-        operation: item.operation === "update" ? "update" : "create",
+        operation:
+          item.operation === "update" || item.operation === "delete"
+            ? item.operation
+            : "create",
         baseRecord: item.baseRecord || null,
         revision: Math.max(1, Number(item.revision) || 1),
         status: item.status || "pending",
@@ -1927,7 +1932,9 @@ export function BudgetAPI(): BudgetAPIContract {
   }
   /** Handles the getOutboxTransactions operation for the budget data layer. */
   function getOutboxTransactions() {
-    return getOutbox().map(outboxTransaction);
+    return getOutbox()
+      .filter((item) => item.operation !== "delete")
+      .map(outboxTransaction);
   }
   /** Handles the getOutboxStatus operation for the budget data layer. */
   function getOutboxStatus() {
@@ -2184,25 +2191,25 @@ export function BudgetAPI(): BudgetAPIContract {
     return queued;
   }
 
-  /** Deletes a transaction locally or from the connected Sheet. */
-  async function deleteTransaction(id, openedRecord = null) {
+  /** Queues a transaction deletion and removes it from the local read model immediately. */
+  function deleteTransaction(id, openedRecord = null) {
     ensureLocalData();
     const transactionId = String(id || "");
     if (!transactionId) throw new Error("That transaction could not be found.");
 
-    if (getConfig().endpoint) {
-      await request("deleteTransaction", {
-        body: {
-          deletion: {
-            id: transactionId,
-            base: openedRecord
-              ? confirmedTransactionRecord(openedRecord)
-              : null,
-          },
-        },
-      });
-      removeConfirmedTransactionFromCache(transactionId);
-    } else {
+    const items = getOutbox();
+    const existing = items.find((item) => item.record.id === transactionId);
+    const cached =
+      getCachedTransactions()?.find(
+        (transaction) => transaction.id === transactionId,
+      ) ||
+      readArray(KEYS.transactions)
+        .map(hydrateTransaction)
+        .find((transaction) => transaction.id === transactionId);
+    const record = existing?.record || openedRecord || cached;
+    if (!record) throw new Error("That transaction could not be found.");
+
+    if (!getConfig().endpoint) {
       const transactions = readArray(KEYS.transactions);
       if (!transactions.some((transaction) => transaction.id === transactionId))
         throw new Error("That transaction could not be found.");
@@ -2210,6 +2217,32 @@ export function BudgetAPI(): BudgetAPIContract {
         KEYS.transactions,
         transactions.filter((transaction) => transaction.id !== transactionId),
       );
+      if (existing)
+        writeOutbox(items.filter((item) => item.record.id !== transactionId));
+    } else if (existing?.operation === "create") {
+      // A locally created transaction that has never reached Sheets needs no
+      // server-side delete; dropping its create entry is the complete change.
+      writeOutbox(items.filter((item) => item.record.id !== transactionId));
+    } else {
+      const base = existing?.operation === "update"
+        ? openedRecord || existing.baseRecord
+        : openedRecord;
+      const item = {
+        operation: "delete",
+        record: confirmedTransactionRecord(record),
+        baseRecord: base ? confirmedTransactionRecord(base) : null,
+        revision: (existing?.revision || 0) + 1,
+        status: "pending",
+        attempts: 0,
+        nextRetryAt: 0,
+        error: "",
+        failureCode: "",
+        currentRecord: null,
+      };
+      writeOutbox(
+        items.filter((entry) => entry.record.id !== transactionId).concat(item),
+      );
+      removeConfirmedTransactionFromCache(transactionId);
     }
 
     window.dispatchEvent(
@@ -2217,6 +2250,9 @@ export function BudgetAPI(): BudgetAPIContract {
         detail: { id: transactionId },
       }),
     );
+    emitSyncStatus();
+    if (getConfig().endpoint) scheduleSync(0);
+    return Promise.resolve();
   }
 
   /** Handles the sendTransactionBatch operation for the budget data layer. */
@@ -2298,6 +2334,31 @@ export function BudgetAPI(): BudgetAPIContract {
     return { saved, failed };
   }
 
+  /** Sends deletion requests one at a time so older Apps Script deployments remain supported. */
+  async function sendTransactionDeleteBatch(items) {
+    const saved = [];
+    const failed = [];
+    for (const item of items) {
+      try {
+        const result = await request("deleteTransaction", {
+          body: {
+            deletion: {
+              id: item.record.id,
+              base: item.baseRecord
+                ? confirmedTransactionRecord(item.baseRecord)
+                : null,
+            },
+          },
+        });
+        saved.push(result);
+      } catch (error) {
+        if (!error.isApiError) throw error;
+        failed.push({ id: item.record.id, error: error.message });
+      }
+    }
+    return { saved, failed };
+  }
+
   /** Handles the scheduleSync operation for the budget data layer. */
   function scheduleSync(delay = 0) {
     if (typeof setTimeout !== "function") return;
@@ -2326,9 +2387,10 @@ export function BudgetAPI(): BudgetAPIContract {
     const eligible = getOutbox().filter(
       (item) =>
         item.status === "pending" &&
-        !pendingEntities.has(item.record.categoryId) &&
-        !pendingEntities.has(item.record.vendorId) &&
-        !pendingEntities.has(item.record.assignmentId),
+        (item.operation === "delete" ||
+          (!pendingEntities.has(item.record.categoryId) &&
+            !pendingEntities.has(item.record.vendorId) &&
+            !pendingEntities.has(item.record.assignmentId))),
     );
     const due = eligible
       .filter((item) => item.nextRetryAt <= Date.now())
@@ -2368,7 +2430,9 @@ export function BudgetAPI(): BudgetAPIContract {
           const result =
             operation === "create"
               ? await sendTransactionBatch(batch.map((item) => item.record))
-              : await sendTransactionUpdateBatch(batch);
+              : operation === "update"
+                ? await sendTransactionUpdateBatch(batch)
+                : await sendTransactionDeleteBatch(batch);
           const savedById = new Map(
             result.saved.map((transaction) => [transaction.id, transaction]),
           );
@@ -2381,6 +2445,7 @@ export function BudgetAPI(): BudgetAPIContract {
             const saved = savedById.get(item.record.id);
             const failure = failures.get(item.record.id);
             if (item.revision !== snapshot.revision) {
+              if (operation === "delete") return [{ ...item, status: "pending" }];
               if (saved)
                 return [
                   {
@@ -2418,8 +2483,14 @@ export function BudgetAPI(): BudgetAPIContract {
             ];
           });
           writeOutbox(items);
-          updateConfirmedTransactionCache(result.saved);
-          if (result.saved.length)
+          if (operation === "delete") {
+            result.saved.forEach((transaction) =>
+              removeConfirmedTransactionFromCache(transaction.id),
+            );
+          } else {
+            updateConfirmedTransactionCache(result.saved);
+          }
+          if (result.saved.length && operation !== "delete")
             window.dispatchEvent(
               new CustomEvent("budget:transaction-saved", {
                 detail: { saved: result.saved, operation },
@@ -2497,6 +2568,10 @@ export function BudgetAPI(): BudgetAPIContract {
         await processBatch(
           due.filter((item) => item.operation === "update"),
           "update",
+        );
+        await processBatch(
+          due.filter((item) => item.operation === "delete"),
+          "delete",
         );
       } finally {
         syncPromise = null;
@@ -2605,6 +2680,14 @@ export function BudgetAPI(): BudgetAPIContract {
       const restored = hydrateTransaction(
         item.currentRecord || item.baseRecord,
       );
+      window.dispatchEvent(
+        new CustomEvent("budget:transaction-restored", {
+          detail: { transaction: restored },
+        }),
+      );
+    } else if (item.operation === "delete") {
+      const restored = hydrateTransaction(item.baseRecord || item.record);
+      updateConfirmedTransactionCache([item.baseRecord || item.record]);
       window.dispatchEvent(
         new CustomEvent("budget:transaction-restored", {
           detail: { transaction: restored },

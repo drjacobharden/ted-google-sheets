@@ -19,6 +19,7 @@ import {
   type InvestmentOverviewChartDisplay,
 } from "../../utilities/investment-overview-chart";
 import { escapeHTML, money, netFlows } from "../../utilities/view-formatters";
+import { TRANSACTION_DATA_EVENTS } from "../../utilities/transaction-events";
 import { buildAnnualInvestmentHeatmap } from "../../utilities/annual-investment-heatmap";
 import {
   analyzeInvestmentActivity,
@@ -123,6 +124,7 @@ export class InvestmentOverviewScreen
     window.addEventListener("app:route-changed", this);
     window.addEventListener("budget:accounts-changed", this);
     window.addEventListener("budget:accounts-loaded", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.addEventListener(name, this));
     this.addEventListener("click", this);
     this.addEventListener("keydown", this);
     this.#chartMode.addEventListener("dropdown-selection", this);
@@ -139,6 +141,7 @@ export class InvestmentOverviewScreen
     window.removeEventListener("app:route-changed", this);
     window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("budget:accounts-loaded", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.removeEventListener(name, this));
     this.removeEventListener("click", this);
     this.removeEventListener("keydown", this);
   }

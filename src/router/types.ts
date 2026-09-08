@@ -15,7 +15,6 @@ export type RouteName =
   | "dashboard"
   | "new-transaction"
   | "import"
-  | "sync"
   | "settings"
   | "investment-overview"
   | "investment-accounts"
@@ -46,6 +45,7 @@ export interface KnownRouteParams {
   accountDraftName?: string;
   accountCreateRequestId?: string;
   transactionKind?: "expense" | "income" | "account";
+  section?: "setup" | "sync";
 }
 
 export type RouteParams = Record<string, string> & Partial<KnownRouteParams>;

@@ -5,6 +5,7 @@ import { createTransactionRow } from "../../utilities/transaction-row";
 import { dateRangeDetail, eventTargetElement, isInvestmentSource, type DateRangePickerElement, type DateRangeValue } from "../../utilities/ui-utilities";
 import { APIs } from "../../api/api";
 import { calculateInvestmentSavings } from "../../utilities/investment-calculations";
+import { TRANSACTION_DATA_EVENTS } from "../../utilities/transaction-events";
 import { money } from "../../utilities/view-formatters";
 import templateString from "./template.html" with { type: "text" };
 
@@ -36,8 +37,7 @@ export class DashboardScreen extends HTMLElement implements EventListenerObject 
     this.addEventListener("date-range-changed", this);
     window.addEventListener("budget:accounts-changed", this);
     window.addEventListener("budget:accounts-loaded", this);
-    window.addEventListener("budget:transaction-saved", this);
-    window.addEventListener("budget:transaction-queued", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.addEventListener(name, this));
     this.#render();
   }
 
@@ -50,8 +50,7 @@ export class DashboardScreen extends HTMLElement implements EventListenerObject 
     this.removeEventListener("date-range-changed", this);
     window.removeEventListener("budget:accounts-changed", this);
     window.removeEventListener("budget:accounts-loaded", this);
-    window.removeEventListener("budget:transaction-saved", this);
-    window.removeEventListener("budget:transaction-queued", this);
+    TRANSACTION_DATA_EVENTS.forEach((name) => window.removeEventListener(name, this));
   }
 
   /** Updates the selected range or rerenders when application data changes. */
