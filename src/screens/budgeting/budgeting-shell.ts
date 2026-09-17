@@ -30,6 +30,7 @@ const OVERLAY_PARAMS = new Set([
   "transactionId",
   "entityKind",
   "entityId",
+  "entityDraftName",
   "investmentAccountId",
   "accountDraftName",
   "accountCreateRequestId",
@@ -292,6 +293,7 @@ export class BudgetingHeader
         drawer: "entity-new",
         entityKind,
         entityId: null,
+        entityDraftName: null,
       });
       return;
     }

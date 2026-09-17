@@ -94,6 +94,7 @@ const OVERLAY_PARAMS = new Set([
   "transactionId",
   "entityKind",
   "entityId",
+  "entityDraftName",
   "investmentAccountId",
   "investmentLedgerSource",
   "accountDraftName",

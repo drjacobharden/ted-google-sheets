@@ -29,9 +29,9 @@ export function transactionEditPresentation(
   if (kind === "income") {
     return {
       title: "Edit Income",
-      paymentType: negative ? "Refund" : "Deposit",
+      paymentType: negative ? "Reversal" : "Deposit",
       paymentTypeKey,
-      paymentTypeOptions: ["Deposit", "Refund"],
+      paymentTypeOptions: paymentTypeOptions("income"),
     };
   }
 

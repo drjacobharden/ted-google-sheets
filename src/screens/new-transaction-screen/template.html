@@ -15,7 +15,7 @@
     <segmented-control
       id="new-transaction-kind"
       variant="section-tabs"
-      aria-label="Transaction type"
+      aria-label="Entry section"
     ></segmented-control>
     <custom-button
       class="ghost-button new-transaction-page__import-button"
@@ -60,7 +60,7 @@
               value="positive"
             ></payment-type-select>
           </div>
-          <category-select></category-select>
+          <category-select type="all" create-type="expense"></category-select>
           <vendor-select></vendor-select>
           <people-select></people-select>
           <account-select

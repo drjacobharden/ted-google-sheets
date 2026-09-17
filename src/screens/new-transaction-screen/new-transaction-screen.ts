@@ -19,8 +19,7 @@ import { PaymentTypeSelect } from "../../components/dropdowns/payment-type-selec
 import type { AccountType } from "../../api/account-api";
 
 const KIND_OPTIONS = [
-  { key: "expense", title: "Expense", isDefaultValue: true },
-  { key: "income", title: "Income" },
+  { key: "budgeting", title: "Budgeting", isDefaultValue: true },
   { key: "account", title: "Accounts" },
 ];
 
@@ -46,11 +45,11 @@ export class NewTransactionScreen extends HTMLElement {
   #message!: HTMLElement;
   #initialState = "";
   #accountRequestId = "";
-  #expenseDraft = { categoryId: "", vendorId: "" };
-  #incomeDraft = { categoryId: "", vendorId: "" };
+  #budgetKind: "expense" | "income" = "expense";
   #selectedCategoryId: string | null = null;
   #selectedVendorId: string | null = null;
   #selectedAccountType: AccountType | null = null;
+  #pendingCategoryCreate = false;
 
   connectedCallback(): void {
     if (!this.dataset.initialized) {
@@ -61,7 +60,7 @@ export class NewTransactionScreen extends HTMLElement {
       this.#bindEvents();
       this.#reset(DateUtils.toISODate(new Date()), false);
       if (router.currentParams().transactionKind === "account") {
-        this.#setKind("account");
+        this.#setMode("account");
       }
     }
   }
@@ -83,6 +82,18 @@ export class NewTransactionScreen extends HTMLElement {
 
       case "segmented-control-selection":
         this.#handleKindSelection(event);
+        break;
+
+      case "category-selected":
+        this.#handleCategorySelection(event as CustomEvent);
+        break;
+
+      case "budget:category-created":
+        this.#handleCategoryCreated(event as CustomEvent);
+        break;
+
+      case "app:route-changed":
+        this.#handleRouteChanged(event as CustomEvent);
         break;
 
       case "date-change":
@@ -133,6 +144,18 @@ export class NewTransactionScreen extends HTMLElement {
     this.#message = this.querySelector("#new-transaction-message")!;
     this.#noteInput = this.querySelector("#new-transaction_notes")!;
 
+    this.#categorySelect.configureOptions({
+      onAddRequest: (name: string) => {
+        this.#pendingCategoryCreate = true;
+        router.updateParams({
+          drawer: "entity-new",
+          entityKind: "category",
+          entityId: null,
+          entityDraftName: name,
+        });
+      },
+    });
+
     this.querySelectorAll(
       ".new-transaction-page__detail-list dropdown-menu",
     ).forEach((dropdown) => {
@@ -146,10 +169,13 @@ export class NewTransactionScreen extends HTMLElement {
     this.#form.addEventListener("submit", this);
     this.addEventListener("click", this);
     this.#kindControl.addEventListener("segmented-control-selection", this);
+    this.#categorySelect.addEventListener("category-selected", this);
     this.#inlineDatePicker.addEventListener("date-change", this);
     this.#compactDatePicker.addEventListener("date-change", this);
     this.#accountSelect.addEventListener("account-selected", this);
     this.#paymentType.addEventListener("payment-type-change", this);
+    window.addEventListener("budget:category-created", this);
+    window.addEventListener("app:route-changed", this);
     addListener("budget:account-created", window, this);
   }
 
@@ -157,12 +183,29 @@ export class NewTransactionScreen extends HTMLElement {
     this.#form.removeEventListener("submit", this);
     this.removeEventListener("click", this);
     this.#kindControl.removeEventListener("segmented-control-selection", this);
+    this.#categorySelect.removeEventListener("category-selected", this);
     this.#inlineDatePicker.removeEventListener("date-change", this);
     this.#compactDatePicker.removeEventListener("date-change", this);
     this.#accountSelect.removeEventListener("account-selected", this);
     this.#paymentType.removeEventListener("payment-type-change", this);
+    window.removeEventListener("budget:category-created", this);
+    window.removeEventListener("app:route-changed", this);
     removeListener("budget:account-created", window, this);
   }
+
+  #handleCategoryCreated = (event: CustomEvent): void => {
+    const category = event.detail?.category;
+    if (!this.#pendingCategoryCreate || !category?.id) return;
+    this.#pendingCategoryCreate = false;
+    this.#categorySelect.select(category.id, true);
+  };
+
+  #handleRouteChanged = (event: CustomEvent): void => {
+    const params = event.detail?.params;
+    if (params?.drawer !== "entity-new" || params?.entityKind !== "category") {
+      this.#pendingCategoryCreate = false;
+    }
+  };
 
   #state(): string {
     return JSON.stringify({
@@ -181,50 +224,61 @@ export class NewTransactionScreen extends HTMLElement {
 
   #handleKindSelection = (event: Event): void => {
     this.#kindControl.handleSelection(event, ({ value }) => {
-      const current = this.#formController.kind;
-
-      if (current === "expense") {
-        this.#expenseDraft = {
-          categoryId: this.#categorySelect.value,
-          vendorId: this.#vendorSelect.value,
-        };
-      } else if (current === "income") {
-        this.#incomeDraft = {
-          categoryId: this.#categorySelect.value,
-          vendorId: this.#vendorSelect.value,
-        };
-      }
-
-      this.#setKind(value);
+      this.#setMode(value);
     });
   };
 
-  #setKind(value: string): void {
-    const kind = this.#formController.setKind(value);
-    const isAccount = kind === "account";
-    const isIncome = kind === "income";
-    this.#kindControl.selection = kind;
+  #handleCategorySelection = (event: CustomEvent): void => {
+    const type = event.detail?.category?.type;
+    if (
+      (type !== "expense" && type !== "income") ||
+      this.#kindControl.selection === "account"
+    ) {
+      return;
+    }
+
+    this.#budgetKind = type;
+    this.#syncMode();
+  };
+
+  #setMode(value: string): void {
+    this.#kindControl.selection = value === "account" ? "account" : "budgeting";
+    this.#syncMode();
+  }
+
+  #syncMode(): void {
+    const isAccount = this.#kindControl.selection === "account";
+    const kind = this.#formController.setKind(
+      isAccount ? "account" : this.#budgetKind,
+    );
+    const typeInput = this.#form.querySelector<HTMLInputElement>(
+      'input[name="type"]',
+    );
+    if (typeInput) typeInput.value = kind;
     this.#categorySelect.hidden = isAccount;
-    this.#categorySelect.type = isIncome ? "income" : "expense";
-    this.#categorySelect.value = null;
     this.#vendorSelect.hidden = isAccount;
-    this.#vendorSelect.toggleAttribute("optional", isIncome);
+    this.#vendorSelect.toggleAttribute(
+      "optional",
+      !isAccount && this.#budgetKind === "income",
+    );
     this.#peopleSelect.hidden = isAccount;
     this.#accountSelect.hidden = !isAccount;
     this.#amountInput.min = "0.01";
+    this.#categorySelect.setAttribute("create-type", this.#budgetKind);
     this.#paymentType.kind = kind;
     this.#paymentType.accountType = isAccount
       ? this.#selectedAccountType
       : null;
 
-    this.#sourceSelect.value =
-      value === "income" ? "manual" : this.#sourceSelect.value;
+    if (!isAccount && this.#budgetKind === "income") {
+      this.#sourceSelect.value = "manual";
+    }
     this.#syncSourceVisibility();
 
     this.#sourceSelect.tooltip =
-      value === "expense"
+      kind === "expense"
         ? "Expenses paid through a paycheck deduction (like health insurance) are counted as both income and an expense."
-        : value === "account"
+        : kind === "account"
           ? "Investments and debt payments paid through paycheck deductions are counted as both income and an account transfer."
           : "";
   }
@@ -374,16 +428,12 @@ export class NewTransactionScreen extends HTMLElement {
   };
 
   #reset(date: string, announce: boolean): void {
-    const activeKind = this.#formController.kind;
-    this.#expenseDraft = { categoryId: "", vendorId: "" };
-    this.#incomeDraft = {
-      categoryId: APIs.budget.INCOME_CATEGORY_ID,
-      vendorId: "",
-    };
+    const activeMode = this.#kindControl.selection ?? "budgeting";
     this.#amountInput.value = "";
     this.#noteInput.value = "";
     this.#setDateValue(date);
     this.#categorySelect.clearFallbackSelection?.();
+    this.#categorySelect.value = "";
     this.#vendorSelect.clearFallbackSelection?.();
     this.#peopleSelect.clearFallbackSelection?.();
     this.#accountSelect.value = "";
@@ -393,8 +443,8 @@ export class NewTransactionScreen extends HTMLElement {
     this.#sourceSelect.value = "manual";
     this.#vendorSelect.value = "";
     this.#peopleSelect.value = APIs.budget.SHARED_ASSIGNMENT_ID;
-    this.#setKind(activeKind);
-    if (activeKind === "income") {
+    this.#setMode(activeMode);
+    if (activeMode !== "account" && this.#budgetKind === "income") {
       this.#categorySelect.value = APIs.budget.INCOME_CATEGORY_ID;
     }
     this.#message.className = announce

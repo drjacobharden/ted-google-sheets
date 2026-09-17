@@ -221,7 +221,7 @@ export class EntityDrawerScreen
     window.setTimeout(() => this.#form.elements.name.select(), 370);
   }
 
-  #openCreate(kind: EntityKind): boolean {
+  #openCreate(kind: EntityKind, draftName = ""): boolean {
     const settings = CONFIG[kind];
     if (!settings) return false;
     this.#opened = {
@@ -232,13 +232,13 @@ export class EntityDrawerScreen
       isDefault: false,
     };
     this.#returnFocus = document.activeElement as HTMLElement | null;
-    this.#openedName = "";
+    this.#openedName = draftName;
     this.#categoryType = "expense";
     this.#openedType = "expense";
     this.#header.title = `New ${settings.label}`;
     this.#nameLabel.textContent = settings.nameLabel;
     this.#form.elements.name.maxLength = kind === "category" ? 50 : 80;
-    this.#form.elements.name.value = "";
+    this.#form.elements.name.value = draftName;
     this.#typeField.hidden = kind !== "category";
     this.#resetCategoryTypeSelector();
     this.#saveButton.label = `Add ${settings.label}`;
@@ -312,10 +312,17 @@ export class EntityDrawerScreen
 
     try {
       if (current.mode === "create") {
-        settings.add({
+        const saved = settings.add({
           name,
           ...(current.kind === "category" ? { type: this.#categoryType } : {}),
         });
+        if (current.kind === "category") {
+          window.dispatchEvent(
+            new CustomEvent("budget:category-created", {
+              detail: { category: saved },
+            }),
+          );
+        }
         this.#close(true);
         showToast(`${titleCase(settings.label)} added.`);
         return;
@@ -452,7 +459,12 @@ export class EntityDrawerScreen
   }
 
   #clearRoute(): void {
-    router.updateParams({ drawer: null, entityKind: null, entityId: null });
+    router.updateParams({
+      drawer: null,
+      entityKind: null,
+      entityId: null,
+      entityDraftName: null,
+    });
   }
 
   #openFromRoute(): void {
@@ -460,7 +472,9 @@ export class EntityDrawerScreen
     const action = params.drawer;
     const kind = params.entityKind;
     const id = params.entityId;
-    const routeKey = `${action || ""}:${kind || ""}:${id || ""}`;
+    const draftName =
+      action === "entity-new" ? params.entityDraftName || "" : "";
+    const routeKey = `${action || ""}:${kind || ""}:${id || ""}:${draftName}`;
 
     if (action !== "entity-new" && action !== "entity-edit") {
       this.#openedRouteKey = "";
@@ -486,7 +500,7 @@ export class EntityDrawerScreen
     try {
       const opened =
         action === "entity-new"
-          ? this.#openCreate(kind)
+          ? this.#openCreate(kind, draftName)
           : this.#openEdit(kind, id);
       if (opened) this.#openedRouteKey = routeKey;
       else this.#clearRoute();

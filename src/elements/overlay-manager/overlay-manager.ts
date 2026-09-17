@@ -140,6 +140,7 @@ export class OverlayManager extends HTMLElement {
       transactionId: null,
       entityKind: null,
       entityId: null,
+      entityDraftName: null,
       investmentAccountId: null,
       investmentLedgerSource: null,
       accountDraftName: null,

@@ -59,7 +59,7 @@ describe("edit-only transaction drawer", () => {
       paymentType: "Deposit",
     });
     expect(transactionEditPresentation("income", -12).paymentType).toBe(
-      "Refund",
+      "Reversal",
     );
     expect(
       transactionEditPresentation("account", 12, "investment"),
