@@ -7,7 +7,7 @@ export function paymentTypeOptions(
   kind: PaymentKind,
   accountType: AccountType | null = null,
 ): readonly string[] {
-  if (kind === "income") return ["Deposit", "Refund"];
+  if (kind === "income") return ["Deposit", "Reversal"];
   if (kind === "account") {
     if (accountType === "investment") return ["Contribution", "Withdrawal", "Balance"];
     if (accountType === "debt") return ["Payment", "New Borrowing", "Balance"];

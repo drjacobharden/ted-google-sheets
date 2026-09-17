@@ -18,7 +18,7 @@ const dropdownStyles = await Bun.file(
 describe("shared payment type select", () => {
   test("provides contextual positive and negative labels", () => {
     expect(paymentTypeOptions("expense")).toEqual(["Payment", "Refund"]);
-    expect(paymentTypeOptions("income")).toEqual(["Deposit", "Refund"]);
+    expect(paymentTypeOptions("income")).toEqual(["Deposit", "Reversal"]);
     expect(paymentTypeOptions("account", "investment")).toEqual([
       "Contribution",
       "Withdrawal",

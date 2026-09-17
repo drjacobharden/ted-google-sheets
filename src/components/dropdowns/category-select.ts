@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { APIs } from "../../api/api";
+import { compareCategoryOptions } from "../../utilities/category-order";
 import { InfoHover } from "../info-hover/info-hover";
 import { showToast } from "../toast-stack/toast-service";
 
@@ -41,6 +42,7 @@ export class CategorySelect extends HTMLElement {
       name,
       type: this.#type === "all" ? this.#createType : this.#type,
     });
+  #onAddRequest = null;
   #onCreate = (category) => {
     this.dispatchEvent(
       new CustomEvent("category-created", {
@@ -72,6 +74,10 @@ export class CategorySelect extends HTMLElement {
       return;
     }
     this.#setValue(id);
+  }
+
+  select(categoryId, announce = false) {
+    this.#setValue(categoryId, announce);
   }
 
   get isOpen() {
@@ -108,10 +114,11 @@ export class CategorySelect extends HTMLElement {
       this.#dropdown?.querySelector(".dropdown-trigger")?.focus();
   }
 
-  configureOptions({ getOptions, createOption, onCreate } = {}) {
+  configureOptions({ getOptions, createOption, onCreate, onAddRequest } = {}) {
     if (typeof getOptions === "function") this.#getOptions = getOptions;
     if (typeof createOption === "function") this.#createOption = createOption;
     if (typeof onCreate === "function") this.#onCreate = onCreate;
+    if (typeof onAddRequest === "function") this.#onAddRequest = onAddRequest;
     this.#refresh(this.value);
   }
 
@@ -230,13 +237,7 @@ export class CategorySelect extends HTMLElement {
     ) {
       options.push(this.#fallbackSelection);
     }
-    this.#dropdown.items = options
-      .sort((left, right) => {
-        const leftOrder = left.type === "expense" ? 0 : 1;
-        const rightOrder = right.type === "expense" ? 0 : 1;
-        return leftOrder - rightOrder || left.name.localeCompare(right.name, "en-US", { numeric: true, sensitivity: "base" });
-      })
-      .map((item) => ({
+    this.#dropdown.items = options.sort(compareCategoryOptions).map((item) => ({
       key: String(item.id),
       title: `${item.name}${item.archived ? " (archived)" : ""}`,
       group: item.type === "income" ? "Income" : "Expenses",
@@ -273,7 +274,13 @@ export class CategorySelect extends HTMLElement {
     const name = String(input || "")
       .trim()
       .replace(/\s+/g, " ");
-    if (!name) return;
+    if (!name) {
+      if (this.#onAddRequest) {
+        this.closePopup({ focusTrigger: true });
+        this.#onAddRequest("");
+      }
+      return;
+    }
     const existing = this.#options.find(
       (item) =>
         item.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
@@ -281,6 +288,11 @@ export class CategorySelect extends HTMLElement {
     if (existing) {
       this.#setValue(existing.id, true);
       this.closePopup({ focusTrigger: true });
+      return;
+    }
+    if (this.#onAddRequest) {
+      this.closePopup({ focusTrigger: true });
+      this.#onAddRequest(name);
       return;
     }
     try {

@@ -5,6 +5,7 @@ import {
   uuid,
   writeStorageArray,
 } from "../utilities/data-utilities";
+import { compareCategoriesByName } from "../utilities/category-order";
 
 export type EntityKind = "category" | "vendor" | "assignment";
 export type TransactionType = "income" | "expense";
@@ -616,9 +617,7 @@ export function BudgetAPI(): BudgetAPIContract {
   /** A quick category operation that shows all categories without any filtering */
   function listAllCategories() {
     ensureLocalData();
-    return readArray(KEYS.categories).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
+    return readArray(KEYS.categories).sort(compareCategoriesByName);
   }
 
   /** Handles the listCategories operation for the budget data layer. */
@@ -626,7 +625,7 @@ export function BudgetAPI(): BudgetAPIContract {
     ensureLocalData();
     return active(readArray(KEYS.categories))
       .filter((item) => !options.type || item.type === options.type)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort(compareCategoriesByName);
   }
   /** Returns every cached vendor, including archived records. */
   function listAllVendors() {

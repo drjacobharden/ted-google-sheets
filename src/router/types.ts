@@ -40,6 +40,7 @@ export interface KnownRouteParams {
   transactionId?: string;
   entityKind?: EntityKind;
   entityId?: string;
+  entityDraftName?: string;
   investmentAccountId?: string;
   investmentLedgerSource?: string;
   accountDraftName?: string;

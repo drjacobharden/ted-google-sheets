@@ -7,6 +7,7 @@ import type { AvailableFilter } from "../../components/filter-bar/filter-bar";
 import type { DataTableColumn } from "../../components/data-table/data-table";
 import { router } from "../../router/router";
 import { appController } from "../../state/app-controller";
+import { sortNeedsReviewLast } from "../../utilities/category-order";
 import {
   buildEntityLedgerRows,
   editorialPeriod,
@@ -106,12 +107,15 @@ export class CategoryScreen extends EditorialEntityLedgerScreen<CategoryLedgerRo
   protected sourceRows(year: number): CategoryLedgerRow[] {
     const type = this.#categoryType;
     const entities = APIs.budget.listAllCategories().filter((category) => category.type === type);
-    return buildEntityLedgerRows(entities, appController.getTransactions(), {
+    const rowType: CategoryLedgerRow["type"] =
+      type === "income" ? "Income" : "Expense";
+    const rows = buildEntityLedgerRows(entities, appController.getTransactions(), {
       year,
       month: this.selectedMonth,
       idKey: "categoryId",
       type,
-    }).map((row) => ({ ...row, type: type === "income" ? "Income" : "Expense" }));
+    }).map((row) => ({ ...row, type: rowType }));
+    return sortNeedsReviewLast(rows);
   }
 
   protected subtitle(year: number): string {
