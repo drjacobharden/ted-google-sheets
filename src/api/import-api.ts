@@ -310,7 +310,7 @@ export function ImportAPI(budget: import("./budget-api").BudgetAPIContract): Imp
       ? requireProfile(
           await request(
             index >= 0 ? "updateImportProfile" : "createImportProfile",
-            { profile },
+            { profile, base: index >= 0 ? all[index] : null },
           ),
         )
       : profile;
