@@ -63,6 +63,7 @@ export function buildEntityChartMonths(
   id: string,
   year: number,
   today = new Date(),
+  throughDate?: string,
 ): EntityChartMonth[] {
   const rows = Array.from({ length: 12 }, (_, index) => ({
     monthId: `${year}-${String(index + 1).padStart(2, "0")}`,
@@ -81,6 +82,7 @@ export function buildEntityChartMonths(
   }));
   transactions.forEach((transaction) => {
     if (!validDate(transaction.date) || transaction.date.slice(0, 4) !== String(year)) return;
+    if (throughDate && transaction.date > throughDate) return;
     const month = Number(transaction.date.slice(5, 7)) - 1;
     if (year === today.getFullYear() && month > today.getMonth()) return;
     const effects = activityEffects(transaction, accounts);

@@ -339,7 +339,7 @@ export class EntityDetailScreen
     );
   }
 
-  #transactionsForYear(year: number): BudgetTransaction[] {
+  #transactionsForYear(year: number, throughDate?: string): BudgetTransaction[] {
     if (!this.#selected) return [];
     const settings = ENTITY_DETAIL_CONFIG[this.#selected.kind];
     return budgetingActivities(
@@ -349,6 +349,7 @@ export class EntityDetailScreen
       APIs.budget.listAllPeople(),
     )
       .filter((transaction) => transaction.date.startsWith(`${year}-`))
+      .filter((transaction) => !throughDate || transaction.date <= throughDate)
       .filter(
         (transaction) => transaction[settings.field] === this.#selected?.id,
       );
@@ -385,7 +386,26 @@ export class EntityDetailScreen
     this.#configureFilters(year);
     const previousYear = year - 1;
     const current = this.#transactionsForYear(year);
-    const previous = this.#transactionsForYear(previousYear);
+    const today = new Date();
+    const todayIso = today.toISOString().slice(0, 10);
+    const latestCurrentDate =
+      year === today.getFullYear()
+        ? current
+            .map((transaction) => transaction.date)
+            .filter((date) => date <= todayIso)
+            .sort()
+            .at(-1)
+        : undefined;
+    const previousThroughDate = latestCurrentDate
+      ? `${previousYear}${latestCurrentDate.slice(4)}`
+      : undefined;
+    const previous = this.#transactionsForYear(
+      previousYear,
+      previousThroughDate,
+    );
+    const comparisonMonths = latestCurrentDate
+      ? Number(latestCurrentDate.slice(5, 7))
+      : elapsedPeriods(previousYear).months;
     const total = this.#value(current);
     const previousTotal = this.#value(previous);
     const comparison =
@@ -395,7 +415,7 @@ export class EntityDetailScreen
 
     this.#title.textContent = entity.name;
     this.#subtitle.textContent = `Viewing summary for ${year}`;
-    this.#renderFocusMetrics(current, total, year, previous);
+    this.#renderFocusMetrics(current, total, year, previous, comparisonMonths);
     if (this.#selected.kind !== "assignment") {
       this.#comparisonLabel.textContent = `vs ${previousYear}`;
       this.#comparison.textContent = signedPercent(comparison);
@@ -407,7 +427,12 @@ export class EntityDetailScreen
         "is-negative",
         comparison !== null && comparison < 0,
       );
-      this.#renderComparisonSubline(total, previousTotal, year);
+      this.#renderComparisonSubline(
+        total,
+        previousTotal,
+        year,
+        comparisonMonths,
+      );
     }
 
     this.#configureChartMode(entity, year);
@@ -419,16 +444,15 @@ export class EntityDetailScreen
     total: number,
     previousTotal: number,
     year: number,
+    comparisonMonths: number,
   ): void {
     if (this.#selected?.kind === "assignment") {
       this.#comparisonSubline.hidden = true;
       return;
     }
 
-    const currentMonths = elapsedPeriods(year).months;
-    const previousMonths = elapsedPeriods(year - 1).months;
     const monthlyDifference =
-      total / currentMonths - previousTotal / previousMonths;
+      total / comparisonMonths - previousTotal / comparisonMonths;
     const direction =
       monthlyDifference === 0
         ? "difference"
@@ -444,6 +468,7 @@ export class EntityDetailScreen
     total: number,
     year: number,
     previousTransactions: readonly BudgetTransaction[] = [],
+    comparisonMonths = elapsedPeriods(year - 1).months,
   ): void {
     const isPeriodBreakdown = this.#selected?.kind !== "assignment";
     if (!isPeriodBreakdown) {
@@ -485,6 +510,7 @@ export class EntityDetailScreen
         previousBalance,
         year,
         "saved",
+        comparisonMonths,
       );
       return;
     }
@@ -554,6 +580,7 @@ export class EntityDetailScreen
     previous: number,
     year: number,
     subject = "",
+    comparisonMonths = elapsedPeriods(year - 1).months,
   ): void {
     if (previous === 0) {
       element.textContent = "";
@@ -561,10 +588,8 @@ export class EntityDetailScreen
       return;
     }
 
-    const currentMonths = elapsedPeriods(year).months;
-    const previousMonths = elapsedPeriods(year - 1).months;
     const monthlyDifference =
-      current / currentMonths - previous / previousMonths;
+      current / comparisonMonths - previous / comparisonMonths;
     const direction =
       monthlyDifference === 0
         ? "difference"
@@ -710,6 +735,19 @@ export class EntityDetailScreen
     if (!this.#selected) return;
     const year = appState.get("budgetingContext").year;
     const accounts = APIs.accounts.accounts();
+    const today = new Date();
+    const todayIso = today.toISOString().slice(0, 10);
+    const latestCurrentDate =
+      year === today.getFullYear()
+        ? this.#transactionsForYear(year)
+            .map((transaction) => transaction.date)
+            .filter((date) => date <= todayIso)
+            .sort()
+            .at(-1)
+        : undefined;
+    const previousThroughDate = latestCurrentDate
+      ? `${year - 1}${latestCurrentDate.slice(4)}`
+      : undefined;
     const currentRows = buildEntityChartMonths(
       this.#allTransactions(),
       accounts,
@@ -724,6 +762,7 @@ export class EntityDetailScreen
       this.#selected.id,
       year - 1,
       new Date(year - 1, 11, 31),
+      previousThroughDate,
     );
     this.#chart.data = entityChartData(
       currentRows,

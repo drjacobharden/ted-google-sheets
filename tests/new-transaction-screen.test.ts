@@ -55,6 +55,44 @@ describe("full-screen transaction entry presentation", () => {
     expect(source).toContain('isAccount ? "account" : this.#budgetKind');
   });
 
+  test("places the Batch entry switch beside Add transaction in the form footer", () => {
+    const footer = template.slice(
+      template.indexOf('class="new-transaction-page__footer-actions"'),
+    );
+    expect(footer).toContain('id="new-transaction-batch-toggle"');
+    expect(footer).toContain("Batch entry");
+    expect(footer).toContain('label="Add transaction"');
+    expect(footer.indexOf('id="new-transaction-batch-toggle"')).toBeLessThan(
+      footer.indexOf('label="Add transaction"'),
+    );
+    expect(template).not.toContain('data-action="toggle-batch"');
+  });
+
+  test("renders batch entries as date and amount cards in the entry column", () => {
+    expect(template).toContain("Choose a date and amount");
+    expect(template).toContain('class="new-transaction-page__batch-cards"');
+    expect(template).toContain('leading-icon="plus"');
+    expect(template).toContain('label="Add another entry"');
+    expect(source).toContain('document.createElement("date-picker")');
+    expect(source).toContain('document.createElement("currency-input")');
+    expect(styles).toContain(".new-transaction-page__grid.is-batch-entry");
+    expect(styles).toContain("border-bottom: var(--rule-strong)");
+    expect(styles).toContain("background: var(--color-surface);");
+    expect(styles).toContain("background: var(--color-surface-overlay);");
+    expect(styles).toContain("&::-webkit-inner-spin-button");
+  });
+
+  test("aligns batch metadata, offsets the single calendar, and keeps the active switch border dark", () => {
+    expect(styles).toContain(
+      ".new-transaction-page__grid.is-batch-entry {\n    grid-template-columns: repeat(2, minmax(0, 1fr));",
+    );
+    expect(styles).toContain(".new-transaction-page__detail-list {\n      margin-top:");
+    expect(styles).toContain(
+      ".new-transaction-page__entry-column {\n    padding-top: var(--space-md);",
+    );
+    expect(styles).toContain("&:checked {\n        border-color: #000;");
+  });
+
   test("uses category type for payment labels and hides income source as manual", () => {
     expect(source).toContain("this.#paymentType.kind = kind");
     expect(source).toContain('this.#sourceSelect.value = "manual"');

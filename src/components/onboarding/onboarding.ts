@@ -261,7 +261,7 @@ if (!customElements.get("onboarding-overlay")) customElements.define("onboarding
         <div class="onboarding-section-heading">
           <p class="type-meta">Structure — fig. 02</p>
           <h2 class="type-section-title">Initialize the copied Sheet</h2>
-          <p class="type-body type-muted">In the Google Sheet, use the custom menu to create the normalized budget tabs and Ledger.</p>
+          <p class="type-body type-muted">In the Google Sheet, use the custom menu to create and verify the normalized budget tabs.</p>
         </div>
         <ol class="onboarding-instructions">
           <li>Reload the copied Sheet.</li>

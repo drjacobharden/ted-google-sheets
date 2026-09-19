@@ -7,6 +7,10 @@ export interface JsonObject {
 
 export interface ApiError extends Error {
   isApiError: true;
+  code?: string;
+  retryable?: boolean;
+  requestId?: string;
+  phase?: string;
 }
 
 /** Returns whether a value is a non-null, non-array object. */
@@ -83,18 +87,27 @@ export async function requestJson(
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action, ...body }),
+    body: JSON.stringify({ action, requestId: uuid(), ...body }),
     redirect: "follow",
   });
   if (!response.ok) throw new Error(`Request failed (${response.status}).`);
   const payload: unknown = await response.json();
   if (isRecord(payload) && payload.ok === false) {
+    const detail = isRecord(payload.error) ? payload.error : null;
     const error = new Error(
       typeof payload.error === "string"
         ? payload.error
+        : detail && typeof detail.message === "string"
+          ? detail.message
         : "The Sheet returned an error.",
     ) as ApiError;
     error.isApiError = true;
+    if (detail) {
+      error.code = typeof detail.code === "string" ? detail.code : undefined;
+      error.retryable = detail.retryable === true;
+      error.requestId = typeof detail.requestId === "string" ? detail.requestId : undefined;
+      error.phase = typeof detail.phase === "string" ? detail.phase : undefined;
+    }
     throw error;
   }
   return isRecord(payload) && "data" in payload ? payload.data : payload;

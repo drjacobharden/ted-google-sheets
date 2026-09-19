@@ -78,7 +78,6 @@ const datePickerTemplate = () => `
     #nextBtn = null;
     #hiddenInput = null;
     #selectionElement = null;
-
     static get observedAttributes() {
       return ["value", "name", "alignment", "variant"];
     }
@@ -130,6 +129,10 @@ const datePickerTemplate = () => `
     connectedCallback() {
       // Set the html to display
       this.innerHTML = datePickerTemplate();
+
+      // Attributes can be assigned before a dynamically-created picker is
+      // connected, so make sure the initial value survives that lifecycle.
+      if (!this.#value) this.#value = this.getAttribute("value") || "";
 
       // Set references to the elements so we only query once
       this.#triggerElement = this.querySelector(".date-picker-trigger");
@@ -215,6 +218,7 @@ const datePickerTemplate = () => `
       if (name === "name" && this.#hiddenInput) {
         this.#hiddenInput.name = newValue;
       }
+
     }
 
     handleEvent(event) {
