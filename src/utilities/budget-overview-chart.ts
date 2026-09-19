@@ -68,6 +68,7 @@ export function buildBudgetOverviewChartMonths(
   accounts: ReadonlyArray<Account>,
   year: number,
   today = new Date(),
+  throughDate?: string,
 ): BudgetOverviewChartMonth[] {
   const rows = Array.from({ length: 12 }, (_, index) => ({
     monthId: `${year}-${String(index + 1).padStart(2, "0")}`,
@@ -90,6 +91,7 @@ export function buildBudgetOverviewChartMonths(
       transaction.date.slice(0, 4) !== String(year)
     )
       return;
+    if (throughDate && transaction.date > throughDate) return;
     const month = Number(transaction.date.slice(5, 7)) - 1;
     if (year === today.getFullYear() && month > today.getMonth()) return;
     const row = rows[month];
@@ -109,6 +111,7 @@ export function buildBudgetOverviewChartMonths(
       !validDate(transaction.date) ||
       transaction.date.slice(0, 4) !== String(year)
     ) return;
+    if (throughDate && transaction.date > throughDate) return;
     const month = Number(transaction.date.slice(5, 7)) - 1;
     if (year === today.getFullYear() && month > today.getMonth()) return;
     const effects = activityEffects(transaction, accounts);
@@ -126,6 +129,7 @@ export function buildBudgetOverviewChartMonths(
       transaction.date.slice(0, 4) !== String(year)
     )
       return;
+    if (throughDate && transaction.date > throughDate) return;
     const amount = deductedInvestmentSavings([transaction], accounts);
     if (amount)
       deductedInvestmentByMonth.set(

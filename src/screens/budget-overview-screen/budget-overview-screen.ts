@@ -1297,11 +1297,29 @@ export class BudgetOverviewScreen
       this.#selectedYear,
       DateUtils.today,
     );
+    const todayIso = DateUtils.today.toISOString().slice(0, 10);
+    const latestCurrentYearDate =
+      this.#selectedYear === DateUtils.today.getFullYear()
+        ? transactions
+            .map((transaction) => transaction.date)
+            .filter(
+              (date) =>
+                /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+                date.startsWith(`${this.#selectedYear}-`) &&
+                date <= todayIso,
+            )
+            .sort()
+            .at(-1)
+        : undefined;
+    const previousYearThroughDate = latestCurrentYearDate
+      ? `${this.#selectedYear - 1}${latestCurrentYearDate.slice(4)}`
+      : undefined;
     const previousRows = buildBudgetOverviewChartMonths(
       transactions,
       accounts,
       this.#selectedYear - 1,
       new Date(this.#selectedYear, 11, 31),
+      previousYearThroughDate,
     );
     const hasData = rows.some((row) => row.hasData);
     const totals = rows.reduce(
