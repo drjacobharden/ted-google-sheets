@@ -1,12 +1,14 @@
-/** Google Apps Script web API for the normalized budget ledger. */
+/** Google Apps Script web API for the normalized budget data model. */
 
 const APP = Object.freeze({
   spreadsheetIdProperty: "SPREADSHEET_ID",
   setupVersionProperty: "SETUP_VERSION",
-  setupVersion: "15",
+  setupStateProperty: "SETUP_STATE",
+  setupVersion: "16",
   unifiedActivityMigrationProperty: "UNIFIED_ACTIVITY_V12_SPREADSHEET_ID",
-  apiVersion: 15,
-  ledgerDirtyProperty: "LEDGER_DIRTY",
+  legacyAccountsMigrationProperty: "LEGACY_ACCOUNTS_V11_SPREADSHEET_ID",
+  accountCategoryRepairProperty: "ACCOUNT_CATEGORY_V16_SPREADSHEET_ID",
+  apiVersion: 16,
   incomeCategoryId: "00000000-0000-4000-8000-000000000001",
   debtPaymentCategoryId: "00000000-0000-4000-8000-000000000002",
   sharedAssignmentId: "00000000-0000-4000-8000-000000000101",
@@ -252,25 +254,6 @@ const TABLES = Object.freeze({
       "updatedAt",
     ],
   },
-  ledger: {
-    name: "Ledger",
-    headers: [
-      "Date",
-      "Type",
-      "Category",
-      "Vendor",
-      "Assignment",
-      "Created By",
-      "Notes",
-      "Amount",
-      "Transaction ID",
-      "Category ID",
-      "Vendor ID",
-      "Assignment ID",
-      "Created By ID",
-      "Created At",
-    ],
-  },
 });
 
 const LEGACY_TRANSACTION_HEADERS = Object.freeze([
@@ -292,40 +275,73 @@ const DEFAULT_CATEGORIES = Object.freeze([
   { id: APP.debtPaymentCategoryId, name: "Debt Payment", type: "expense" },
 ]);
 
+let REQUEST_CONTEXT_ = null;
+
 function doGet(e) {
-  return handleRequest_(e && e.parameter ? e.parameter : {});
+  const request = e && e.parameter ? e.parameter : {};
+  request._method = "GET";
+  return handleRequest_(request);
 }
 
 function doPost(e) {
   try {
-    return handleRequest_(parsePostBody_(e));
+    const request = parsePostBody_(e);
+    request._method = "POST";
+    return handleRequest_(request);
   } catch (error) {
-    return json_({ ok: false, error: errorMessage_(error) });
+    REQUEST_CONTEXT_ = {
+      requestId: Utilities.getUuid(),
+      action: "parsePostBody",
+      startedAt: Date.now(),
+    };
+    return failure_(error);
   }
 }
 
 function handleRequest_(request) {
+  REQUEST_CONTEXT_ = {
+    requestId: cleanText_(request.requestId || Utilities.getUuid(), 100),
+    action: cleanText_(request.action, 80),
+    startedAt: Date.now(),
+  };
   try {
+    if (String(request.action || "") === "health")
+      return success_({ status: "ok", apiVersion: APP.apiVersion });
     assertInitialized_();
+    if (
+      request._method === "GET" &&
+      [
+        "health",
+        "readiness",
+        "bootstrap",
+        "listTransactions",
+        "listUsers",
+        "listCategories",
+        "listArchivedEntities",
+        "listVendors",
+        "listAssignments",
+        "listAccounts",
+        "listAccountBalances",
+        "listAccountActivity",
+        "listInvestmentAccounts",
+        "listInvestmentBalances",
+        "listInvestmentContributions",
+        "listDebtAccounts",
+        "listDebtBalances",
+        "listDebtPayments",
+        "listImportProfiles",
+        "getImportProfileBundle",
+        "listInvestmentSnapshots",
+      ].indexOf(String(request.action || "")) < 0
+    )
+      throw appError_(
+        "method_not_allowed",
+        "Mutations must use POST.",
+        false,
+      );
     switch (String(request.action || "")) {
-      case "health":
-        return success_({
-          status: "ok",
-          apiVersion: APP.apiVersion,
-          features: [
-            "bootstrap",
-            "bootstrapArchives",
-            "batchTransactions",
-            "batchEntities",
-            "batchTransactionUpdates",
-            "accounts",
-            "accountMonthlyFlows",
-            "batchAccountMonths",
-            "importProfiles",
-            "importMappings",
-          ],
-          ledgerNeedsRebuild: isLedgerDirty_(),
-        });
+      case "readiness":
+        return success_(readiness_());
       case "bootstrap":
         return success_(bootstrap_());
       case "listTransactions":
@@ -360,7 +376,7 @@ function handleRequest_(request) {
       case "updateUser":
         return successResult_(
           withScriptLock_(function () {
-            return updateUser_(request.user);
+            return updateUser_(request.user, request.base);
           }),
         );
       case "listCategories":
@@ -372,7 +388,7 @@ function handleRequest_(request) {
       case "updateCategory":
         return successResult_(
           withScriptLock_(function () {
-            return updateCategory_(request.category);
+            return updateCategory_(request.category, request.base);
           }),
         );
       case "archiveCategory":
@@ -388,7 +404,7 @@ function handleRequest_(request) {
       case "updateVendor":
         return successResult_(
           withScriptLock_(function () {
-            return updateNamedRecord_(TABLES.vendors, request.vendor);
+            return updateNamedRecord_(TABLES.vendors, request.vendor, request.base);
           }),
         );
       case "archiveVendor":
@@ -406,7 +422,7 @@ function handleRequest_(request) {
       case "updateAssignment":
         return successResult_(
           withScriptLock_(function () {
-            return updateNamedRecord_(TABLES.assignments, request.assignment);
+            return updateNamedRecord_(TABLES.assignments, request.assignment, request.base);
           }),
         );
       case "archiveAssignment":
@@ -418,7 +434,7 @@ function handleRequest_(request) {
       case "listAccounts":
         return success_(listAccounts_());
       case "saveAccount":
-        return success_(withScriptLock_(function () { return saveAccount_(request.account); }));
+        return success_(withScriptLock_(function () { return saveAccount_(request.account, request.base); }));
       case "archiveAccount":
         return success_(withScriptLock_(function () { return archiveRecord_(TABLES.accounts, request.id); }));
       case "listAccountBalances":
@@ -426,55 +442,27 @@ function handleRequest_(request) {
       case "listAccountActivity":
         return success_(listAccountActivity_());
       case "saveAccountMonth":
-        return success_(saveAccountMonths_([request.month]));
+        return success_(withScriptLock_(function () { return saveAccountMonths_([request.month]); }));
       case "saveAccountMonths":
-        return success_(saveAccountMonths_(request.months));
+        return success_(withScriptLock_(function () { return saveAccountMonths_(request.months); }));
       case "deleteAccountActivity":
-        return success_(deleteAccountActivity_(request.id));
+        return success_(deleteAccountActivity_(request.id, request.accountId, request.accountType));
       case "deleteAccountBalance":
         return success_(withScriptLock_(function () { return deleteAccountBalance_(request); }));
       // Deprecated adapters for the staged UI migration. They all delegate to
       // the unified sheets and never recreate legacy persistence.
       case "listInvestmentAccounts":
         return success_(listAccounts_().filter(function (item) { return item.type === "investment"; }));
-      case "addInvestmentAccounts":
-        return success_(addInvestmentAccounts_(request.accounts));
-      case "addInvestmentAccount":
-        return success_(addInvestmentAccounts_([request.account]).saved[0]);
-      case "updateInvestmentAccount":
-        return success_(
-          withScriptLock_(function () {
-            return updateInvestmentAccount_(request.account);
-          }),
-        );
-      case "archiveInvestmentAccount":
-        return success_(
-          withScriptLock_(function () {
-            return archiveRecord_(TABLES.accounts, request.id);
-          }),
-        );
       case "listInvestmentBalances":
-        return success_(listAccountBalances_().filter(function (item) { return accountTypeById_(item.accountId) === "investment"; }));
+        return success_(listAccountBalancesByType_("investment"));
       case "listInvestmentContributions":
         return success_(listAccountActivity_().filter(function (item) { return item.activityType === "contribution"; }));
-      case "saveInvestmentMonth":
-        return success_(saveAccountMonths_([request.month]));
-      case "saveInvestmentMonths":
-        return success_(saveAccountMonths_(request.months));
       case "listDebtAccounts":
         return success_(listAccounts_().filter(function (item) { return item.type === "debt"; }));
       case "listDebtBalances":
-        return success_(listAccountBalances_().filter(function (item) { return accountTypeById_(item.accountId) === "debt"; }).map(legacyDebtBalance_));
+        return success_(listAccountBalancesByType_("debt").map(legacyDebtBalance_));
       case "listDebtPayments":
-        return success_(listAccountActivity_().filter(function (item) { return accountTypeById_(item.accountId) === "debt"; }).map(legacyDebtActivity_));
-      case "saveDebtAccount":
-        return success_(withScriptLock_(function () { return saveDebtAccount_(request.account); }));
-      case "saveDebtBalance":
-        return success_(withScriptLock_(function () { return saveDebtBalance_(request.balance); }));
-      case "saveDebtPayment":
-        return success_(saveDebtPayment_(request.payment));
-      case "deleteDebtPayment":
-        return success_(deleteDebtPayment_(request.id));
+        return success_(listAccountActivity_().filter(function (item) { return item.activityType !== "contribution"; }).map(legacyDebtActivity_));
       case "listImportProfiles":
         return success_(listImportProfiles_());
       case "getImportProfileBundle":
@@ -488,7 +476,7 @@ function handleRequest_(request) {
       case "updateImportProfile":
         return success_(
           withScriptLock_(function () {
-            return updateImportProfile_(request.profile);
+            return updateImportProfile_(request.profile, request.base);
           }),
         );
       case "archiveImportProfile":
@@ -511,31 +499,242 @@ function handleRequest_(request) {
         throw new Error(
           "This app version cannot safely write itemized investment contributions. Update the TED app.",
         );
-      case "rebuildLedger":
-        return success_(rebuildLedger());
       default:
         throw new Error("Unknown action.");
     }
   } catch (error) {
-    return json_({ ok: false, error: errorMessage_(error) });
+    return failure_(error);
   }
 }
 
+function readiness_() {
+  const spreadsheet = getSpreadsheet_();
+  const missing = [];
+  const incompatible = [];
+  Object.keys(TABLES)
+    .filter(function (key) { return key !== "accountActivity"; })
+    .forEach(function (key) {
+    const spec = TABLES[key];
+    const sheet = spreadsheet.getSheetByName(spec.name);
+    if (!sheet) {
+      missing.push(spec.name);
+      return;
+    }
+    const headers = sheet.getRange(1, 1, 1, spec.headers.length).getValues()[0];
+    if (!headersMatch_(headers, spec.headers)) incompatible.push(spec.name);
+    });
+  const advancedSheetsAvailable = Boolean(
+    typeof Sheets !== "undefined" &&
+      Sheets.Spreadsheets &&
+      Sheets.Spreadsheets.Values,
+  );
+  return {
+    status:
+      !missing.length && !incompatible.length && advancedSheetsAvailable
+        ? "ready"
+        : "not_ready",
+    apiVersion: APP.apiVersion,
+    spreadsheetAccessible: true,
+    advancedSheetsAvailable: advancedSheetsAvailable,
+    missingSheets: missing,
+    incompatibleSheets: incompatible,
+  };
+}
+
+function inspectDataIntegrity_(spreadsheet) {
+  spreadsheet = spreadsheet || getSpreadsheet_();
+  const tables = {};
+  Object.keys(TABLES).forEach(function (key) {
+    const spec = TABLES[key];
+    const sheet = spreadsheet.getSheetByName(spec.name);
+    if (!sheet) {
+      tables[spec.name] = { present: false, required: key !== "accountActivity" };
+      return;
+    }
+    const lastRow = sheet.getLastRow();
+    const values = lastRow
+      ? sheet.getRange(1, 1, lastRow, spec.headers.length).getValues()
+      : [];
+    const headers = values[0] || [];
+    const ids = new Map();
+    const duplicateIds = [];
+    const blankIdRows = [];
+    const invalidNumbers = [];
+    const invalidDates = [];
+    values.slice(1).forEach(function (row, index) {
+      const rowNumber = index + 2;
+      if (!row[0]) {
+        if (row.some(function (value) { return value !== ""; })) blankIdRows.push(rowNumber);
+        return;
+      }
+      const id = String(row[0]);
+      if (ids.has(id)) duplicateIds.push({ id: id, rows: [ids.get(id), rowNumber] });
+      else ids.set(id, rowNumber);
+      spec.fields.forEach(function (field, column) {
+        const value = row[column];
+        if (["amount", "balance", "contribution", "interestRate", "amountMultiplier"].indexOf(field) >= 0 && value !== "" && !isFinite(Number(value)))
+          invalidNumbers.push({ row: rowNumber, field: field, value: String(value) });
+        if ((field === "date" || field === "asOfDate") && value !== "") {
+          const date = normalizeDateId_(value);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidISODate_(date))
+            invalidDates.push({ row: rowNumber, field: field, value: String(value) });
+        }
+      });
+    });
+    tables[spec.name] = {
+      present: true,
+      required: key !== "accountActivity",
+      headersValid: headersMatch_(headers, spec.headers),
+      rowCount: ids.size,
+      blankIdRows: blankIdRows,
+      duplicateIds: duplicateIds,
+      invalidNumbers: invalidNumbers,
+      invalidDates: invalidDates,
+    };
+  });
+  const accountSheet = spreadsheet.getSheetByName(TABLES.accounts.name);
+  const categoryColumn = TABLES.accounts.fields.indexOf("categoryId") + 1;
+  const suspiciousAccountCategoryRows = [];
+  if (accountSheet && accountSheet.getLastRow() > 1) {
+    const rows = accountSheet.getRange(2, categoryColumn, accountSheet.getLastRow() - 1, 2).getValues();
+    rows.forEach(function (row, index) {
+      if (!row[0] && row[1]) suspiciousAccountCategoryRows.push({ row: index + 2, columnK: String(row[1]) });
+    });
+  }
+  const properties = PropertiesService.getScriptProperties();
+  return {
+    spreadsheetId: spreadsheet.getId(),
+    inspectedAt: new Date().toISOString(),
+    tables: tables,
+    suspiciousAccountCategoryRows: suspiciousAccountCategoryRows,
+    migrationState: {
+      setup: properties.getProperty(APP.setupStateProperty) || "",
+      legacyAccounts: properties.getProperty(APP.legacyAccountsMigrationProperty) || "",
+      unifiedActivity: properties.getProperty(APP.unifiedActivityMigrationProperty) || "",
+      accountCategoryRepair: properties.getProperty(APP.accountCategoryRepairProperty) || "",
+    },
+  };
+}
+
 function success_(data) {
-  return json_({ ok: true, data: data });
+  return json_({ ok: true, data: data, meta: responseMeta_() });
 }
 function successResult_(result) {
-  const payload = { ok: true, data: result.data };
+  const payload = { ok: true, data: result.data, meta: responseMeta_() };
   if (result.warning) payload.warning = result.warning;
   return json_(payload);
 }
+
+function responseMeta_() {
+  return {
+    requestId: REQUEST_CONTEXT_ ? REQUEST_CONTEXT_.requestId : "",
+    action: REQUEST_CONTEXT_ ? REQUEST_CONTEXT_.action : "",
+    apiVersion: APP.apiVersion,
+    durationMs: REQUEST_CONTEXT_ ? Date.now() - REQUEST_CONTEXT_.startedAt : 0,
+    lockWaitMs: REQUEST_CONTEXT_ ? REQUEST_CONTEXT_.lockWaitMs || 0 : 0,
+    phases: REQUEST_CONTEXT_ ? REQUEST_CONTEXT_.phases || {} : {},
+  };
+}
+
+function appError_(code, message, retryable, phase) {
+  const error = new Error(message);
+  error.code = code;
+  error.retryable = retryable === true;
+  error.phase = phase || "request";
+  return error;
+}
+
+function resultFailure_(id, error, extra) {
+  const classification = classifyError_(error);
+  return {
+    ...(extra || {}),
+    id: id || "",
+    code: classification.code,
+    retryable: classification.retryable,
+    error: errorMessage_(error),
+  };
+}
+
+function classifyError_(error) {
+  if (error && error.code)
+    return {
+      code: error.code,
+      retryable: error.retryable === true,
+      phase: error.phase || "request",
+    };
+  const message = errorMessage_(error);
+  if (/quota|rate limit|too many requests|service invoked too many/i.test(message))
+    return { code: "quota", retryable: true, phase: "google_service" };
+  if (/timed out|timeout|service unavailable|internal error|try again/i.test(message))
+    return { code: "service", retryable: true, phase: "google_service" };
+  if (/changed in the Sheet|already exists with different|conflict/i.test(message))
+    return { code: "conflict", retryable: false, phase: "validation" };
+  if (/not been initialized|headers do not match|sheet is missing/i.test(message))
+    return { code: "not_ready", retryable: false, phase: "readiness" };
+  return { code: "validation", retryable: false, phase: "validation" };
+}
+
+function failure_(error) {
+  const classification = classifyError_(error);
+  const detail = {
+    requestId: REQUEST_CONTEXT_ ? REQUEST_CONTEXT_.requestId : "",
+    action: REQUEST_CONTEXT_ ? REQUEST_CONTEXT_.action : "",
+    apiVersion: APP.apiVersion,
+    code: classification.code,
+    retryable: classification.retryable,
+    phase: classification.phase,
+    durationMs: REQUEST_CONTEXT_ ? Date.now() - REQUEST_CONTEXT_.startedAt : 0,
+    lockWaitMs: REQUEST_CONTEXT_ ? REQUEST_CONTEXT_.lockWaitMs || 0 : 0,
+    phases: REQUEST_CONTEXT_ ? REQUEST_CONTEXT_.phases || {} : {},
+    message: errorMessage_(error),
+  };
+  console.error(JSON.stringify({ ...detail, stack: error && error.stack ? error.stack : "" }));
+  return json_({ ok: false, error: detail });
+}
 function withScriptLock_(callback) {
+  const lock = acquireScriptLock_();
+  try {
+    const result = callback();
+    flushMutation_();
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function acquireScriptLock_() {
   const lock = LockService.getScriptLock();
+  const startedAt = Date.now();
   lock.waitLock(30000);
+  if (REQUEST_CONTEXT_)
+    REQUEST_CONTEXT_.lockWaitMs =
+      (REQUEST_CONTEXT_.lockWaitMs || 0) + (Date.now() - startedAt);
+  return lock;
+}
+
+function timedPhase_(name, callback) {
+  const startedAt = Date.now();
   try {
     return callback();
   } finally {
-    lock.releaseLock();
+    if (REQUEST_CONTEXT_) {
+      REQUEST_CONTEXT_.phases = REQUEST_CONTEXT_.phases || {};
+      REQUEST_CONTEXT_.phases[name] =
+        (REQUEST_CONTEXT_.phases[name] || 0) + (Date.now() - startedAt);
+    }
+  }
+}
+
+function flushMutation_() {
+  try {
+    SpreadsheetApp.flush();
+  } catch (error) {
+    throw appError_(
+      "ambiguous_commit",
+      "The Sheet could not confirm the completed write: " + errorMessage_(error),
+      true,
+      "commit",
+    );
   }
 }
 
@@ -543,7 +742,9 @@ function assertInitialized_() {
   const properties = PropertiesService.getScriptProperties();
   if (
     !properties.getProperty(APP.spreadsheetIdProperty) ||
-    properties.getProperty(APP.setupVersionProperty) !== APP.setupVersion
+    properties.getProperty(APP.setupVersionProperty) !== APP.setupVersion ||
+    properties.getProperty(APP.setupStateProperty) !==
+      "completed:" + properties.getProperty(APP.spreadsheetIdProperty)
   ) {
     throw new Error(
       "This budget has not been initialized. Run Track Every Dollar → Set up budget first.",
@@ -552,21 +753,57 @@ function assertInitialized_() {
 }
 
 function ensureDataModel_() {
-  getTableSheet_(TABLES.categories);
-  getTableSheet_(TABLES.vendors);
-  getTableSheet_(TABLES.assignments);
-  getTableSheet_(TABLES.users);
-  getTableSheet_(TABLES.accounts);
-  getTableSheet_(TABLES.accountBalances);
-  getTableSheet_(TABLES.accountActivity);
-  migrateLegacyAccountsV11_();
-  getTableSheet_(TABLES.importProfiles);
-  getTableSheet_(TABLES.importVendorMappings);
-  getTableSheet_(TABLES.importPersonMappings);
+  ensureTableSheet_(TABLES.categories);
+  ensureTableSheet_(TABLES.vendors);
+  ensureTableSheet_(TABLES.assignments);
+  ensureTableSheet_(TABLES.users);
+  ensureTableSheet_(TABLES.accounts);
+  ensureTableSheet_(TABLES.accountBalances);
+  migrateInvestmentModelV6_();
+  const properties = PropertiesService.getScriptProperties();
+  const spreadsheetId = getSpreadsheet_().getId();
+  if (
+    properties.getProperty(APP.legacyAccountsMigrationProperty) !==
+    spreadsheetId
+  ) {
+    migrateLegacyAccountsV11_();
+    flushMutation_();
+    properties.setProperty(APP.legacyAccountsMigrationProperty, spreadsheetId);
+  }
+  ensureTableSheet_(TABLES.importProfiles);
+  ensureTableSheet_(TABLES.importVendorMappings);
+  ensureTableSheet_(TABLES.importPersonMappings);
   seedDefaults_();
   getTransactionSheet_();
   migrateUnifiedActivityV12_();
-  getLedgerSheet_();
+  repairAccountCategoryColumnV16_();
+  verifyDataModel_();
+}
+
+function verifyDataModel_() {
+  const spreadsheet = getSpreadsheet_();
+  Object.keys(TABLES)
+    .filter(function (key) { return key !== "accountActivity"; })
+    .forEach(function (key) {
+      const spec = TABLES[key];
+      const sheet = requiredSheet_(spreadsheet, spec);
+      const headers = sheet.getRange(1, 1, 1, spec.headers.length).getValues()[0];
+      if (!headersMatch_(headers, spec.headers))
+        throw new Error("The " + spec.name + " sheet failed schema verification.");
+      if (sheet.getLastRow() > 1) {
+        const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, spec.headers.length).getValues();
+        rows.forEach(function (row, index) {
+          if (!row[0] && row.some(function (value) { return value !== ""; }))
+            throw new Error("The " + spec.name + " sheet has data in row " + (index + 2) + " without an ID.");
+        });
+      }
+      const seen = new Set();
+      readPhysicalRecordsFromSheet_(sheet, spec, true).forEach(function (entry) {
+        if (seen.has(entry.record.id))
+          throw new Error("The " + spec.name + " sheet contains duplicate ID " + entry.record.id + ".");
+        seen.add(entry.record.id);
+      });
+    });
 }
 
 /** Repairs pre-unification activity whose reporting month was present but date was blank. */
@@ -633,20 +870,31 @@ function seedDefaults_() {
 
 function listTransactions_() {
   const spreadsheet = getSpreadsheet_();
-  const records = readRecordsFromSheet_(
-    requiredSheet_(spreadsheet, TABLES.transactions),
-    TABLES.transactions,
-    true,
-  );
-  const references = referenceMapsFromSpreadsheet_(spreadsheet);
+  const specs = [TABLES.transactions].concat(referenceSpecs_());
+  const recordsBySheet = readTablesWithSheetsApi_(spreadsheet.getId(), specs);
+  const records = recordsBySheet[TABLES.transactions.name];
+  const references = referenceMapsFromRecords_(recordsBySheet);
   return records.map(function (transaction) {
     return hydrateTransaction_(transaction, references);
   });
 }
 
+function referenceSpecs_() {
+  return [
+    TABLES.categories,
+    TABLES.vendors,
+    TABLES.assignments,
+    TABLES.users,
+    TABLES.accounts,
+  ];
+}
+
 function bootstrap_() {
   try {
-    return buildBootstrapPayload_(readBootstrapWithSheetsApi_());
+    const records = timedPhase_("bootstrap_read", readBootstrapWithSheetsApi_);
+    return timedPhase_("bootstrap_build", function () {
+      return buildBootstrapPayload_(records);
+    });
   } catch (error) {
     throw new Error(
       "Bootstrap batch read failed: " + errorMessage_(error),
@@ -670,18 +918,21 @@ function bootstrapSpecs_() {
 }
 
 function readBootstrapWithSheetsApi_() {
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty(
+    APP.spreadsheetIdProperty,
+  );
+  if (!spreadsheetId)
+    throw new Error("No spreadsheet is configured for the batch read.");
+  return readTablesWithSheetsApi_(spreadsheetId, bootstrapSpecs_());
+}
+
+function readTablesWithSheetsApi_(spreadsheetId, specs) {
   if (
     typeof Sheets === "undefined" ||
     !Sheets.Spreadsheets ||
     !Sheets.Spreadsheets.Values
   )
     throw new Error("The Advanced Sheets service is not available.");
-  const spreadsheetId = PropertiesService.getScriptProperties().getProperty(
-    APP.spreadsheetIdProperty,
-  );
-  if (!spreadsheetId)
-    throw new Error("No spreadsheet is configured for the batch read.");
-  const specs = bootstrapSpecs_();
   const ranges = specs.map(function (spec) {
     return (
       "'" +
@@ -718,6 +969,21 @@ function readBootstrapWithSheetsApi_() {
       });
   });
   return recordsBySheet;
+}
+
+function referenceMapsFromRecords_(recordsBySheet) {
+  function map(spec) {
+    return new Map(
+      recordsBySheet[spec.name].map(function (item) { return [item.id, item]; }),
+    );
+  }
+  return {
+    categories: map(TABLES.categories),
+    vendors: map(TABLES.vendors),
+    assignments: map(TABLES.assignments),
+    users: map(TABLES.users),
+    accounts: map(TABLES.accounts),
+  };
 }
 
 function buildBootstrapPayload_(recordsBySheet) {
@@ -805,10 +1071,10 @@ function normalizeBatchRow_(spec, row) {
     const value =
       row[index] === undefined || row[index] === null ? "" : row[index];
     if (typeof value !== "number") return value;
-    if (field !== "date" && field !== "month" && !/At$/.test(field))
+    if (field !== "date" && field !== "asOfDate" && field !== "month" && !/At$/.test(field))
       return value;
     const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
-    if (field === "date")
+    if (field === "date" || field === "asOfDate")
       return Utilities.formatDate(date, "UTC", "yyyy-MM-dd");
     if (field === "month") return Utilities.formatDate(date, "UTC", "yyyy-MM");
     return Utilities.formatDate(date, "UTC", "yyyy-MM-dd'T'HH:mm:ss'Z'");
@@ -826,18 +1092,15 @@ function addTransactions_(inputs) {
     throw new Error("At least one transaction is required.");
   if (inputs.length > 50)
     throw new Error("A maximum of 50 transactions can be added at once.");
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  const lock = acquireScriptLock_();
   try {
     const spreadsheet = getSpreadsheet_();
     const transactionSheet = requiredSheet_(spreadsheet, TABLES.transactions);
-    const ledgerSheet = requiredSheet_(spreadsheet, TABLES.ledger);
-    const references = referenceMapsFromSpreadsheet_(spreadsheet);
-    const existing = readRecordsFromSheet_(
-      transactionSheet,
-      TABLES.transactions,
-      true,
-    );
+    const recordsBySheet = timedPhase_("transaction_read", function () {
+      return readTablesWithSheetsApi_(spreadsheet.getId(), [TABLES.transactions].concat(referenceSpecs_()));
+    });
+    const references = referenceMapsFromRecords_(recordsBySheet);
+    const existing = recordsBySheet[TABLES.transactions.name];
     const byId = new Map(
       existing.map(function (transaction) {
         return [transaction.id, transaction];
@@ -863,10 +1126,7 @@ function addTransactions_(inputs) {
         byId.set(transaction.id, transaction);
         saved.push(hydrateTransaction_(transaction, references));
       } catch (error) {
-        failed.push({
-          id: input && input.id ? String(input.id) : "",
-          error: errorMessage_(error),
-        });
+        failed.push(resultFailure_(input && input.id ? String(input.id) : "", error));
       }
     });
 
@@ -876,21 +1136,8 @@ function addTransactions_(inputs) {
         return recordToRow_(TABLES.transactions, transaction);
       }),
     );
-    let warning = "";
-    if (additions.length) {
-      try {
-        appendRows_(
-          ledgerSheet,
-          additions.map(function (transaction) {return hydrateTransaction_(transaction, references);}).filter(ledgerVisible_).map(ledgerRow_),
-        );
-      } catch (error) {
-        markLedgerDirty_();
-        warning =
-          "Transactions were saved, but the Ledger needs to be rebuilt: " +
-          errorMessage_(error);
-      }
-    }
-    return { data: { saved: saved, failed: failed }, warning: warning };
+    flushMutation_();
+    return { data: { saved: saved, failed: failed } };
   } finally {
     lock.releaseLock();
   }
@@ -907,28 +1154,34 @@ function updateTransactions_(inputs) {
     throw new Error("At least one transaction update is required.");
   if (inputs.length > 50)
     throw new Error("A maximum of 50 transactions can be updated at once.");
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  const lock = acquireScriptLock_();
   try {
     const spreadsheet = getSpreadsheet_();
     const transactionSheet = requiredSheet_(spreadsheet, TABLES.transactions);
-    const ledgerSheet = requiredSheet_(spreadsheet, TABLES.ledger);
-    const references = referenceMapsFromSpreadsheet_(spreadsheet);
-    const records = readRecordsFromSheet_(
-      transactionSheet,
-      TABLES.transactions,
-      true,
-    );
+    const recordsBySheet = timedPhase_("transaction_read", function () {
+      return readTablesWithSheetsApi_(spreadsheet.getId(), [TABLES.transactions].concat(referenceSpecs_()));
+    });
+    const references = referenceMapsFromRecords_(recordsBySheet);
+    const rowById = new Map();
+    if (transactionSheet.getLastRow() > 1)
+      transactionSheet
+        .getRange(2, 1, transactionSheet.getLastRow() - 1, 1)
+        .getValues()
+        .forEach(function (row, index) {
+          if (row[0] !== "") rowById.set(String(row[0]), index + 2);
+        });
+    const physicalRecords = recordsBySheet[TABLES.transactions.name].map(function (record) {
+      return { rowNumber: rowById.get(record.id), record: record };
+    });
     const indexes = new Map(
-      records.map(function (transaction, index) {
-        return [transaction.id, index];
+      physicalRecords.map(function (entry) {
+        return [entry.record.id, entry];
       }),
     );
     const seen = new Set();
     const saved = [];
     const failed = [];
-    const changedIds = new Set();
-    let changed = false;
+    const writes = [];
 
     inputs.forEach(function (input) {
       const requestedId =
@@ -949,10 +1202,10 @@ function updateTransactions_(inputs) {
             "A transaction can only appear once in an update batch.",
           );
         seen.add(id);
-        const index = indexes.get(id);
-        if (index === undefined)
+        const entry = indexes.get(id);
+        if (!entry)
           throw new Error("That transaction could not be found.");
-        const existing = records[index];
+        const existing = entry.record;
         const draft = validateUpdatedTransaction_(
           input.transaction,
           existing,
@@ -971,36 +1224,21 @@ function updateTransactions_(inputs) {
           });
           return;
         }
-        records[index] = draft;
+        entry.record = draft;
         saved.push(hydrateTransaction_(draft, references));
-        changedIds.add(id);
-        changed = true;
+        writes.push({ rowNumber: entry.rowNumber, record: draft });
       } catch (error) {
-        failed.push({ id: requestedId, error: errorMessage_(error) });
+        failed.push(resultFailure_(requestedId, error));
       }
     });
 
-    if (changed)
+    writes.forEach(function (write) {
       transactionSheet
-        .getRange(2, 1, records.length, TABLES.transactions.headers.length)
-        .setValues(
-          records.map(function (transaction) {
-            return recordToRow_(TABLES.transactions, transaction);
-          }),
-        );
-
-    let warning = "";
-    if (changed) {
-      try {
-        rebuildLedger_();
-      } catch (error) {
-        markLedgerDirty_();
-        warning =
-          "Transactions were updated, but the Ledger needs to be rebuilt: " +
-          errorMessage_(error);
-      }
-    }
-    return { data: { saved: saved, failed: failed }, warning: warning };
+        .getRange(write.rowNumber, 1, 1, TABLES.transactions.headers.length)
+        .setValues([recordToRow_(TABLES.transactions, write.record)]);
+    });
+    flushMutation_();
+    return { data: { saved: saved, failed: failed } };
   } finally {
     lock.releaseLock();
   }
@@ -1010,76 +1248,29 @@ function deleteTransaction_(input) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("A transaction deletion is required.");
   const id = requireUuid_(input.id, "Transaction ID");
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  const lock = acquireScriptLock_();
   try {
     const spreadsheet = getSpreadsheet_();
     const transactionSheet = requiredSheet_(spreadsheet, TABLES.transactions);
-    const ledgerSheet = requiredSheet_(spreadsheet, TABLES.ledger);
-    const records = readRecordsFromSheet_(
+    const records = readPhysicalRecordsFromSheet_(
       transactionSheet,
       TABLES.transactions,
       true,
     );
-    const index = records.findIndex(function (transaction) {
-      return transaction.id === id;
+    const entry = records.find(function (item) {
+      return item.record.id === id;
     });
-    if (index < 0) throw new Error("That transaction could not be found.");
-    const existing = records[index];
-    if (input.base && !editableTransactionsMatch_(existing, input.base))
-      throw new Error("This transaction changed in the Sheet after you opened it.");
-
-    records.splice(index, 1);
-    if (records.length)
-      transactionSheet
-        .getRange(2, 1, records.length, TABLES.transactions.headers.length)
-        .setValues(
-          records.map(function (transaction) {
-            return recordToRow_(TABLES.transactions, transaction);
-          }),
-        );
-    transactionSheet
-      .getRange(records.length + 2, 1, 1, TABLES.transactions.headers.length)
-      .clearContent();
-
-    let warning = "";
-    try {
-      const lastRow = ledgerSheet.getLastRow();
-      const ledgerRows =
-        lastRow < 2
-          ? []
-          : ledgerSheet
-              .getRange(2, 1, lastRow - 1, TABLES.ledger.headers.length)
-              .getValues();
-      const remainingLedgerRows = ledgerRows.filter(function (row) {
-        return String(row[8] || "") !== id;
-      });
-      if (remainingLedgerRows.length === ledgerRows.length && ledgerVisible_(hydrateTransaction_(existing,referenceMapsFromSpreadsheet_(spreadsheet))))
-        throw new Error("The deleted transaction is missing from the Ledger.");
-      if (remainingLedgerRows.length)
-        ledgerSheet
-          .getRange(
-            2,
-            1,
-            remainingLedgerRows.length,
-            TABLES.ledger.headers.length,
-          )
-          .setValues(remainingLedgerRows);
-      if(ledgerRows.length>remainingLedgerRows.length) ledgerSheet
-        .getRange(
-          remainingLedgerRows.length + 2,
-          1,
-          ledgerRows.length - remainingLedgerRows.length,
-          TABLES.ledger.headers.length,
-        )
-        .clearContent();
-    } catch (error) {
-      markLedgerDirty_();
-      warning =
-        "The transaction was deleted, but the Ledger needs to be rebuilt: " +
-        errorMessage_(error);
+    if (!entry) {
+      return { data: { id: id, deleted: true, alreadyDeleted: true } };
     }
-    return { data: { id: id }, warning: warning };
+    const existing = entry.record;
+    if (!input.base)
+      throw new Error("A confirmed transaction base is required for deletion.");
+    if (!editableTransactionsMatch_(existing, input.base))
+      throw new Error("This transaction changed in the Sheet after you opened it.");
+    transactionSheet.deleteRow(entry.rowNumber);
+    flushMutation_();
+    return { data: { id: id, deleted: true } };
   } finally {
     lock.releaseLock();
   }
@@ -1089,12 +1280,12 @@ function validateUpdatedTransaction_(input, existing, references) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("A transaction object is required.");
   const accountId=cleanText_(input.accountId,36);
-  const account=accountId?getRecordById_(TABLES.accounts,requireUuid_(accountId,"Account ID")):null;
+  const account=accountId?references.accounts.get(requireUuid_(accountId,"Account ID")):null;
   if(accountId&&(!account||account.active===false))throw new Error("Choose an active account.");
   const type = account ? "" : cleanText_(input.type, 20).toLowerCase();
   if (!account && type !== "income" && type !== "expense")
     throw new Error("Transaction type must be income or expense.");
-  const amount = Number(input.amount);
+  const amount = Math.round(Number(input.amount) * 100) / 100;
   if (!isFinite(amount) || amount === 0)
     throw new Error("Amount must be a non-zero value.");
   const date = cleanText_(input.date, 10);
@@ -1130,7 +1321,7 @@ function validateUpdatedTransaction_(input, existing, references) {
     createdAt: existing.createdAt,
     createdBy: existing.createdBy,
     type: type,
-    amount: Math.round(amount * 100) / 100,
+    amount: amount,
     date: date,
     categoryId: categoryId,
     vendorId: vendorId,
@@ -1166,12 +1357,13 @@ function validateTransaction_(input, references) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("A transaction object is required.");
   const accountId=cleanText_(input.accountId,36);
-  const account=accountId?getRecordById_(TABLES.accounts,requireUuid_(accountId,"Account ID")):null;
+  references = references || referenceMaps_();
+  const account=accountId?references.accounts.get(requireUuid_(accountId,"Account ID")):null;
   const type = account ? "" : cleanText_(input.type, 20).toLowerCase();
   if (!account && type !== "income" && type !== "expense")
     throw new Error("Transaction type must be income or expense.");
   if(accountId&&(!account||account.active===false))throw new Error("Choose an active account.");
-  const amount = Number(input.amount);
+  const amount = Math.round(Number(input.amount) * 100) / 100;
   if (!isFinite(amount) || amount === 0)
     throw new Error("Amount must be a non-zero value.");
   const date = cleanText_(input.date, 10);
@@ -1181,7 +1373,6 @@ function validateTransaction_(input, references) {
   const categoryId = account?"":requireUuid_(input.categoryId, "Category ID");
   const assignmentId = account?"":requireUuid_(input.assignmentId, "Assignment ID");
   const createdBy = requireUuid_(input.createdBy, "createdBy");
-  references = references || referenceMaps_();
   const category = references.categories.get(categoryId);
   if (!account&&(!category || category.active === false || category.type !== type))
     throw new Error("Choose an active category matching the transaction type.");
@@ -1204,7 +1395,7 @@ function validateTransaction_(input, references) {
     createdAt: normalizeDateTime_(input.createdAt),
     createdBy: createdBy,
     type: type,
-    amount: Math.round(amount * 100) / 100,
+    amount: amount,
     date: date,
     categoryId: categoryId,
     vendorId: vendorId,
@@ -1264,7 +1455,12 @@ function referenceMapsFromSpreadsheet_(spreadsheet) {
 function requiredSheet_(spreadsheet, spec) {
   const sheet = spreadsheet.getSheetByName(spec.name);
   if (!sheet)
-    throw new Error("The " + spec.name + " sheet is missing. Run setup again.");
+    throw appError_(
+      "not_ready",
+      "The " + spec.name + " sheet is missing.",
+      false,
+      "readiness",
+    );
   return sheet;
 }
 
@@ -1293,17 +1489,28 @@ function listUsers_() {
 }
 function addUser_(input) {
   const timestamp = new Date().toISOString();
+  const requestedId = input && input.id ? requireUuid_(input.id, "User ID") : "";
+  const existing = requestedId ? getRecordById_(TABLES.users, requestedId) : null;
   const user = validateUser_(input, {
-    id: input && input.id ? input.id : Utilities.getUuid(),
-    active: true,
-    createdAt: timestamp,
+    id: requestedId || Utilities.getUuid(),
+    active: existing ? existing.active !== false : true,
+    createdAt: existing ? existing.createdAt : timestamp,
     updatedAt: timestamp,
   });
+  if (existing) {
+    if (
+      existing.firstName === user.firstName &&
+      existing.lastName === user.lastName &&
+      existing.active === user.active
+    )
+      return existing;
+    throw new Error("That user ID already exists with different data.");
+  }
   ensureUniqueIdAndName_(TABLES.users, user.id, fullUserName_(user), "");
   appendRows_(getTableSheet_(TABLES.users), [recordToRow_(TABLES.users, user)]);
   return user;
 }
-function updateUser_(input) {
+function updateUser_(input, base) {
   const sheet = getTableSheet_(TABLES.users);
   const row = findRowById_(sheet, input && input.id);
   if (!row) throw new Error("That user could not be found.");
@@ -1317,16 +1524,17 @@ function updateUser_(input) {
     createdAt: existing.createdAt,
     updatedAt: new Date().toISOString(),
   });
+  const fields = ["firstName", "lastName", "active"];
+  if (fields.every(function (field) { return String(existing[field]) === String(user[field]); }))
+    return { data: existing };
+  if (!base || !fields.every(function (field) { return String(existing[field]) === String(base[field]); }))
+    throw appError_("conflict", "This user changed in the Sheet after you opened it.", false, "validation");
   const oldName = fullUserName_(existing),
     newName = fullUserName_(user);
   sheet
     .getRange(row, 1, 1, TABLES.users.headers.length)
     .setValues([recordToRow_(TABLES.users, user)]);
-  return {
-    data: user,
-    warning:
-      oldName === newName ? "" : safeSyncLedgerName_(13, 6, user.id, newName),
-  };
+  return { data: user };
 }
 function validateUser_(input, base) {
   if (!input || typeof input !== "object")
@@ -1381,7 +1589,7 @@ function normalizeInvestmentAccount_(input, existing) {
     type: "investment",
     source: source,
     assignmentId: assignmentId,
-    active: existing ? existing.active !== false : true,
+    active: input.active === undefined ? (existing ? existing.active !== false : true) : input.active !== false,
     createdAt: existing
       ? existing.createdAt
       : normalizeDateTime_(input.createdAt || timestamp),
@@ -1411,10 +1619,7 @@ function addInvestmentAccounts_(inputs) {
     throw new Error(
       "A maximum of 50 investment accounts can be added at once.",
     );
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    const sheet = requiredSheet_(getSpreadsheet_(), TABLES.accounts);
+  const sheet = requiredSheet_(getSpreadsheet_(), TABLES.accounts);
     const records = readRecordsFromSheet_(
       sheet,
       TABLES.accounts,
@@ -1428,7 +1633,7 @@ function addInvestmentAccounts_(inputs) {
     const byName = new Map(
       records
         .filter(function (item) {
-          return item.active !== false;
+          return item.active !== false && item.type === "investment";
         })
         .map(function (item) {
           return [investmentAccountKey_(item), item];
@@ -1461,7 +1666,7 @@ function addInvestmentAccounts_(inputs) {
         byId.set(record.id, record);
         byName.set(investmentAccountKey_(record), record);
       } catch (error) {
-        failed.push({ id: requestedId, error: errorMessage_(error) });
+        failed.push(resultFailure_(requestedId, error));
       }
     });
     appendRows_(
@@ -1470,10 +1675,8 @@ function addInvestmentAccounts_(inputs) {
         return recordToRow_(TABLES.accounts, item);
       }),
     );
-    return { saved: saved, reconciled: reconciled, failed: failed };
-  } finally {
-    lock.releaseLock();
-  }
+    flushMutation_();
+  return { saved: saved, reconciled: reconciled, failed: failed };
 }
 
 function updateInvestmentAccount_(input) {
@@ -1491,6 +1694,7 @@ function updateInvestmentAccount_(input) {
     function (item) {
       return (
         item.id !== account.id &&
+        item.type === "investment" &&
         item.active !== false &&
         investmentAccountKey_(item) === investmentAccountKey_(account)
       );
@@ -1515,6 +1719,8 @@ function saveDebtAccount_(input) {
   const sheet = getTableSheet_(TABLES.accounts);
   const row = findRowById_(sheet, input.id);
   const existing = row ? rowToRecord_(TABLES.accounts, sheet.getRange(row, 1, 1, TABLES.accounts.headers.length).getValues()[0]) : null;
+  if (existing && existing.type !== "debt")
+    throw new Error("An account type cannot be changed after creation.");
   const timestamp = new Date().toISOString();
   const assignmentId = requireUuid_(input.assignmentId || APP.sharedAssignmentId, "Assignment ID");
   if (!readRecords_(TABLES.assignments, true).some(function (assignment) { return assignment.id === assignmentId; }))
@@ -1546,7 +1752,7 @@ function saveDebtBalance_(input) {
   const accountId = requireUuid_(input.accountId || input.debtAccountId, "Debt account ID");
   if (!readRecords_(TABLES.accounts, true).some(function (item) { return item.id === accountId && item.active !== false && item.type === "debt"; })) throw new Error("Choose an active debt account.");
   const asOfDate = cleanText_(input.asOfDate, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Choose a valid debt balance date.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate) || !isValidISODate_(asOfDate)) throw new Error("Choose a valid debt balance date.");
   const value = Number(input.balance); if (!isFinite(value) || value < 0) throw new Error("Debt balances cannot be negative.");
   const sheet = getTableSheet_(TABLES.accountBalances);
   const records = readRecords_(TABLES.accountBalances, true);
@@ -1559,6 +1765,9 @@ function saveDebtBalance_(input) {
     createdAt: existing ? existing.createdAt : normalizeDateTime_(input.createdAt || timestamp), createdBy: requireUuid_((existing && existing.createdBy) || input.createdBy, "createdBy"),
     updatedAt: normalizeDateTime_(input.updatedAt || timestamp), updatedBy: requireUuid_(input.updatedBy || input.createdBy, "updatedBy"), asOfDate: asOfDate,
   };
+  const users = new Map(readRecords_(TABLES.users, true).map(function (item) { return [item.id, item]; }));
+  if (!users.has(record.createdBy) || !users.has(record.updatedBy))
+    throw new Error("Choose a valid app user.");
   if (row) sheet.getRange(row, 1, 1, TABLES.accountBalances.headers.length).setValues([recordToRow_(TABLES.accountBalances, record)]);
   else appendRows_(sheet, [recordToRow_(TABLES.accountBalances, record)]);
   return record;
@@ -1573,47 +1782,73 @@ function investmentMonthEnd_(month) {
   );
 }
 
-function upsertAccountTransaction_(input) {
-  if(!input||typeof input!=="object")throw new Error("Account activity is required.");
-  const accountId=requireUuid_(input.accountId,"Account ID");
-  const account=getRecordById_(TABLES.accounts,accountId);
-  if(!account||account.active===false)throw new Error("Choose an active account.");
-  const existing=input.id?getRecordById_(TABLES.transactions,input.id):null;
-  const createdBy=(existing&&existing.createdBy)||input.createdBy;
-  const transaction={id:(existing&&existing.id)||input.id||Utilities.getUuid(),createdAt:(existing&&existing.createdAt)||input.createdAt||new Date().toISOString(),createdBy:createdBy,type:"",amount:Number(input.amount),date:cleanText_(input.date||String(input.month||"")+"-15",10),categoryId:"",vendorId:"",assignmentId:"",notes:cleanText_(input.notes,1000),accountId:accountId,source:input.source==="deduction"?"deduction":input.source==="manual"?"manual":account.source,legacyActivityId:(existing&&existing.legacyActivityId)||""};
-  const saved=existing?updateTransaction_({transaction:transaction,base:existing}).data:addTransaction_(transaction).data;
-  return {...saved,month:String(saved.date).slice(0,7),activityType:account.type==="investment"?"contribution":Number(saved.amount)<0?"borrowing":"payment"};
-}
-
-function saveDebtPayment_(input) {
-  const borrowing=input.activityType==="borrowing"||input.kind==="borrowing";
-  return upsertAccountTransaction_({...input,accountId:input.accountId||input.debtAccountId,amount:borrowing?-Math.abs(Number(input.amount)):Math.abs(Number(input.amount))});
-}
-
-function deleteDebtPayment_(id) { const existing=readRecords_(TABLES.transactions,true).find(function(item){return item.id===id;});if(existing)deleteTransaction_({id:id,base:existing});return {id:id,deleted:true}; }
-
 function listAccounts_() { return readRecords_(TABLES.accounts, true); }
 function listAccountBalances_() { return readRecords_(TABLES.accountBalances, true); }
+function listAccountBalancesByType_(type) {
+  const accounts = new Map(listAccounts_().map(function (item) { return [item.id, item]; }));
+  return listAccountBalances_().filter(function (item) {
+    const account = accounts.get(item.accountId);
+    return account && account.type === type;
+  });
+}
 function listAccountActivity_() { const accounts=new Map(listAccounts_().map(function(item){return[item.id,item];}));return readRecords_(TABLES.transactions,true).filter(function(item){return item.accountId&&accounts.has(item.accountId);}).map(function(item){const account=accounts.get(item.accountId);return {...item,month:String(item.date).slice(0,7),activityType:account.type==="investment"?"contribution":Number(item.amount)<0?"borrowing":"payment"};}); }
-function accountTypeById_(id) { const account = getRecordById_(TABLES.accounts, id); return account ? account.type : ""; }
 function legacyDebtBalance_(record) { return { ...record, debtAccountId: record.accountId }; }
 function legacyDebtActivity_(record) { return { ...record, debtAccountId: record.accountId, kind: record.activityType }; }
-function deleteAccountActivity_(id) { return deleteDebtPayment_(id); }
+function deleteAccountActivity_(id, expectedAccountId, expectedAccountType) {
+  const existing = getRecordById_(TABLES.transactions, id);
+  if (!existing) return { id: id, deleted: true, alreadyDeleted: true };
+  const account = getRecordById_(TABLES.accounts, existing.accountId);
+  if (!account) throw new Error("That activity references a missing account.");
+  if (expectedAccountId && existing.accountId !== expectedAccountId)
+    throw new Error("That activity belongs to another account.");
+  if (expectedAccountType && account.type !== expectedAccountType)
+    throw new Error("That activity belongs to another account type.");
+  return deleteTransaction_({ id: id, base: existing }).data;
+}
 function deleteAccountBalance_(input) {
   const id = requireUuid_(input && input.id, "Account balance ID");
   const sheet = getTableSheet_(TABLES.accountBalances);
-  const records = readRecords_(TABLES.accountBalances, true);
-  const index = records.findIndex(function (item) { return item.id === id; });
-  if (index < 0) throw new Error("That account balance could not be found.");
-  const existing = records[index];
-  if (input.base && !investmentRecordMatches_(existing, input.base, ["accountId", "month", "balance", "notes", "asOfDate"], ["balance"]))
+  const entry = readPhysicalRecordsFromSheet_(sheet, TABLES.accountBalances, true).find(function (item) { return item.record.id === id; });
+  if (!entry) return { id: id, deleted: true, alreadyDeleted: true };
+  const existing = entry.record;
+  if (!input.base)
+    throw new Error("A confirmed account balance base is required for deletion.");
+  if (!investmentRecordMatches_(existing, input.base, ["accountId", "month", "balance", "notes", "asOfDate"], ["balance"]))
     throw new Error("This account balance changed in the Sheet after you opened it.");
-  records.splice(index, 1);
-  writeInvestmentRecords_(sheet, TABLES.accountBalances, records, Math.max(0, sheet.getLastRow() - 1));
+  sheet.deleteRow(entry.rowNumber);
   return { id: id, deleted: true };
 }
-function saveAccount_(input) { return input && input.type === "debt" ? saveDebtAccount_(input) : saveInvestmentAccount_(input); }
-function saveInvestmentAccount_(input) { const row = findRowById_(getTableSheet_(TABLES.accounts), input && input.id); return row ? updateInvestmentAccount_(input) : addInvestmentAccounts_([input]).saved[0]; }
+function accountEditableMatches_(existing, input) {
+  if (!existing || !input) return false;
+  return ["name", "type", "assignmentId", "active", "source", "interestRate", "categoryId"].every(function (field) {
+    const desired = field === "active" ? input.active !== false : input[field];
+    return String(existing[field] === undefined ? "" : existing[field]) === String(desired === undefined ? "" : desired);
+  });
+}
+function saveAccount_(input, base) {
+  const existing = input && input.id ? getRecordById_(TABLES.accounts, input.id) : null;
+  if (existing) {
+    if (accountEditableMatches_(existing, input)) return existing;
+    if (!base || !accountEditableMatches_(existing, base))
+      throw appError_("conflict", "This account changed in the Sheet after you opened it.", false, "validation");
+  }
+  return input && input.type === "debt" ? saveDebtAccount_(input) : saveInvestmentAccount_(input);
+}
+function saveInvestmentAccount_(input) {
+  const sheet = getTableSheet_(TABLES.accounts);
+  const row = findRowById_(sheet, input && input.id);
+  if (row) {
+    const existing = rowToRecord_(TABLES.accounts, sheet.getRange(row, 1, 1, TABLES.accounts.headers.length).getValues()[0]);
+    if (existing.type !== "investment")
+      throw new Error("An account type cannot be changed after creation.");
+    return updateInvestmentAccount_(input);
+  }
+  const result = addInvestmentAccounts_([input]);
+  if (result.failed.length) throw new Error(result.failed[0].error);
+  if (result.saved.length) return result.saved[0];
+  if (result.reconciled.length) return result.reconciled[0].record;
+  throw new Error("The investment account was not saved.");
+}
 
 function listInvestmentBalances_() {
   return readRecords_(TABLES.accountBalances, true);
@@ -1651,7 +1886,7 @@ function normalizeInvestmentBalance_(input, existing, accounts, users) {
     throw new Error("Investment balances cannot be negative.");
   const timestamp = new Date().toISOString();
   const asOfDate = cleanText_(input.asOfDate || investmentMonthEnd_(month), 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate) || asOfDate.slice(0, 7) !== month)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate) || !isValidISODate_(asOfDate) || asOfDate.slice(0, 7) !== month)
     throw new Error("Balance date must be within the reporting month.");
   const createdBy = existing
     ? existing.createdBy
@@ -1692,12 +1927,12 @@ function normalizeInvestmentContribution_(input, existing, accounts, users) {
       (!existing || existing.accountId !== accountId))
   )
     throw new Error("Choose an active investment account.");
-  const amount = Number(input.amount);
+  const amount = Math.round(Number(input.amount) * 100) / 100;
   if (!isFinite(amount) || amount === 0)
     throw new Error("Investment contribution amounts must be nonzero.");
   const timestamp = new Date().toISOString();
   const date = cleanText_(input.date || month + "-15", 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date.slice(0, 7) !== month)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValidISODate_(date) || date.slice(0, 7) !== month)
     throw new Error("Flow date must be within the reporting month.");
   const flowType = input.flowType === "transfer" ? "transfer" : "external";
   const createdBy = existing
@@ -1714,7 +1949,7 @@ function normalizeInvestmentContribution_(input, existing, accounts, users) {
     accountId: accountId,
     activityType: "contribution",
     month: month,
-    amount: Math.round(amount * 100) / 100,
+    amount: amount,
     createdAt: existing
       ? existing.createdAt
       : normalizeDateTime_(input.createdAt || timestamp),
@@ -1745,347 +1980,194 @@ function currentInvestmentMonth_(accountId, month, balances, contributions) {
 }
 
 function writeInvestmentRecords_(sheet, spec, records, previousCount) {
-  const count = records.length;
-  if (count)
-    sheet.getRange(2, 1, count, spec.headers.length).setValues(
-      records.map(function (item) {
-        return recordToRow_(spec, item);
-      }),
-    );
-  if (previousCount > count)
-    sheet
-      .getRange(2 + count, 1, previousCount - count, spec.headers.length)
-      .clearContent();
+  const count = Math.max(previousCount || 0, records.length);
+  if (!count) return;
+  const blank = Array(spec.headers.length).fill("");
+  const values = records.map(function (item) {
+    return recordToRow_(spec, item);
+  });
+  while (values.length < count) values.push(blank.slice());
+  sheet.getRange(2, 1, count, spec.headers.length).setValues(values);
 }
 
 function saveAccountMonths_(inputs) {
   if (!Array.isArray(inputs) || !inputs.length)
     throw new Error("At least one account month is required.");
-  const accounts = new Map(listAccounts_().map(function (item) { return [item.id, item]; }));
-  const debtOperations = inputs.filter(function (operation) {
-    return operation && accounts.get(operation.accountId) && accounts.get(operation.accountId).type === "debt";
+  if (inputs.length > 50)
+    throw new Error("A maximum of 50 account months can be saved at once.");
+  const spreadsheet = getSpreadsheet_();
+  const balanceSheet = requiredSheet_(spreadsheet, TABLES.accountBalances);
+  const transactionSheet = requiredSheet_(spreadsheet, TABLES.transactions);
+  const balancePhysicalCount = Math.max(0, balanceSheet.getLastRow() - 1);
+  const transactionPhysicalCount = Math.max(0, transactionSheet.getLastRow() - 1);
+  const recordsBySheet = timedPhase_("account_month_read", function () {
+    return readTablesWithSheetsApi_(spreadsheet.getId(), [TABLES.accountBalances, TABLES.transactions].concat(referenceSpecs_()));
   });
-  const investmentOperations = inputs.filter(function (operation) {
-    return operation && accounts.get(operation.accountId) && accounts.get(operation.accountId).type === "investment";
+  const balanceRecords = recordsBySheet[TABLES.accountBalances.name];
+  const transactionRecords = recordsBySheet[TABLES.transactions.name];
+  const references = referenceMapsFromRecords_(recordsBySheet);
+  const accounts = references.accounts;
+  const users = new Map(
+    [...references.users.entries()].filter(function (entry) {
+      return entry[1].active !== false;
+    }),
+  );
+  const balances = new Map(balanceRecords.map(function (item) { return [item.id, item]; }));
+  const balanceByMonth = new Map(balanceRecords.map(function (item) { return [item.accountId + "|" + item.month, item]; }));
+  const transactions = new Map(transactionRecords.map(function (item) { return [item.id, item]; }));
+  const saved = [], failed = [], seenMonths = new Set();
+
+  inputs.forEach(function (operation) {
+    const operationId = String((operation && operation.id) || "");
+    try {
+      if (!operation || typeof operation !== "object" || Array.isArray(operation))
+        throw new Error("An account month operation is required.");
+      const accountId = requireUuid_(operation.accountId, "Account ID");
+      const account = accounts.get(accountId);
+      if (!account || account.active === false)
+        throw new Error("Choose an active account.");
+      const month = cleanText_(operation.month, 7);
+      if (!validMonth_(month)) throw new Error("Month must be a valid YYYY-MM value.");
+      const monthKey = accountId + "|" + month;
+      if (seenMonths.has(monthKey))
+        throw new Error("An account can only appear once per month in a batch.");
+      seenMonths.add(monthKey);
+
+      const balanceEntry = operation.balance || {};
+      if (!balanceEntry.record) throw new Error("An ending balance is required.");
+      const existingBalance =
+        balances.get(String(balanceEntry.record.id || "")) ||
+        balanceByMonth.get(monthKey) ||
+        null;
+      if (
+        existingBalance &&
+        balanceEntry.record.id &&
+        String(balanceEntry.record.id) !== existingBalance.id
+      )
+        throw appError_("conflict", "That account already has an ending balance for this month.", false, "validation");
+      const balance = normalizeInvestmentBalance_(
+        { ...balanceEntry.record, accountId: accountId, month: month },
+        existingBalance,
+        accounts,
+        users,
+      );
+      const balanceFields = ["id", "accountId", "month", "balance", "notes", "asOfDate", "createdAt", "createdBy", "updatedAt", "updatedBy"];
+      const balanceDesired = existingBalance && investmentRecordMatches_(existingBalance, balance, balanceFields, ["balance"]);
+      if (
+        existingBalance &&
+        !balanceDesired &&
+        (!balanceEntry.base ||
+          !investmentRecordMatches_(existingBalance, balanceEntry.base, balanceFields, ["balance"]))
+      )
+        throw appError_("conflict", "This ending balance changed in the Sheet after you opened it.", false, "validation");
+
+      const stagedUpserts = [], stagedDeletes = [], seenActivity = new Set();
+      const upserts = operation.activity || operation.upserts || [];
+      upserts.forEach(function (entry) {
+        const source = entry && entry.record ? entry.record : entry;
+        const id = requireUuid_(source && source.id, "Account activity ID");
+        if (seenActivity.has(id)) throw new Error("Account activity may appear only once per operation.");
+        seenActivity.add(id);
+        const existing = transactions.get(id) || null;
+        const activityType = String(source.activityType || source.kind || (account.type === "investment" ? "contribution" : "payment"));
+        if (account.type === "investment" && activityType !== "contribution")
+          throw new Error("Investment accounts require contribution activity.");
+        if (account.type === "debt" && activityType !== "payment" && activityType !== "borrowing")
+          throw new Error("Debt activity must be a payment or borrowing.");
+        const amount = account.type === "debt"
+          ? activityType === "borrowing" ? -Math.abs(Number(source.amount)) : Math.abs(Number(source.amount))
+          : Number(source.amount);
+        const raw = {
+          ...source,
+          id: id,
+          accountId: accountId,
+          amount: amount,
+          date: source.date || month + "-15",
+          source: source.source || account.source,
+          createdAt: existing ? existing.createdAt : source.createdAt,
+          createdBy: existing ? existing.createdBy : source.createdBy,
+          notes: source.notes || "",
+        };
+        if (String(raw.date).slice(0, 7) !== month)
+          throw new Error("Activity date must be within the reporting month.");
+        const desired = existing
+          ? validateUpdatedTransaction_(raw, existing, references)
+          : validateTransaction_(raw, references);
+        if (existing && editableTransactionsMatch_(existing, desired)) return;
+        const base = entry && entry.record ? entry.base : null;
+        if (existing && (!base || !editableTransactionsMatch_(existing, base)))
+          throw appError_("conflict", "Account activity changed in the Sheet after you opened it.", false, "validation");
+        if (existing && (existing.accountId !== accountId || String(existing.date).slice(0, 7) !== month))
+          throw new Error("Account activity cannot be moved to another account or month.");
+        stagedUpserts.push(desired);
+      });
+
+      (operation.deletes || []).forEach(function (entry) {
+        const id = requireUuid_(entry && entry.id, "Account activity ID");
+        if (seenActivity.has(id)) throw new Error("Account activity cannot be updated and deleted together.");
+        seenActivity.add(id);
+        const existing = transactions.get(id) || null;
+        if (!existing) return;
+        if (existing.accountId !== accountId || String(existing.date).slice(0, 7) !== month)
+          throw new Error("That activity belongs to another account or month.");
+        if (!entry.base || !editableTransactionsMatch_(existing, entry.base))
+          throw appError_("conflict", "Account activity changed before it could be deleted.", false, "validation");
+        stagedDeletes.push(id);
+      });
+
+      balances.set(balance.id, balance);
+      balanceByMonth.set(monthKey, balance);
+      stagedUpserts.forEach(function (record) { transactions.set(record.id, record); });
+      stagedDeletes.forEach(function (id) { transactions.delete(id); });
+      const activity = [...transactions.values()]
+        .filter(function (item) { return item.accountId === accountId && String(item.date).slice(0, 7) === month; })
+        .map(function (item) { return { ...item, month: month, activityType: account.type === "investment" ? "contribution" : Number(item.amount) < 0 ? "borrowing" : "payment" }; });
+      saved.push({ id: operationId, accountId: accountId, month: month, balance: balance, activity: activity });
+    } catch (error) {
+      const classification = classifyError_(error);
+      failed.push({
+        id: operationId,
+        code: classification.code,
+        retryable: classification.retryable,
+        error: errorMessage_(error),
+      });
+    }
   });
-  if (debtOperations.length && investmentOperations.length)
-    throw new Error("A batch may contain either investment or debt account months, not both.");
-  if (debtOperations.length) {
-    const saved = [], failed = [];
-    debtOperations.forEach(function (operation) {
-      try {
-        const balance = saveDebtBalance_({ ...(operation.balance && operation.balance.record), accountId: operation.accountId, debtAccountId: operation.accountId, asOfDate: (operation.balance && operation.balance.record && operation.balance.record.asOfDate) || investmentMonthEnd_(operation.month) });
-        const activity = operation.activity || operation.upserts || [];
-        activity.forEach(function (entry) {
-          saveDebtPayment_({ ...(entry.record || entry), accountId: operation.accountId, debtAccountId: operation.accountId, kind: (entry.record || entry).activityType || (entry.record || entry).kind });
-        });
-        saved.push({ id: operation.id || "", accountId: operation.accountId, month: operation.month, balance: balance, activity: listAccountActivity_().filter(function (item) { return item.accountId === operation.accountId && item.month === operation.month; }) });
-      } catch (error) { failed.push({ id: operation.id || "", error: errorMessage_(error) }); }
+
+  if (saved.length) {
+    timedPhase_("account_month_commit", function () {
+      batchReplaceTableBodies_(spreadsheet.getId(), [
+        { spec: TABLES.accountBalances, records: [...balances.values()], previousCount: balancePhysicalCount },
+        { spec: TABLES.transactions, records: [...transactions.values()], previousCount: transactionPhysicalCount },
+      ]);
     });
-    return { saved: saved, failed: failed };
   }
-  return saveInvestmentMonths_(investmentOperations);
+  return { saved: saved, failed: failed };
 }
 
-function saveInvestmentMonths_(inputs) {
-  if (!Array.isArray(inputs) || !inputs.length)
-    throw new Error("At least one investment month is required.");
-  if (inputs.length > 50)
-    throw new Error("A maximum of 50 investment months can be saved at once.");
-  const lock = { releaseLock: function () {} };
-  try {
-    const spreadsheet = getSpreadsheet_();
-    const balanceSheet = requiredSheet_(spreadsheet, TABLES.accountBalances);
-    const balanceRecords = readRecordsFromSheet_(
-      balanceSheet,
-      TABLES.accountBalances,
-      true,
-    );
-    const contributionRecords = listAccountActivity_().filter(function(item){return item.activityType==="contribution";});
-    const accounts = new Map(
-      readRecordsFromSheet_(
-        requiredSheet_(spreadsheet, TABLES.accounts),
-        TABLES.accounts,
-        true,
-      ).map(function (item) {
-        return [item.id, item];
-      }),
-    );
-    const users = new Map(
-      readRecordsFromSheet_(
-        requiredSheet_(spreadsheet, TABLES.users),
-        TABLES.users,
-        true,
-      )
-        .filter(function (item) {
-          return item.active !== false;
-        })
-        .map(function (item) {
-          return [item.id, item];
-        }),
-    );
-    const balances = new Map(
-      balanceRecords.map(function (item) {
-        return [item.id, item];
-      }),
-    );
-    const contributions = new Map(
-      contributionRecords.map(function (item) {
-        return [item.id, item];
-      }),
-    );
-    const balanceByMonth = new Map(
-      balanceRecords.map(function (item) {
-        return [item.accountId + "|" + item.month, item];
-      }),
-    );
-    const saved = [],
-      failed = [],
-      seenMonths = new Set();
-    inputs.forEach(function (operation) {
-      const operationId = String((operation && operation.id) || "");
-      try {
-        if (!operation || typeof operation !== "object")
-          throw new Error("An investment month operation is required.");
-        const accountId = requireUuid_(
-          operation.accountId,
-          "Investment account ID",
-        );
-        const month = cleanText_(operation.month, 7);
-        if (!validMonth_(month))
-          throw new Error("Month must be a valid YYYY-MM value.");
-        const monthKey = accountId + "|" + month;
-        if (seenMonths.has(monthKey))
-          throw new Error(
-            "An account can only appear once per month in a batch.",
-          );
-        seenMonths.add(monthKey);
-        const balanceEntry = operation.balance || {};
-        const existingBalance =
-          (balanceEntry.record &&
-            balances.get(String(balanceEntry.record.id || ""))) ||
-          balanceByMonth.get(monthKey) ||
-          null;
-        const balance = normalizeInvestmentBalance_(
-          { ...balanceEntry.record, accountId: accountId, month: month },
-          existingBalance,
-          accounts,
-          users,
-        );
-        if (
-          existingBalance &&
-          !balanceEntry.base &&
-          !investmentRecordMatches_(
-            existingBalance,
-            balance,
-            ["accountId", "month", "balance", "notes"],
-            ["balance"],
-          )
-        ) {
-          failed.push({
-            id: operationId,
-            code: "conflict",
-            error: "This ending balance already exists with different values.",
-            current: currentInvestmentMonth_(
-              accountId,
-              month,
-              balances,
-              contributions,
-            ),
-          });
-          return;
-        }
-        if (
-          existingBalance &&
-          balanceEntry.base &&
-          !investmentRecordMatches_(
-            existingBalance,
-            balanceEntry.base,
-            ["accountId", "month", "balance", "notes"],
-            ["balance"],
-          )
-        ) {
-          failed.push({
-            id: operationId,
-            code: "conflict",
-            error:
-              "This ending balance changed in the Sheet after you opened it.",
-            current: currentInvestmentMonth_(
-              accountId,
-              month,
-              balances,
-              contributions,
-            ),
-          });
-          return;
-        }
-        if (!existingBalance && balanceByMonth.has(monthKey)) {
-          failed.push({
-            id: operationId,
-            code: "conflict",
-            error: "That account already has an ending balance for this month.",
-            current: currentInvestmentMonth_(
-              accountId,
-              month,
-              balances,
-              contributions,
-            ),
-          });
-          return;
-        }
-        const normalizedUpserts = [],
-          seenContributionIds = new Set();
-        for (const entry of operation.upserts || []) {
-          const existing =
-            contributions.get(
-              String((entry && entry.record && entry.record.id) || ""),
-            ) || null;
-          const record = normalizeInvestmentContribution_(
-            { ...entry.record, accountId: accountId, month: month },
-            existing,
-            accounts,
-            users,
-          );
-          if (seenContributionIds.has(record.id))
-            throw new Error(
-              "A contribution can only appear once in a monthly update.",
-            );
-          seenContributionIds.add(record.id);
-          if (
-            existing &&
-            !entry.base &&
-            !investmentRecordMatches_(
-              existing,
-              record,
-              ["accountId", "month", "amount"],
-              ["amount"],
-            )
-          ) {
-            failed.push({
-              id: operationId,
-              code: "conflict",
-              error:
-                "That contribution ID already exists with different values.",
-              current: currentInvestmentMonth_(
-                accountId,
-                month,
-                balances,
-                contributions,
-              ),
-            });
-            return;
-          }
-          if (
-            existing &&
-            entry.base &&
-            !investmentRecordMatches_(
-              existing,
-              entry.base,
-              ["accountId", "month", "amount"],
-              ["amount"],
-            )
-          ) {
-            failed.push({
-              id: operationId,
-              code: "conflict",
-              error: "A contribution changed in the Sheet after you opened it.",
-              current: currentInvestmentMonth_(
-                accountId,
-                month,
-                balances,
-                contributions,
-              ),
-            });
-            return;
-          }
-          if (
-            existing &&
-            (existing.accountId !== accountId || existing.month !== month)
-          )
-            throw new Error(
-              "A contribution cannot be moved to another account or month.",
-            );
-          normalizedUpserts.push(record);
-        }
-        const normalizedDeletes = [],
-          seenDeleteIds = new Set();
-        for (const entry of operation.deletes || []) {
-          const id = requireUuid_(
-            entry && entry.id,
-            "Investment contribution ID",
-          );
-          if (seenDeleteIds.has(id) || seenContributionIds.has(id))
-            throw new Error(
-              "A contribution cannot be updated and deleted in the same operation.",
-            );
-          seenDeleteIds.add(id);
-          const existing = contributions.get(id) || null;
-          if (!existing && !entry.base)
-            throw new Error(
-              "A confirmed contribution base is required for deletion.",
-            );
-          if (
-            existing &&
-            (!entry.base ||
-              !investmentRecordMatches_(
-                existing,
-                entry.base,
-                ["accountId", "month", "amount"],
-                ["amount"],
-              ))
-          ) {
-            failed.push({
-              id: operationId,
-              code: "conflict",
-              error: "A contribution changed before it could be deleted.",
-              current: currentInvestmentMonth_(
-                accountId,
-                month,
-                balances,
-                contributions,
-              ),
-            });
-            return;
-          }
-          if (
-            existing &&
-            (existing.accountId !== accountId || existing.month !== month)
-          )
-            throw new Error(
-              "That contribution belongs to another account or month.",
-            );
-          normalizedDeletes.push(id);
-        }
-        balances.set(balance.id, balance);
-        balanceByMonth.set(monthKey, balance);
-        normalizedUpserts.forEach(function (record) {
-          upsertAccountTransaction_(record);
-          contributions.set(record.id, record);
-        });
-        normalizedDeletes.forEach(function (id) {
-          deleteAccountActivity_(id);
-          contributions.delete(id);
-        });
-        saved.push({
-          id: operationId,
-          ...currentInvestmentMonth_(accountId, month, balances, contributions),
-        });
-      } catch (error) {
-        failed.push({ id: operationId, error: errorMessage_(error) });
-      }
+function batchReplaceTableBodies_(spreadsheetId, definitions) {
+  if (typeof Sheets === "undefined" || !Sheets.Spreadsheets || !Sheets.Spreadsheets.Values)
+    throw appError_("not_ready", "The Advanced Sheets service is not available.", false, "commit");
+  const data = [];
+  definitions.forEach(function (definition) {
+    const count = Math.max(definition.previousCount, definition.records.length);
+    if (!count) return;
+    const blank = Array(definition.spec.headers.length).fill("");
+    const values = definition.records.map(function (record) {
+      return recordToRow_(definition.spec, record);
     });
-    if (saved.length) {
-      writeInvestmentRecords_(
-        balanceSheet,
-        TABLES.accountBalances,
-        [...balances.values()],
-        balanceRecords.length,
-      );
-    }
-    return { saved: saved, failed: failed };
-  } finally {
-    lock.releaseLock();
-  }
+    while (values.length < count) values.push(blank.slice());
+    data.push({
+      range: "'" + definition.spec.name.replace(/'/g, "''") + "'!A2:" + columnLabel_(definition.spec.headers.length) + (count + 1),
+      majorDimension: "ROWS",
+      values: values,
+    });
+  });
+  if (data.length)
+    Sheets.Spreadsheets.Values.batchUpdate(
+      { valueInputOption: "RAW", data: data },
+      spreadsheetId,
+    );
 }
 
 function listLegacyInvestmentSnapshots_() {
@@ -2112,7 +2194,12 @@ function publicImportProfile_(record) {
   try {
     columnMapping = JSON.parse(record.columnMappingJson || "{}");
   } catch (error) {
-    columnMapping = {};
+    throw appError_(
+      "data_integrity",
+      "Import profile " + record.id + " contains invalid mapping JSON.",
+      false,
+      "read",
+    );
   }
   return {
     id: record.id,
@@ -2264,9 +2351,15 @@ function assertUniqueImportProfileName_(record) {
 }
 
 function createImportProfile_(input) {
-  const record = normalizeImportProfile_(input, null);
-  if (getRecordById_(TABLES.importProfiles, record.id))
-    throw new Error("That import profile ID already exists.");
+  const requestedId = input && input.id ? requireUuid_(input.id, "Import profile ID") : "";
+  const existing = requestedId ? getRecordById_(TABLES.importProfiles, requestedId) : null;
+  const record = normalizeImportProfile_(input, existing);
+  if (existing) {
+    const fields = ["id", "name", "target", "investmentAccountId", "headerSignature", "columnMappingJson", "dateFormat", "amountMode", "amountMultiplier", "active", "createdAt"];
+    if (fields.every(function (field) { return String(existing[field] === undefined ? "" : existing[field]) === String(record[field] === undefined ? "" : record[field]); }))
+      return publicImportProfile_(existing);
+    throw new Error("That import profile ID already exists with different data.");
+  }
   assertUniqueImportProfileName_(record);
   appendRows_(getTableSheet_(TABLES.importProfiles), [
     recordToRow_(TABLES.importProfiles, record),
@@ -2274,7 +2367,14 @@ function createImportProfile_(input) {
   return publicImportProfile_(record);
 }
 
-function updateImportProfile_(input) {
+function importProfilesMatch_(left, right) {
+  if (!left || !right) return false;
+  return ["name", "target", "investmentAccountId", "headerSignature", "dateFormat", "amountMode", "amountMultiplier", "active"].every(function (field) {
+    return String(left[field] === undefined ? "" : left[field]) === String(right[field] === undefined ? "" : right[field]);
+  }) && JSON.stringify(left.columnMapping || {}) === JSON.stringify(right.columnMapping || {});
+}
+
+function updateImportProfile_(input, base) {
   const sheet = getTableSheet_(TABLES.importProfiles);
   const row = findRowById_(sheet, input && input.id);
   if (!row) throw new Error("That import profile could not be found.");
@@ -2288,6 +2388,11 @@ function updateImportProfile_(input) {
     { ...publicImportProfile_(existing), ...input },
     existing,
   );
+  const existingPublic = publicImportProfile_(existing);
+  const desiredPublic = publicImportProfile_(record);
+  if (importProfilesMatch_(existingPublic, desiredPublic)) return existingPublic;
+  if (!base || !importProfilesMatch_(existingPublic, base))
+    throw appError_("conflict", "This import profile changed in the Sheet after you opened it.", false, "validation");
   assertUniqueImportProfileName_(record);
   sheet
     .getRange(row, 1, 1, TABLES.importProfiles.headers.length)
@@ -2325,9 +2430,7 @@ function validateImportMappingInputs_(inputs, idField, references, accountRefere
   const seen = new Set();
   inputs.forEach(function (input) {
     const source = plainImportText_(input && input.sourceDescription, 500);
-    const normalized = normalizeImportDescription_(
-      input && (input.normalizedSourceDescription || source),
-    );
+    const normalized = normalizeImportDescription_(source);
     if (!normalized) throw new Error("A source description is required.");
     if (seen.has(normalized))
       throw new Error(
@@ -2355,7 +2458,7 @@ function validateImportMappingInputs_(inputs, idField, references, accountRefere
   });
 }
 
-function upsertImportMappingKind_(
+function stageImportMappingKind_(
   spec,
   profileId,
   inputs,
@@ -2386,9 +2489,7 @@ function upsertImportMappingKind_(
       input && input.sourceDescription,
       500,
     );
-    const normalized = normalizeImportDescription_(
-      input && (input.normalizedSourceDescription || sourceDescription),
-    );
+    const normalized = normalizeImportDescription_(sourceDescription);
     if (!normalized) throw new Error("A source description is required.");
     const key = profileId + "|" + normalized;
     if (seen.has(key))
@@ -2432,20 +2533,17 @@ function upsertImportMappingKind_(
       records.push(record);
     }
   });
-  writeInvestmentRecords_(
-    sheet,
-    spec,
-    records,
-    Math.max(0, sheet.getLastRow() - 1),
-  );
-  return records.filter(function (item) {
-    return item.importProfileId === profileId && item.active !== false;
-  });
+  return {
+    records: records,
+    previousCount: Math.max(0, sheet.getLastRow() - 1),
+    active: records.filter(function (item) {
+      return item.importProfileId === profileId && item.active !== false;
+    }),
+  };
 }
 
 function upsertImportMappings_(profileId, vendorInputs, personInputs) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  const lock = acquireScriptLock_();
   try {
     profileId = requireUuid_(profileId, "Import profile ID");
     const profile = getRecordById_(TABLES.importProfiles, profileId);
@@ -2472,24 +2570,38 @@ function upsertImportMappings_(profileId, vendorInputs, personInputs) {
       "assignmentId",
       assignments,
     );
-    return {
-      vendorMappings: upsertImportMappingKind_(
+    const vendorStage = stageImportMappingKind_(
         TABLES.importVendorMappings,
         profileId,
         vendorInputs || [],
         "vendorId",
         vendors,
         accounts,
-      ),
-      personMappings: upsertImportMappingKind_(
+      );
+    const personStage = stageImportMappingKind_(
         TABLES.importPersonMappings,
         profileId,
         personInputs || [],
         "assignmentId",
         assignments,
         accounts,
-      ),
-    };
+      );
+    const ids = new Map();
+    vendorStage.records.concat(personStage.records).forEach(function (record) {
+      const owner = ids.get(record.id);
+      const identity = record.importProfileId + "|" + record.normalizedSourceDescription;
+      if (owner && owner !== identity)
+        throw new Error("An import mapping ID is used by multiple mappings.");
+      ids.set(record.id, identity);
+    });
+    const definitions = [];
+    if ((vendorInputs || []).length)
+      definitions.push({ spec: TABLES.importVendorMappings, records: vendorStage.records, previousCount: vendorStage.previousCount });
+    if ((personInputs || []).length)
+      definitions.push({ spec: TABLES.importPersonMappings, records: personStage.records, previousCount: personStage.previousCount });
+    batchReplaceTableBodies_(getSpreadsheet_().getId(), definitions);
+    flushMutation_();
+    return { vendorMappings: vendorStage.active, personMappings: personStage.active };
   } finally {
     lock.releaseLock();
   }
@@ -2507,8 +2619,7 @@ function addEntities_(inputs) {
     throw new Error("At least one entity is required.");
   if (inputs.length > 50)
     throw new Error("A maximum of 50 entities can be added at once.");
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  const lock = acquireScriptLock_();
   try {
     const spreadsheet = getSpreadsheet_();
     const definitions = {
@@ -2627,11 +2738,7 @@ function addEntities_(inputs) {
         definition.byName.set(entityNameKey_(kind, record), record);
         saved.push({ kind: kind, record: record });
       } catch (error) {
-        failed.push({
-          kind: kind,
-          id: requestedId,
-          error: errorMessage_(error),
-        });
+        failed.push(resultFailure_(requestedId, error, { kind: kind }));
       }
     });
 
@@ -2651,6 +2758,7 @@ function addEntities_(inputs) {
         }),
       );
     });
+    flushMutation_();
     return { saved: saved, reconciled: reconciled, failed: failed };
   } finally {
     lock.releaseLock();
@@ -2710,7 +2818,7 @@ function addCategory_(input) {
     isDefault: false,
   });
 }
-function updateCategory_(input) {
+function updateCategory_(input, base) {
   const existing = getRecordById_(TABLES.categories, input && input.id);
   if (!existing) throw new Error("That category could not be found.");
   if (input.type && input.type !== existing.type)
@@ -2719,7 +2827,7 @@ function updateCategory_(input) {
     ...input,
     type: existing.type,
     isDefault: existing.isDefault,
-  });
+  }, base);
 }
 
 function addNamedRecord_(spec, input) {
@@ -2748,7 +2856,7 @@ function addNamedRecord_(spec, input) {
   return record;
 }
 
-function updateNamedRecord_(spec, input) {
+function updateNamedRecord_(spec, input, base) {
   const sheet = getTableSheet_(spec);
   const row = findRowById_(sheet, input && input.id);
   if (!row)
@@ -2764,13 +2872,17 @@ function updateNamedRecord_(spec, input) {
   const name = requiredName_(input.name);
   const record = {
     ...existing,
-    ...input,
     id: existing.id,
     name: name,
     active: input.active !== false,
     createdAt: existing.createdAt,
     updatedAt: new Date().toISOString(),
   };
+  const fields = ["name", "active"];
+  if (fields.every(function (field) { return String(existing[field]) === String(record[field]); }))
+    return { data: existing };
+  if (!base || !fields.every(function (field) { return String(existing[field]) === String(base[field]); }))
+    throw appError_("conflict", "This record changed in the Sheet after you opened it.", false, "validation");
   ensureUniqueIdAndName_(
     spec,
     record.id,
@@ -2781,22 +2893,7 @@ function updateNamedRecord_(spec, input) {
   sheet
     .getRange(row, 1, 1, spec.headers.length)
     .setValues([recordToRow_(spec, record)]);
-  let warning = "";
-  if (existing.name !== record.name) {
-    const ledgerColumns =
-      spec === TABLES.categories
-        ? [10, 3]
-        : spec === TABLES.vendors
-          ? [11, 4]
-          : [12, 5];
-    warning = safeSyncLedgerName_(
-      ledgerColumns[0],
-      ledgerColumns[1],
-      record.id,
-      record.name,
-    );
-  }
-  return { data: record, warning: warning };
+  return { data: record };
 }
 
 function archiveRecord_(spec, id) {
@@ -2836,19 +2933,32 @@ function readRecords_(spec, includeInactive) {
   return readRecordsFromSheet_(getTableSheet_(spec), spec, includeInactive);
 }
 function readRecordsFromSheet_(sheet, spec, includeInactive) {
+  return readPhysicalRecordsFromSheet_(sheet, spec, includeInactive).map(
+    function (entry) {
+      return entry.record;
+    },
+  );
+}
+function readPhysicalRecordsFromSheet_(sheet, spec, includeInactive) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   return sheet
     .getRange(2, 1, lastRow - 1, spec.headers.length)
     .getValues()
-    .filter(function (row) {
-      return row[0] !== "";
+    .map(function (row, index) {
+      return { rowNumber: index + 2, row: row };
     })
-    .map(function (row) {
-      return rowToRecord_(spec, row);
+    .filter(function (entry) {
+      return entry.row[0] !== "";
     })
-    .filter(function (record) {
-      return includeInactive || record.active !== false;
+    .map(function (entry) {
+      return {
+        rowNumber: entry.rowNumber,
+        record: rowToRecord_(spec, entry.row, entry.rowNumber),
+      };
+    })
+    .filter(function (entry) {
+      return includeInactive || entry.record.active !== false;
     });
 }
 function getRecordById_(spec, id) {
@@ -2872,126 +2982,6 @@ function ensureUniqueIdAndName_(spec, id, name, type, excludeId) {
   });
 }
 
-function rebuildLedger() {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    return rebuildLedger_();
-  } finally {
-    lock.releaseLock();
-  }
-}
-function rebuildLedger_() {
-  const ledger = getLedgerSheet_(),
-    transactions = listTransactions_();
-  const invalidDates = transactions.filter(function (transaction) {
-    return !/^\d{4}-\d{2}-\d{2}$/.test(String(transaction.date || ""));
-  });
-  if (invalidDates.length)
-    throw new Error(
-      "Ledger rebuild stopped before writing: " +
-        invalidDates.length +
-        " transaction(s) have a blank or invalid Date. Restore those dates, then run setup again.",
-    );
-  const rows = transactions.filter(ledgerVisible_).map(ledgerRow_),
-    existingRows = Math.max(ledger.getLastRow() - 1, 0),
-    outputRows = Math.max(existingRows, rows.length);
-  // Replace the body in one Sheets write. This is faster and cannot leave a
-  // cleared Ledger between separate clear and append operations on timeout.
-  if (outputRows) {
-    const blankRow = TABLES.ledger.headers.map(function () { return ""; });
-    const values = rows.concat(
-      Array.from({ length: outputRows - rows.length }, function () {
-        return blankRow.slice();
-      }),
-    );
-    ledger
-      .getRange(2, 1, outputRows, TABLES.ledger.headers.length)
-      .setValues(values);
-  }
-  configureLedger_(ledger);
-  PropertiesService.getScriptProperties().deleteProperty(
-    APP.ledgerDirtyProperty,
-  );
-  SpreadsheetApp.flush();
-  return { rows: transactions.length, status: "rebuilt" };
-}
-function appendLedgerRow_(transaction) {
-  if(!ledgerVisible_(transaction))return;
-  const ledger = getLedgerSheet_();
-  appendRows_(ledger, [ledgerRow_(transaction)]);
-  configureLedger_(ledger);
-}
-function ledgerVisible_(transaction) {
-  if(!transaction.accountId)return true;
-  if(!transaction.accountType)return false;
-  if(transaction.accountType==="investment")return transaction.source==="deduction";
-  return Number(transaction.amount)>=0;
-}
-function ledgerRow_(transaction) {
-  const deduction=transaction.source==="deduction";
-  const type=transaction.accountType==="investment"?"income":transaction.type||"expense";
-  const notes=(transaction.notes?transaction.notes+" · ":"")+(transaction.account?transaction.account+" · ":"")+(deduction?"Deduction adds "+transaction.amount+" gross income":"");
-  return [
-    transaction.date,
-    type,
-    transaction.category,
-    transaction.vendor,
-    transaction.assignment,
-    transaction.createdByName,
-    notes,
-    transaction.amount,
-    transaction.id,
-    transaction.resolvedCategoryId||transaction.categoryId,
-    transaction.vendorId,
-    transaction.resolvedAssignmentId||transaction.assignmentId,
-    transaction.createdBy,
-    transaction.createdAt,
-  ];
-}
-function safeSyncLedgerName_(idColumn, displayColumn, id, name) {
-  try {
-    const count = syncLedgerName_(idColumn, displayColumn, id, name);
-    return count ? "" : "";
-  } catch (error) {
-    markLedgerDirty_();
-    return (
-      "The record was updated, but the Ledger needs to be rebuilt: " +
-      errorMessage_(error)
-    );
-  }
-}
-function syncLedgerName_(idColumn, displayColumn, id, name) {
-  const sheet = getLedgerSheet_(),
-    lastRow = sheet.getLastRow();
-  if (lastRow < 2) return 0;
-  const ids = sheet.getRange(2, idColumn, lastRow - 1, 1).getValues();
-  const names = sheet.getRange(2, displayColumn, lastRow - 1, 1).getValues();
-  let changed = 0;
-  ids.forEach(function (row, index) {
-    if (row[0] === id) {
-      names[index][0] = name;
-      changed += 1;
-    }
-  });
-  if (changed)
-    sheet.getRange(2, displayColumn, lastRow - 1, 1).setValues(names);
-  return changed;
-}
-function markLedgerDirty_() {
-  PropertiesService.getScriptProperties().setProperty(
-    APP.ledgerDirtyProperty,
-    new Date().toISOString(),
-  );
-}
-function isLedgerDirty_() {
-  return Boolean(
-    PropertiesService.getScriptProperties().getProperty(
-      APP.ledgerDirtyProperty,
-    ),
-  );
-}
-
 function getSpreadsheet_() {
   const id = PropertiesService.getScriptProperties().getProperty(
     APP.spreadsheetIdProperty,
@@ -3006,6 +2996,17 @@ function getSpreadsheet_() {
   return spreadsheet;
 }
 function getTableSheet_(spec) {
+  const spreadsheet = getSpreadsheet_();
+  const sheet = requiredSheet_(spreadsheet, spec);
+  const current = sheet.getRange(1, 1, 1, spec.headers.length).getValues()[0];
+  if (!headersMatch_(current, spec.headers))
+    throw new Error(
+      "The " + spec.name + " sheet headers do not match the expected schema.",
+    );
+  return sheet;
+}
+
+function ensureTableSheet_(spec) {
   const spreadsheet = getSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(spec.name);
   if (!sheet) sheet = spreadsheet.insertSheet(spec.name);
@@ -3035,19 +3036,19 @@ function migrateImportPayeeMappingHeaders_(sheet, spec) {
     .getRange(1, 1, 1, previousHeaders.length)
     .getValues()[0];
   if (!headersMatch_(current, previousHeaders)) return;
+  backupSheetForMigration_(sheet, "import-mapping-v16");
   const lastRow = sheet.getLastRow();
   const rows = lastRow < 2
     ? []
     : sheet.getRange(2, 1, lastRow - 1, previousHeaders.length).getValues();
-  sheet.getRange(1, 1, Math.max(lastRow, 1), spec.headers.length).clearContent();
-  sheet.getRange(1, 1, 1, spec.headers.length).setValues([spec.headers]);
-  if (rows.length) {
-    sheet.getRange(2, 1, rows.length, spec.headers.length).setValues(
-      rows.map(function (row) {
-        return row.slice(0, 5).concat([""], row.slice(5));
-      }),
-    );
-  }
+  replaceSheetValues_(
+    sheet,
+    spec.headers,
+    rows.map(function (row) {
+      return row.slice(0, 5).concat([""], row.slice(5));
+    }),
+    Math.max(previousHeaders.length, spec.headers.length),
+  );
 }
 function migrateLegacyInvestmentHeaders_(sheet, spec) {
   const accountHeaders = [
@@ -3081,14 +3082,12 @@ function migrateLegacyInvestmentHeaders_(sheet, spec) {
       : null;
   }
   if (!oldHeaders) return;
+  backupSheetForMigration_(sheet, "investment-headers-v16");
   const lastRow = sheet.getLastRow();
   const oldRows =
     lastRow < 2
       ? []
       : sheet.getRange(2, 1, lastRow - 1, oldHeaders.length).getValues();
-  sheet.getRange(1, 1, Math.max(lastRow, 1), oldHeaders.length).clearContent();
-  sheet.getRange(1, 1, 1, spec.headers.length).setValues([spec.headers]);
-  if (!oldRows.length) return;
   const migrated = oldRows
     .filter(function (row) {
       return row[0] !== "";
@@ -3097,9 +3096,12 @@ function migrateLegacyInvestmentHeaders_(sheet, spec) {
       const isLegacy = oldHeaders === accountHeaders;
       return recordToRow_(spec, { id:row[0], name:row[1], type:"investment", assignmentId:(isLegacy?row[4]:"")||APP.sharedAssignmentId, active:(isLegacy?row[5]:row[3])===""?true:(isLegacy?row[5]:row[3]), createdAt:isLegacy?row[6]:row[4], updatedAt:isLegacy?row[7]:row[5], source:(isLegacy?"manual":row[2])==="paycheck"?"deduction":(isLegacy?"manual":row[2]), interestRate:"", categoryId:"" });
     });
-  sheet
-    .getRange(2, 1, migrated.length, spec.headers.length)
-    .setValues(migrated);
+  replaceSheetValues_(
+    sheet,
+    spec.headers,
+    migrated,
+    Math.max(oldHeaders.length, spec.headers.length),
+  );
 }
 
 function migrateV11AccountHeaders_(sheet) {
@@ -3108,15 +3110,15 @@ function migrateV11AccountHeaders_(sheet) {
   const oldHeaders = ["ID", "Name", "Type", "Assignment ID", "Active", "Created At", "Updated At", "Source", "Interest Rate"];
   const current = sheet.getRange(1,1,1,oldHeaders.length).getValues()[0];
   if (!headersMatch_(current, oldHeaders)) return;
+  backupSheetForMigration_(sheet, "accounts-v11-v16");
   const lastRow=sheet.getLastRow();
   const rows=lastRow<2?[]:sheet.getRange(2,1,lastRow-1,oldHeaders.length).getValues();
-  sheet.getRange(1,1,Math.max(lastRow,1),TABLES.accounts.headers.length).clearContent();
-  sheet.getRange(1,1,1,TABLES.accounts.headers.length).setValues([TABLES.accounts.headers]);
-  if(rows.length) sheet.getRange(2,1,rows.length,TABLES.accounts.headers.length).setValues(rows.map(function(row){
+  const migrated = rows.map(function(row){
     const type=String(row[2]);
     row[7]=row[7]==="paycheck"?"deduction":row[7]||"manual";
     return row.concat([type==="debt"?APP.debtPaymentCategoryId:""]);
-  }));
+  });
+  replaceSheetValues_(sheet, TABLES.accounts.headers, migrated, TABLES.accounts.headers.length);
 }
 
 function derivedInvestmentContributionId_(snapshotId) {
@@ -3209,6 +3211,7 @@ function migrateLegacyAccountsV11_() {
 function migrateInvestmentModelV6_() {
   const spreadsheet = getSpreadsheet_();
   const legacy = spreadsheet.getSheetByName("InvestmentSnapshots");
+  if (!legacy || legacy.getLastRow() < 1) return;
   let balanceSheet = spreadsheet.getSheetByName(TABLES.accountBalances.name);
   let contributionSheet = spreadsheet.getSheetByName(
     TABLES.accountActivity.name,
@@ -3229,8 +3232,6 @@ function migrateInvestmentModelV6_() {
     TABLES.accountActivity.headers,
     TABLES.accountActivity.name,
   );
-  if (!legacy || legacy.getLastRow() < 1) return;
-
   const originalHeaders = [
     "ID",
     "Account ID",
@@ -3384,24 +3385,20 @@ function migrateLegacyUserHeaders_(sheet) {
     .getRange(1, 1, 1, TABLES.users.headers.length)
     .getValues()[0];
   if (!headersMatch_(current, oldHeaders)) return;
+  backupSheetForMigration_(sheet, "users-v16");
   const lastRow = sheet.getLastRow();
   const oldRows =
     lastRow < 2
       ? []
       : sheet.getRange(2, 1, lastRow - 1, oldHeaders.length).getValues();
-  sheet
-    .getRange(1, 1, Math.max(lastRow, 1), TABLES.users.headers.length)
-    .clearContent();
-  sheet
-    .getRange(1, 1, 1, TABLES.users.headers.length)
-    .setValues([TABLES.users.headers]);
-  if (oldRows.length) {
-    sheet.getRange(2, 1, oldRows.length, TABLES.users.headers.length).setValues(
-      oldRows.map(function (row) {
-        return [row[0], row[1], row[2], true, row[3], row[4]];
-      }),
-    );
-  }
+  replaceSheetValues_(
+    sheet,
+    TABLES.users.headers,
+    oldRows.map(function (row) {
+      return [row[0], row[1], row[2], true, row[3], row[4]];
+    }),
+    TABLES.users.headers.length,
+  );
 }
 function getTransactionSheet_() {
   const spreadsheet = getSpreadsheet_();
@@ -3426,11 +3423,10 @@ function getTransactionSheet_() {
   return sheet;
 }
 function migrateV11Transactions_(sheet) {
+  backupSheetForMigration_(sheet, "transactions-v11-v16");
   const lastRow=sheet.getLastRow();
   const rows=lastRow<2?[]:sheet.getRange(2,1,lastRow-1,V11_TRANSACTION_HEADERS.length).getValues();
-  sheet.getRange(1,1,Math.max(lastRow,1),TABLES.transactions.headers.length).clearContent();
-  sheet.getRange(1,1,1,TABLES.transactions.headers.length).setValues([TABLES.transactions.headers]);
-  if(rows.length) sheet.getRange(2,1,rows.length,TABLES.transactions.headers.length).setValues(rows.map(function(row){return row.concat(["","manual",""]);}));
+  replaceSheetValues_(sheet, TABLES.transactions.headers, rows.map(function(row){return row.concat(["","manual",""]);}), TABLES.transactions.headers.length);
 }
 
 function migratedActivityId_(id) {
@@ -3449,13 +3445,15 @@ function migrateUnifiedActivityV12_() {
   const accountSheet=getTableSheet_(TABLES.accounts);
   const accountRowCount=Math.max(accountSheet.getLastRow()-1,0);
   const accountRows=accountRowCount?accountSheet.getRange(2,1,accountRowCount,TABLES.accounts.headers.length).getValues():[];
+  const sourceColumn = TABLES.accounts.fields.indexOf("source");
+  const categoryColumn = TABLES.accounts.fields.indexOf("categoryId");
   const accounts=[];
   const accountSources=[];
   const accountCategories=[];
   accountRows.forEach(function(row){
     if(row[0]===""){
-      accountSources.push([row[7]||""]);
-      accountCategories.push([row[10]||""]);
+      accountSources.push([row[sourceColumn]||""]);
+      accountCategories.push([row[categoryColumn]||""]);
       return;
     }
     const account=rowToRecord_(TABLES.accounts,row);
@@ -3466,8 +3464,8 @@ function migrateUnifiedActivityV12_() {
     accountCategories.push([account.categoryId||""]);
   });
   if(accountRowCount){
-    accountSheet.getRange(2,8,accountRowCount,1).setValues(accountSources);
-    accountSheet.getRange(2,11,accountRowCount,1).setValues(accountCategories);
+    accountSheet.getRange(2,sourceColumn+1,accountRowCount,1).setValues(accountSources);
+    accountSheet.getRange(2,categoryColumn+1,accountRowCount,1).setValues(accountCategories);
   }
   const accountById=new Map(accounts.map(function(item){return [item.id,item];}));
   const transactionSheet=getTableSheet_(TABLES.transactions);
@@ -3488,11 +3486,23 @@ function migrateUnifiedActivityV12_() {
   const existingTransactionCount=transactions.length;
   const byId=new Map(transactions.map(function(item){return [item.id,item];}));
   const imported=new Set(transactions.map(function(item){return item.legacyActivityId;}).filter(Boolean));
-  let legacyActivity=readRecords_(TABLES.accountActivity,true);
+  const legacyActivitySheet = spreadsheet.getSheetByName(TABLES.accountActivity.name);
+  let legacyActivity=legacyActivitySheet
+    ? readRecordsFromSheet_(legacyActivitySheet,TABLES.accountActivity,true)
+    : [];
   const oldInvestments=spreadsheet.getSheetByName(LEGACY_ACCOUNT_TABLES.investmentContributions.name);
   if(oldInvestments) legacyActivity=legacyActivity.concat(readRecordsFromSheet_(oldInvestments,LEGACY_ACCOUNT_TABLES.investmentContributions,true).map(function(item){return {...item,activityType:"contribution"};}));
   const oldDebt=spreadsheet.getSheetByName(LEGACY_ACCOUNT_TABLES.debtPayments.name);
   if(oldDebt) legacyActivity=legacyActivity.concat(readRecordsFromSheet_(oldDebt,LEGACY_ACCOUNT_TABLES.debtPayments,true).map(function(item){return {...item,accountId:item.debtAccountId,activityType:item.kind==="borrowing"?"borrowing":"payment"};}));
+  const orphanedActivity = legacyActivity.filter(function (activity) {
+    return activity.id && !accountById.has(activity.accountId);
+  });
+  if (orphanedActivity.length)
+    throw new Error(
+      "Cannot complete activity migration: " +
+        orphanedActivity.length +
+        " record(s) reference missing accounts.",
+    );
   const hasPendingActivity=legacyActivity.some(function(activity){
     return activity.id&&accountById.has(activity.accountId)&&!imported.has(activity.id);
   });
@@ -3507,8 +3517,12 @@ function migrateUnifiedActivityV12_() {
     const account=accountById.get(activity.accountId); if(!account)return;
     let amount=Number(activity.amount)||0;
     if(account.type==="debt"&&activity.activityType==="borrowing") amount=-Math.abs(amount);
+    const explicit=normalizeDateId_(activity.date);
+    const month=normalizeMonthId_(activity.month||explicit);
+    const date=/^\d{4}-\d{2}-\d{2}$/.test(explicit)?explicit:month+"-15";
+    const source=activity.flowType==="transfer"?"manual":account.source;
     function adoptExisting_(same){
-      if(!same||same.accountId!==activity.accountId||Number(same.amount)!==amount) return false;
+      if(!same||same.accountId!==activity.accountId||Number(same.amount)!==amount||normalizeDateId_(same.date)!==date||String(same.source||"manual")!==String(source||"manual")) return false;
       same.legacyActivityId=activity.id;
       const existingIndex=transactions.indexOf(same);
       if(existingIndex>=0&&existingIndex<existingTransactionCount) legacyActivityIdRows[transactionSheetRows[existingIndex]][0]=activity.id;
@@ -3518,10 +3532,6 @@ function migrateUnifiedActivityV12_() {
     let id=activity.id;
     if(byId.has(id)){if(adoptExisting_(byId.get(id)))return;id=migratedActivityId_(activity.id);}
     if(byId.has(id)){if(adoptExisting_(byId.get(id)))return;throw new Error("Cannot migrate AccountActivity: derived transaction ID collision for "+activity.id+".");}
-    const explicit=normalizeDateId_(activity.date);
-    const month=normalizeMonthId_(activity.month||explicit);
-    const date=/^\d{4}-\d{2}-\d{2}$/.test(explicit)?explicit:month+"-15";
-    const source=activity.flowType==="transfer"?"manual":account.source;
     const record={id:id,createdAt:activity.createdAt,createdBy:activity.createdBy,type:"",amount:amount,date:date,categoryId:"",vendorId:"",assignmentId:"",notes:"",accountId:account.id,source:source,legacyActivityId:activity.id};
     transactions.push(record);byId.set(id,record);imported.add(activity.id);
   });
@@ -3529,32 +3539,51 @@ function migrateUnifiedActivityV12_() {
   // In particular, setup must never rewrite or clear their Account ID values.
   if(legacyActivityIdRows.length)transactionSheet.getRange(2,13,legacyActivityIdRows.length,1).setValues(legacyActivityIdRows);
   appendRows_(transactionSheet,transactions.slice(existingTransactionCount).map(function(item){return recordToRow_(TABLES.transactions,item);}));
-  SpreadsheetApp.flush();
+  flushMutation_();
   properties.setProperty(APP.unifiedActivityMigrationProperty,spreadsheet.getId());
 }
-function getLedgerSheet_() {
-  const spreadsheet = getSpreadsheet_();
-  let sheet = spreadsheet.getSheetByName(TABLES.ledger.name);
-  if (!sheet) sheet = spreadsheet.insertSheet(TABLES.ledger.name);
-  ensureSheetHeaders_(sheet, TABLES.ledger.headers, TABLES.ledger.name);
-  configureLedger_(sheet);
-  return sheet;
-}
-function configureLedger_(sheet) {
-  sheet.setFrozenRows(1);
-  sheet.hideColumns(9, 6);
-  if (!sheet.getFilter())
-    sheet
-      .getRange(
-        1,
-        1,
-        Math.max(sheet.getMaxRows(), 2),
-        TABLES.ledger.headers.length,
-      )
-      .createFilter();
-}
 
+/** Repairs the v12 category write that used the undeclared K column. */
+function repairAccountCategoryColumnV16_() {
+  const spreadsheet = getSpreadsheet_();
+  const properties = PropertiesService.getScriptProperties();
+  if (
+    properties.getProperty(APP.accountCategoryRepairProperty) ===
+    spreadsheet.getId()
+  )
+    return;
+  const sheet = getTableSheet_(TABLES.accounts);
+  const rowCount = Math.max(sheet.getLastRow() - 1, 0);
+  if (rowCount) {
+    const categoryColumn = TABLES.accounts.fields.indexOf("categoryId") + 1;
+    const rows = sheet.getRange(2, categoryColumn, rowCount, 2).getValues();
+    const accountRows = sheet
+      .getRange(2, 1, rowCount, TABLES.accounts.headers.length)
+      .getValues();
+    let changed = false;
+    rows.forEach(function (row, index) {
+      const account = rowToRecord_(TABLES.accounts, accountRows[index], index + 2);
+      const erroneous = String(row[1] || "");
+      if (
+        account.type === "debt" &&
+        !row[0] &&
+        erroneous === APP.debtPaymentCategoryId
+      ) {
+        row[0] = APP.debtPaymentCategoryId;
+        row[1] = "";
+        changed = true;
+      }
+    });
+    if (changed) {
+      backupSheetForMigration_(sheet, "category-column-v16");
+      sheet.getRange(2, categoryColumn, rowCount, 2).setValues(rows);
+    }
+  }
+  flushMutation_();
+  properties.setProperty(APP.accountCategoryRepairProperty, spreadsheet.getId());
+}
 function migrateLegacyTransactions_(sheet) {
+  backupSheetForMigration_(sheet, "transactions-legacy-v16");
   const lastRow = sheet.getLastRow();
   const rows =
     lastRow < 2
@@ -3594,7 +3623,12 @@ function migrateLegacyTransactions_(sheet) {
         createdAt: normalizeDateTime_(legacy["Created At"]),
         createdBy: String(legacy["Created By"] || ""),
         type: type,
-        amount: Number(legacy.Amount) || 0,
+        amount: numericCell_(
+          legacy.Amount,
+          { name: "legacy Transactions" },
+          "migration",
+          "Amount",
+        ),
         date: serializeCell_(legacy.Date, "date"),
         categoryId: category.id,
         vendorId: vendor ? vendor.id : "",
@@ -3602,21 +3636,12 @@ function migrateLegacyTransactions_(sheet) {
         notes: String(legacy.Notes || ""),
       });
     });
-  sheet
-    .getRange(
-      1,
-      1,
-      Math.max(lastRow, 1),
-      Math.max(
-        LEGACY_TRANSACTION_HEADERS.length,
-        TABLES.transactions.headers.length,
-      ),
-    )
-    .clearContent();
-  sheet
-    .getRange(1, 1, 1, TABLES.transactions.headers.length)
-    .setValues([TABLES.transactions.headers]);
-  appendRows_(sheet, migrated);
+  replaceSheetValues_(
+    sheet,
+    TABLES.transactions.headers,
+    migrated,
+    Math.max(LEGACY_TRANSACTION_HEADERS.length, TABLES.transactions.headers.length),
+  );
 }
 function findOrCreateNamed_(spec, name, extras) {
   const text = String(name || "").trim();
@@ -3627,6 +3652,15 @@ function findOrCreateNamed_(spec, name, extras) {
     );
   });
   return existing || addNamedRecord_(spec, { name: text, ...extras });
+}
+
+function backupSheetForMigration_(sheet, label) {
+  const spreadsheet = sheet.getParent ? sheet.getParent() : getSpreadsheet_();
+  const name = ("_TED_Backup_" + sheet.getName() + "_" + label).slice(0, 99);
+  if (spreadsheet.getSheetByName(name)) return;
+  if (typeof sheet.copyTo !== "function") return;
+  const backup = sheet.copyTo(spreadsheet).setName(name);
+  if (typeof backup.hideSheet === "function") backup.hideSheet();
 }
 
 function ensureSheetHeaders_(sheet, headers, label) {
@@ -3670,22 +3704,41 @@ function headersMatch_(actual, expected) {
   });
 }
 
-function rowToRecord_(spec, row) {
+function rowToRecord_(spec, row, rowNumber) {
   const record = {};
   spec.fields.forEach(function (field, index) {
     record[field] = serializeCell_(row[index], field);
   });
-  ["active", "isDefault"].forEach(function (field) {
-    if (field in record)
-      record[field] =
-        record[field] === true ||
-        String(record[field]).toLowerCase() === "true";
-  });
-  if ("amount" in record) record.amount = Number(record.amount) || 0;
+  if ("active" in record) record.active = parseBooleanCell_(record.active, true, spec, rowNumber, "active");
+  if ("isDefault" in record) record.isDefault = parseBooleanCell_(record.isDefault, false, spec, rowNumber, "isDefault");
+  if ("amount" in record) record.amount = numericCell_(record.amount, spec, rowNumber, "amount");
   ["balance", "contribution"].forEach(function (field) {
-    if (field in record) record[field] = Number(record[field]) || 0;
+    if (field in record) record[field] = numericCell_(record[field], spec, rowNumber, field);
   });
   return record;
+}
+function numericCell_(value, spec, rowNumber, field) {
+  if (value === "" || value === null || value === undefined) return 0;
+  const number = Number(value);
+  if (!isFinite(number))
+    throw appError_(
+      "data_integrity",
+      "Invalid numeric value in " + spec.name + " row " + (rowNumber || "?") + ", field " + field + ".",
+      false,
+      "read",
+    );
+  return number;
+}
+function parseBooleanCell_(value, blankDefault, spec, rowNumber, field) {
+  if (value === "" || value === null || value === undefined) return blankDefault;
+  if (value === true || String(value).toLowerCase() === "true") return true;
+  if (value === false || String(value).toLowerCase() === "false") return false;
+  throw appError_(
+    "data_integrity",
+    "Invalid boolean value in " + spec.name + " row " + (rowNumber || "?") + ", field " + field + ".",
+    false,
+    "read",
+  );
 }
 function recordToRow_(spec, record) {
   return spec.fields.map(function (field) {
@@ -3693,6 +3746,22 @@ function recordToRow_(spec, record) {
       ? ""
       : record[field];
   });
+}
+function replaceSheetValues_(sheet, headers, rows, previousWidth) {
+  const width = Math.max(headers.length, previousWidth || 0);
+  const rowCount = Math.max(sheet.getLastRow(), rows.length + 1, 1);
+  const values = Array.from({ length: rowCount }, function () {
+    return Array(width).fill("");
+  });
+  headers.forEach(function (value, index) {
+    values[0][index] = value;
+  });
+  rows.forEach(function (row, rowIndex) {
+    row.forEach(function (value, columnIndex) {
+      if (columnIndex < width) values[rowIndex + 1][columnIndex] = value;
+    });
+  });
+  sheet.getRange(1, 1, rowCount, width).setValues(values);
 }
 function appendRows_(sheet, rows) {
   if (!rows.length) return;
@@ -3719,12 +3788,13 @@ function parsePostBody_(e) {
   }
 }
 function serializeCell_(value, field) {
-  if (field === "amount") return value === "" ? 0 : Number(value);
+  if (field === "amount") return value;
   if (field === "month") return normalizeMonthId_(value);
   if (field === "date" || field === "asOfDate") return normalizeDateId_(value);
   if (value instanceof Date) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ssXXX");
+    return value.toISOString();
   }
+  if (/At$/.test(field) && value !== "") return normalizeDateTime_(value);
   return value === null || value === undefined ? "" : String(value);
 }
 function normalizeDateId_(value) {
