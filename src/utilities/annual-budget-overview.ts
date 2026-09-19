@@ -61,6 +61,7 @@ function ranked(
 export function buildAnnualBudgetOverviews(
   transactions: ReadonlyArray<BudgetTransaction>,
   years: ReadonlyArray<number>,
+  today = new Date(),
 ): AnnualBudgetOverviews {
   const overviews = Object.fromEntries(
     years.map((year) => [
@@ -120,6 +121,51 @@ export function buildAnnualBudgetOverviews(
     categories.set(year, categoryTotals);
   });
 
+  const todayIso = today.toISOString().slice(0, 10);
+  const latestCurrentYearDate = transactions
+    .map((transaction) => transaction.date)
+    .filter(
+      (date) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+        date.startsWith(`${today.getFullYear()}-`) &&
+        date <= todayIso,
+    )
+    .sort()
+    .at(-1);
+
+  const priorTotalsFor = (
+    totalsByYear: Map<number, Map<string, { name: string; total: number }>>,
+    dimension: "vendor" | "category",
+    year: number,
+  ) => {
+    const totals = totalsByYear.get(year - 1) ?? new Map();
+    if (year !== today.getFullYear() || !latestCurrentYearDate) return totals;
+    const cutoff = `${year - 1}${latestCurrentYearDate.slice(4)}`;
+    const filtered = new Map<string, { name: string; total: number }>();
+    transactions.forEach((transaction) => {
+      if (
+        transaction.type !== "expense" ||
+        transactionYear(transaction.date) !== year - 1 ||
+        transaction.date > cutoff
+      )
+        return;
+      const amount = Number(transaction.amount);
+      if (!Number.isFinite(amount)) return;
+      const id =
+        dimension === "vendor"
+          ? transaction.vendorId || "unassigned-vendor"
+          : transaction.categoryId || "uncategorized";
+      const name =
+        dimension === "vendor"
+          ? transaction.vendor?.trim() || "Unassigned vendor"
+          : transaction.category?.trim() || "Uncategorized";
+      const item = filtered.get(id) ?? { name, total: 0 };
+      item.total += amount;
+      filtered.set(id, item);
+    });
+    return filtered;
+  };
+
   Object.values(overviews).forEach((overview) => {
     overview.netBalance = overview.totalIncome - overview.totalSpend;
     overview.savingsRate =
@@ -128,11 +174,11 @@ export function buildAnnualBudgetOverviews(
         : null;
     overview.topVendors = ranked(
       vendors.get(overview.year) ?? new Map(),
-      vendors.get(overview.year - 1) ?? new Map(),
+      priorTotalsFor(vendors, "vendor", overview.year),
     );
     overview.topCategories = ranked(
       categories.get(overview.year) ?? new Map(),
-      categories.get(overview.year - 1) ?? new Map(),
+      priorTotalsFor(categories, "category", overview.year),
     );
   });
   return overviews;

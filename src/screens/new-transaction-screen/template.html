@@ -29,11 +29,25 @@
   <form id="new-transaction-form" novalidate>
     <input type="hidden" name="type" value="expense" />
     <div class="new-transaction-page__grid">
-      <date-picker
-        id="new-transaction-date-inline"
-        class="new-transaction-page__calendar new-transaction-page__date--inline"
-        variant="inline"
-      ></date-picker>
+      <div class="new-transaction-page__entry-column">
+        <date-picker
+          id="new-transaction-date-inline"
+          class="new-transaction-page__calendar new-transaction-page__date--inline"
+          variant="inline"
+        ></date-picker>
+        <section class="new-transaction-page__batch-list" hidden aria-label="Batch entries">
+          <h2>Choose a date and amount</h2>
+          <div class="new-transaction-page__batch-cards"></div>
+          <custom-button
+            class="ghost-button new-transaction-page__add-entry"
+            leading-icon="plus"
+            data-action="add-batch-entry"
+            label="Add another entry"
+            type="button"
+          ></custom-button>
+          <p class="new-transaction-page__batch-notice" role="status" hidden></p>
+        </section>
+      </div>
 
       <div class="new-transaction-page__fields">
         <div class="new-transaction-page__amount-editor">
@@ -42,6 +56,10 @@
             min="0.01"
           ></currency-input>
         </div>
+
+        <p class="new-transaction-page__batch-section-title" hidden>
+          Add transaction details
+        </p>
 
         <div class="new-transaction-page__detail-list">
           <date-picker
@@ -90,12 +108,18 @@
             role="status"
             aria-live="polite"
           ></p>
-          <custom-button
-            class="primary-button"
-            data-action="submit-transaction"
-            type="submit"
-            label="Add transaction"
-          ></custom-button>
+          <div class="new-transaction-page__footer-actions">
+            <label class="new-transaction-page__batch-toggle" for="new-transaction-batch-toggle">
+              <input id="new-transaction-batch-toggle" type="checkbox" role="switch" />
+              <span>Batch entry</span>
+            </label>
+            <custom-button
+              class="primary-button"
+              data-action="submit-transaction"
+              type="submit"
+              label="Add transaction"
+            ></custom-button>
+          </div>
         </div>
       </div>
     </div>

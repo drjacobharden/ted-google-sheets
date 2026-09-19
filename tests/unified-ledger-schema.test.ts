@@ -4,8 +4,8 @@ const code = await Bun.file(new URL("../apps-script/Code.gs", import.meta.url)).
 
 describe("unified ledger Apps Script schema",()=>{
   test("versions and canonical fields are upgraded",()=>{
-    expect(code).toContain('setupVersion: "15"');
-    expect(code).toContain("apiVersion: 15");
+    expect(code).toContain('setupVersion: "16"');
+    expect(code).toContain("apiVersion: 16");
     expect(code).toContain('"Account ID",\n      "Source",\n      "Legacy Activity ID"');
     expect(code).toContain('debtPaymentCategoryId: "00000000-0000-4000-8000-000000000002"');
   });
@@ -28,7 +28,7 @@ describe("unified ledger Apps Script schema",()=>{
   test("migration is spreadsheet-scoped and never rewrites existing account IDs",()=>{
     const migration = code.slice(
       code.indexOf("function migrateUnifiedActivityV12_"),
-      code.indexOf("function getLedgerSheet_"),
+      code.indexOf("function repairAccountCategoryColumnV16_"),
     );
     expect(migration).toContain("APP.unifiedActivityMigrationProperty");
     expect(migration).toContain("===spreadsheet.getId()) return");
@@ -43,7 +43,7 @@ describe("unified ledger Apps Script schema",()=>{
   test("migration adopts matching account-aware rows without clearing their account IDs",()=>{
     const migration = code.slice(
       code.indexOf("function migrateUnifiedActivityV12_"),
-      code.indexOf("function getLedgerSheet_"),
+      code.indexOf("function repairAccountCategoryColumnV16_"),
     );
     expect(migration).toContain("same.accountId!==activity.accountId");
     expect(migration).toContain("same.legacyActivityId=activity.id");
@@ -147,20 +147,17 @@ describe("unified ledger Apps Script schema",()=>{
     expect(accountMigration).toContain('record.source === "paycheck" ? "deduction"');
     expect(accountMigration).toContain("item.asOfDate || investmentMonthEnd_(item.month)");
   });
-  test("ledger rebuild uses hydrated account data without per-row sheet reads",()=>{
-    const ledger = code.slice(
-      code.indexOf("function rebuildLedger_"),
-      code.indexOf("function safeSyncLedgerName_"),
-    );
-    expect(ledger).toContain("transaction.accountType");
-    expect(ledger).toContain("Ledger rebuild stopped before writing:");
-    expect(ledger).not.toContain("getRecordById_");
-    expect(ledger).not.toContain("clearContent()");
+  test("derived Ledger is not part of persistence or runtime maintenance",()=>{
+    expect(code).not.toContain("TABLES.ledger");
+    expect(code).not.toContain("function rebuildLedger_");
+    expect(code).not.toContain("function getLedgerSheet_");
+    expect(code).not.toContain("ledgerDirtyProperty");
+    expect(code).not.toContain('case "rebuildLedger"');
   });
   test("runtime bootstrap and repositories use Transactions rather than AccountActivity",()=>{
     const bootstrap = code.slice(code.indexOf("function bootstrapSpecs_"), code.indexOf("function readBootstrapWithSheetsApi_"));
     expect(bootstrap).not.toContain("TABLES.accountActivity");
-    const runtimeList = code.slice(code.indexOf("function listAccountActivity_"), code.indexOf("function accountTypeById_"));
+    const runtimeList = code.slice(code.indexOf("function listAccountActivity_"), code.indexOf("function legacyDebtBalance_"));
     expect(runtimeList).toContain("TABLES.transactions");
     expect(runtimeList).not.toContain("TABLES.accountActivity");
   });

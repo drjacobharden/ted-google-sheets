@@ -278,7 +278,9 @@ export function BudgetAPI(): BudgetAPIContract {
     "createdByName",
   ]);
   const RETRY_DELAYS = Object.freeze([2000, 5000, 15000, 30000, 60000]);
-  const BOOTSTRAP_TIMEOUT_MS = 15000;
+  const BOOTSTRAP_TIMEOUT_MS = 45000;
+  const BOOTSTRAP_MAX_ATTEMPTS = 3;
+  const MAX_AUTOMATIC_SYNC_ATTEMPTS = 6;
   const RETRYABLE_BOOTSTRAP_STATUSES = new Set([
     404, 408, 425, 429, 500, 502, 503, 504,
   ]);
@@ -290,6 +292,7 @@ export function BudgetAPI(): BudgetAPIContract {
   let entityRetryTimer = null;
   let batchEntitiesSupported = null;
   let appDataPromise = null;
+  let appDataInFlight = false;
 
   /** Handles the browserIsOffline operation for the budget data layer. */
   function browserIsOffline() {
@@ -600,7 +603,7 @@ export function BudgetAPI(): BudgetAPIContract {
     if (index < 0) throw new Error("That user could not be found.");
     const user = normalizeUser(input, { ...users[index], updatedAt: now() });
     const saved = getConfig().endpoint
-      ? await request("updateUser", { body: { user } })
+      ? await request("updateUser", { body: { user, base: users[index] } })
       : user;
     users[index] = saved;
     cacheUsers(users);
@@ -848,7 +851,7 @@ export function BudgetAPI(): BudgetAPIContract {
       assignment: "updateAssignment",
     }[kind];
     const saved = getConfig().endpoint
-      ? await request(action, { body: { [kind]: record } })
+      ? await request(action, { body: { [kind]: record, base: records[index] } })
       : record;
     records[index] = saved;
     writeArray(key, records);
@@ -1166,6 +1169,8 @@ export function BudgetAPI(): BudgetAPIContract {
           kind: item.kind,
           id: item.record.id,
           error: error.message,
+          code: error.code || "server",
+          retryable: error.retryable === true,
         });
       }
     }
@@ -1192,6 +1197,8 @@ export function BudgetAPI(): BudgetAPIContract {
           kind: item.kind,
           id: item.record.id,
           error: error.message,
+          code: error.code || "server",
+          retryable: error.retryable === true,
         });
       }
     }
@@ -1319,7 +1326,7 @@ export function BudgetAPI(): BudgetAPIContract {
           result.reconciled.map((item) => item.requestedId),
         );
         const failures = new Map(
-          result.failed.map((item) => [item.id, item.error]),
+          result.failed.map((item) => [item.id, item]),
         );
         result.saved.forEach((item) =>
           replaceCachedEntity(item.kind, item.record.id, item.record),
@@ -1335,12 +1342,27 @@ export function BudgetAPI(): BudgetAPIContract {
           )
           .map((item) =>
             failures.has(item.record.id)
-              ? {
-                  ...item,
-                  status: "failed",
-                  error: failures.get(item.record.id),
-                  nextRetryAt: 0,
-                }
+              ? (() => {
+                  const failure = failures.get(item.record.id);
+                  const attempts = item.attempts + 1;
+                  if (failure.retryable === true && attempts < MAX_AUTOMATIC_SYNC_ATTEMPTS) {
+                    const baseDelay = RETRY_DELAYS[Math.min(attempts - 1, RETRY_DELAYS.length - 1)];
+                    return {
+                      ...item,
+                      status: "pending",
+                      attempts,
+                      error: failure.error,
+                      nextRetryAt: Date.now() + baseDelay + Math.floor(Math.random() * Math.max(250, baseDelay / 2)),
+                    };
+                  }
+                  return {
+                    ...item,
+                    status: "failed",
+                    error: failure.error,
+                    failureCode: failure.code || "",
+                    nextRetryAt: 0,
+                  };
+                })()
               : item,
           );
         writeEntityOutbox(remaining);
@@ -1389,8 +1411,20 @@ export function BudgetAPI(): BudgetAPIContract {
               };
             }
             const attempts = item.attempts + 1;
-            const delay =
-              RETRY_DELAYS[Math.min(attempts - 1, RETRY_DELAYS.length - 1)];
+            const permanent = error?.isApiError && error?.retryable !== true;
+            if (permanent || attempts >= MAX_AUTOMATIC_SYNC_ATTEMPTS)
+              return {
+                ...item,
+                status: "failed",
+                attempts,
+                nextRetryAt: 0,
+                failureCode: permanent ? error.code || "server" : "retry_exhausted",
+                error: permanent
+                  ? error.message
+                  : `${error.message} Automatic retries paused after ${attempts} attempts.`,
+              };
+            const baseDelay = RETRY_DELAYS[Math.min(attempts - 1, RETRY_DELAYS.length - 1)];
+            const delay = baseDelay + Math.floor(Math.random() * Math.max(250, baseDelay / 2));
             return {
               ...item,
               status: "pending",
@@ -1512,10 +1546,17 @@ export function BudgetAPI(): BudgetAPIContract {
   /** Handles the normalizeResponse operation for the budget data layer. */
   function normalizeResponse(payload) {
     if (payload && payload.ok === false) {
+      const detail = payload.error && typeof payload.error === "object"
+        ? payload.error
+        : { message: payload.error || payload.message };
       const error = new Error(
-        payload.error || payload.message || "The sheet returned an error.",
+        detail.message || "The sheet returned an error.",
       );
       error.isApiError = true;
+      error.code = detail.code || "server";
+      error.retryable = detail.retryable === true;
+      error.requestId = detail.requestId || payload.meta?.requestId || "";
+      error.phase = detail.phase || "request";
       throw error;
     }
     if (payload?.warning)
@@ -1534,32 +1575,35 @@ export function BudgetAPI(): BudgetAPIContract {
       : null;
     let response;
     try {
+      const requestId = uuid();
       if (options.body) {
         response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action, ...options.body }),
+          body: JSON.stringify({ action, requestId, ...options.body }),
           redirect: "follow",
           signal: controller?.signal,
         });
       } else {
         const url = new URL(endpoint);
         url.searchParams.set("action", action);
+        url.searchParams.set("requestId", requestId);
         url.searchParams.set("_", Date.now().toString());
         response = await fetch(url, {
           redirect: "follow",
           signal: controller?.signal,
         });
       }
+      if (!response.ok) {
+        const error = new Error(`Request failed (${response.status}).`);
+        error.status = response.status;
+        error.retryable = RETRYABLE_BOOTSTRAP_STATUSES.has(response.status);
+        throw error;
+      }
+      return normalizeResponse(await response.json());
     } finally {
       if (timeout) clearTimeout(timeout);
     }
-    if (!response.ok) {
-      const error = new Error(`Request failed (${response.status}).`);
-      error.status = response.status;
-      throw error;
-    }
-    return normalizeResponse(await response.json());
   }
 
   /** Returns whether a failed bootstrap is safe and useful to retry once. */
@@ -1567,6 +1611,7 @@ export function BudgetAPI(): BudgetAPIContract {
     return (
       error?.name === "AbortError" ||
       error?.name === "TypeError" ||
+      error?.retryable === true ||
       RETRYABLE_BOOTSTRAP_STATUSES.has(error?.status)
     );
   }
@@ -1574,20 +1619,21 @@ export function BudgetAPI(): BudgetAPIContract {
   /** Requests data, retrying one interrupted bootstrap without retrying writes. */
   async function request(action, options = {}) {
     const isBootstrap = action === "bootstrap" && !options.body;
-    try {
-      return await requestOnce(
-        action,
-        options,
-        isBootstrap ? BOOTSTRAP_TIMEOUT_MS : 0,
-      );
-    } catch (error) {
-      if (!isBootstrap || !isRetryableBootstrapError(error)) throw error;
-      window.dispatchEvent(
-        new CustomEvent("budget:data-refresh-retrying", {
-          detail: { error, attempt: 2, maxAttempts: 2 },
-        }),
-      );
-      return requestOnce(action, options, BOOTSTRAP_TIMEOUT_MS);
+    for (let attempt = 1; attempt <= (isBootstrap ? BOOTSTRAP_MAX_ATTEMPTS : 1); attempt += 1) {
+      try {
+        return await requestOnce(action, options, isBootstrap ? BOOTSTRAP_TIMEOUT_MS : 0);
+      } catch (error) {
+        if (!isBootstrap || !isRetryableBootstrapError(error) || attempt >= BOOTSTRAP_MAX_ATTEMPTS)
+          throw error;
+        const baseDelay = RETRY_DELAYS[Math.min(attempt - 1, RETRY_DELAYS.length - 1)];
+        const delay = baseDelay + Math.floor(Math.random() * Math.max(250, baseDelay / 2));
+        window.dispatchEvent(
+          new CustomEvent("budget:data-refresh-retrying", {
+            detail: { error, attempt: attempt + 1, maxAttempts: BOOTSTRAP_MAX_ATTEMPTS, delay },
+          }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
   }
 
@@ -1814,12 +1860,17 @@ export function BudgetAPI(): BudgetAPIContract {
 
   /** Handles the loadAppData operation for the budget data layer. */
   function loadAppData(options = {}) {
-    if (options.refresh) appDataPromise = null;
+    if (options.refresh && !appDataInFlight) appDataPromise = null;
     if (!appDataPromise) {
-      appDataPromise = fetchAppData().catch((error) => {
-        appDataPromise = null;
-        throw error;
-      });
+      appDataInFlight = true;
+      appDataPromise = fetchAppData()
+        .catch((error) => {
+          appDataPromise = null;
+          throw error;
+        })
+        .finally(() => {
+          appDataInFlight = false;
+        });
     }
     return appDataPromise;
   }
@@ -2146,14 +2197,17 @@ export function BudgetAPI(): BudgetAPIContract {
         existing.currentRecord;
       item = {
         ...existing,
-        operation: existing.operation,
+        // Opening a transaction in the drawer means it already exists in the
+        // ledger. Always persist the edit through the update endpoint, even if
+        // a stale create outbox entry remains for the same ID (for example,
+        // after Sheets accepted a create but the client missed its response).
+        operation: "update",
         record,
-        baseRecord:
-          existing.operation === "create"
-            ? null
-            : reviewingConflict
-              ? openedRecord
-              : existing.baseRecord,
+        baseRecord: reviewingConflict
+          ? openedRecord
+          : existing.operation === "create"
+            ? openedRecord
+            : existing.baseRecord,
         revision: existing.revision + 1,
         status: "pending",
         attempts: 0,
@@ -2461,16 +2515,30 @@ export function BudgetAPI(): BudgetAPIContract {
             }
             if (saved) return [];
             if (failure)
-              return [
-                {
-                  ...item,
-                  status: "failed",
-                  error: failure.error,
-                  failureCode: failure.code || "",
-                  currentRecord: failure.current || null,
-                  nextRetryAt: 0,
-                },
-              ];
+              {
+                const attempts = snapshot.attempts + 1;
+                if (failure.retryable === true && attempts < MAX_AUTOMATIC_SYNC_ATTEMPTS) {
+                  const baseDelay = RETRY_DELAYS[Math.min(attempts - 1, RETRY_DELAYS.length - 1)];
+                  return [{
+                    ...item,
+                    status: "pending",
+                    attempts,
+                    error: failure.error,
+                    failureCode: failure.code || "",
+                    nextRetryAt: Date.now() + baseDelay + Math.floor(Math.random() * Math.max(250, baseDelay / 2)),
+                  }];
+                }
+                return [
+                  {
+                    ...item,
+                    status: "failed",
+                    error: failure.error,
+                    failureCode: failure.code || "",
+                    currentRecord: failure.current || null,
+                    nextRetryAt: 0,
+                  },
+                ];
+              }
             return [
               {
                 ...item,
@@ -2533,8 +2601,21 @@ export function BudgetAPI(): BudgetAPIContract {
                 error: snapshot.error,
               };
             const attempts = item.attempts + 1;
-            const delay =
+            const permanent = error?.isApiError && error?.retryable !== true;
+            if (permanent || attempts >= MAX_AUTOMATIC_SYNC_ATTEMPTS)
+              return {
+                ...item,
+                status: "failed",
+                attempts,
+                nextRetryAt: 0,
+                failureCode: permanent ? error.code || "server" : "retry_exhausted",
+                error: permanent
+                  ? error.message
+                  : `${error.message} Automatic retries paused after ${attempts} attempts.`,
+              };
+            const baseDelay =
               RETRY_DELAYS[Math.min(attempts - 1, RETRY_DELAYS.length - 1)];
+            const delay = baseDelay + Math.floor(Math.random() * Math.max(250, baseDelay / 2));
             return {
               ...item,
               status: "pending",
@@ -2607,11 +2688,17 @@ export function BudgetAPI(): BudgetAPIContract {
           item.attempts > 0 &&
           item.nextRetryAt > Date.now(),
       );
-      if (retrying)
-        throw new Error(
-          retrying.error ||
-            "The transaction sync paused and is ready to retry.",
+      if (retrying) {
+        onProgress?.({
+          completed: ids.length - targets.size,
+          total: ids.length,
+          status: "waiting_to_retry",
+          nextRetryAt: retrying.nextRetryAt,
+        });
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(1000, Math.max(0, retrying.nextRetryAt - Date.now()))),
         );
+      }
       await syncOutbox();
       await Promise.resolve();
     }
@@ -2818,7 +2905,19 @@ export function BudgetAPI(): BudgetAPIContract {
     if (endpointOverride !== undefined)
       saveConfig({ endpoint: endpointOverride });
     try {
-      return await request("health");
+      const readiness = await request("readiness");
+      if (readiness?.status !== "ready") {
+        const details = [
+          ...(readiness?.missingSheets || []),
+          ...(readiness?.incompatibleSheets || []),
+        ];
+        throw new Error(
+          details.length
+            ? `The budget Sheet is not ready: ${details.join(", ")}.`
+            : "The budget Sheet is not ready.",
+        );
+      }
+      return readiness;
     } finally {
       if (endpointOverride !== undefined) saveConfig(current);
     }

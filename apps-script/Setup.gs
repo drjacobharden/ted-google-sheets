@@ -5,8 +5,31 @@ function onOpen() {
     .createMenu("Track Every Dollar")
     .addItem("Set up budget", "setupBudget")
     .addSeparator()
-    .addItem("Rebuild Ledger", "rebuildLedgerFromMenu")
+    .addItem("Check data integrity", "checkBudgetIntegrity")
     .addToUi();
+}
+
+function checkBudgetIntegrity() {
+  const report = inspectDataIntegrity_(SpreadsheetApp.getActiveSpreadsheet());
+  const issues = [];
+  Object.keys(report.tables).forEach(function (name) {
+    const table = report.tables[name];
+    if (table.required && !table.present) issues.push(name + " is missing");
+    if (table.present && !table.headersValid) issues.push(name + " headers differ");
+    if (table.duplicateIds && table.duplicateIds.length) issues.push(name + " has duplicate IDs");
+    if (table.blankIdRows && table.blankIdRows.length) issues.push(name + " has rows with blank IDs");
+    if (table.invalidNumbers && table.invalidNumbers.length) issues.push(name + " has invalid numbers");
+    if (table.invalidDates && table.invalidDates.length) issues.push(name + " has invalid dates");
+  });
+  if (report.suspiciousAccountCategoryRows.length)
+    issues.push("Accounts has unexpected values in column K");
+  SpreadsheetApp.getUi().alert(
+    issues.length ? "Integrity issues found" : "Integrity check passed",
+    issues.length ? issues.join("\n") : "No structural data problems were detected.",
+    SpreadsheetApp.getUi().ButtonSet.OK,
+  );
+  console.log(JSON.stringify(report));
+  return report;
 }
 
 function setupBudget() {
@@ -19,7 +42,7 @@ function setupBudget() {
     const status = getSetupStatus();
     ui.alert(
       "Budget initialized",
-      "The normalized budget sheets are ready and the Ledger has been rebuilt.",
+      "The normalized budget sheets are ready. Connect the app with the deployed /exec URL.",
       ui.ButtonSet.OK,
     );
     return status;
@@ -38,15 +61,28 @@ function setup() {
 }
 
 function initializeSpreadsheet_(spreadsheet) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
   const properties = PropertiesService.getScriptProperties();
-  // This assignment must happen before model access. A copied bound script can
-  // retain the template's properties, but must always use its active copy.
-  properties.setProperty(APP.spreadsheetIdProperty, spreadsheet.getId());
-  // Remove the deployment URL stored by setup version 1, if present.
-  properties.deleteProperty("WEB_APP_URL");
-  ensureDataModel_();
-  rebuildLedger_();
-  properties.setProperty(APP.setupVersionProperty, APP.setupVersion);
+  const spreadsheetId = spreadsheet.getId();
+  try {
+    properties.setProperty(APP.setupStateProperty, "in_progress:" + spreadsheetId);
+    // This assignment must happen before model access. A copied bound script can
+    // retain the template's properties, but must always use its active copy.
+    properties.setProperty(APP.spreadsheetIdProperty, spreadsheetId);
+    properties.deleteProperty("API_TOKEN");
+    // Remove the deployment URL stored by setup version 1, if present.
+    properties.deleteProperty("WEB_APP_URL");
+    ensureDataModel_();
+    SpreadsheetApp.flush();
+    properties.setProperty(APP.setupVersionProperty, APP.setupVersion);
+    properties.setProperty(APP.setupStateProperty, "completed:" + spreadsheetId);
+  } catch (error) {
+    properties.setProperty(APP.setupStateProperty, "failed:" + spreadsheetId);
+    throw error;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function getSetupStatus() {
@@ -54,7 +90,10 @@ function getSetupStatus() {
   const properties = PropertiesService.getScriptProperties();
   const configuredId = properties.getProperty(APP.spreadsheetIdProperty);
   const configuredVersion = properties.getProperty(APP.setupVersionProperty);
-  const requiredSheets = Object.keys(TABLES).map(function (key) {
+  const setupState = properties.getProperty(APP.setupStateProperty);
+  const requiredSheets = Object.keys(TABLES).filter(function (key) {
+    return key !== "accountActivity";
+  }).map(function (key) {
     return TABLES[key].name;
   });
   const missingSheets = spreadsheet
@@ -62,6 +101,18 @@ function getSetupStatus() {
         return !spreadsheet.getSheetByName(name);
       })
     : requiredSheets;
+  const incompatibleSheets = spreadsheet
+    ? Object.keys(TABLES)
+        .filter(function (key) { return key !== "accountActivity"; })
+        .filter(function (key) {
+          const spec = TABLES[key];
+          const sheet = spreadsheet.getSheetByName(spec.name);
+          if (!sheet) return false;
+          const headers = sheet.getRange(1, 1, 1, spec.headers.length).getValues()[0];
+          return !headersMatch_(headers, spec.headers);
+        })
+        .map(function (key) { return TABLES[key].name; })
+    : [];
   const activeSpreadsheetId = spreadsheet ? spreadsheet.getId() : "";
 
   return {
@@ -69,35 +120,16 @@ function getSetupStatus() {
       spreadsheet &&
       configuredId === activeSpreadsheetId &&
       configuredVersion === APP.setupVersion &&
-      missingSheets.length === 0,
+      setupState === "completed:" + activeSpreadsheetId &&
+      missingSheets.length === 0 &&
+      incompatibleSheets.length === 0,
     ),
     setupVersion: configuredVersion,
     currentSetupVersion: APP.setupVersion,
+    setupState: setupState,
     spreadsheetId: activeSpreadsheetId,
     spreadsheetName: spreadsheet ? spreadsheet.getName() : "",
     missingSheets: missingSheets,
-    ledgerNeedsRebuild: isLedgerDirty_(),
+    incompatibleSheets: incompatibleSheets,
   };
-}
-
-function rebuildLedgerFromMenu() {
-  const ui = SpreadsheetApp.getUi();
-  try {
-    const status = getSetupStatus();
-    if (!status.initialized) {
-      throw new Error(
-        "Initialize this budget from TED \u2192 Set up budget first.",
-      );
-    }
-    const result = rebuildLedger();
-    ui.alert(
-      "Ledger rebuilt",
-      result.rows + " transaction rows were rebuilt.",
-      ui.ButtonSet.OK,
-    );
-    return result;
-  } catch (error) {
-    ui.alert("Ledger rebuild failed", errorMessage_(error), ui.ButtonSet.OK);
-    throw error;
-  }
 }
