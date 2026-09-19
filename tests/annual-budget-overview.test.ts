@@ -112,6 +112,23 @@ describe("annual budget overviews", () => {
       inflationRate: 25,
     });
   });
+
+  test("uses the current-year latest date as the prior-year ranking cutoff", () => {
+    const overviews = buildAnnualBudgetOverviews(
+      [
+        transaction("current", "2026-06-10", 250, "expense"),
+        transaction("prior-through", "2025-06-10", 100, "expense"),
+        transaction("prior-after", "2025-06-11", 200, "expense"),
+      ],
+      [2026],
+      new Date("2026-06-15T12:00:00Z"),
+    );
+
+    expect(overviews[2026].topVendors[0]).toMatchObject({
+      priorYearTotal: 100,
+      inflationRate: 150,
+    });
+  });
 });
 
 describe("savings rate chart breakdown", () => {
