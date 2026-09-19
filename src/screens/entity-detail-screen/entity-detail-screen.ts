@@ -170,7 +170,7 @@ export class EntityDetailScreen
   #comparisonSubline!: HTMLElement;
   #chart!: DataChart;
   #chartMode!: DropdownMenu;
-  #chartDisplay: EntityChartDisplay = "monthly-spend";
+  #chartDisplay: EntityChartDisplay = "cumulative-spend";
   #table!: DataTable<BudgetTransaction>;
   #filterBar!: FilterBar<BudgetTransaction>;
   #monthSelector!: DropdownMenu;
@@ -200,7 +200,7 @@ export class EntityDetailScreen
     }
     this.#chartDisplay =
       selectedEntityCharts.get(`${this.#selected.kind}:${this.#selected.id}`) ??
-      "monthly-spend";
+      "cumulative-spend";
     if (this.#listening) return;
     this.#listening = true;
 
@@ -674,13 +674,13 @@ export class EntityDetailScreen
                 title: "Income",
                 selectionLabel: "Cumulative income",
                 group: "Cumulative",
+                isDefaultValue: true,
               },
               {
                 key: "monthly-income",
                 title: "Income",
                 selectionLabel: "Monthly income",
                 group: "Monthly",
-                isDefaultValue: true,
               },
             ]
           : [
@@ -689,13 +689,13 @@ export class EntityDetailScreen
                 title: "Spend",
                 selectionLabel: "Cumulative spend",
                 group: "Cumulative",
+                isDefaultValue: true,
               },
               {
                 key: "monthly-spend",
                 title: "Spend",
                 selectionLabel: "Monthly spend",
                 group: "Monthly",
-                isDefaultValue: true,
               },
             ];
     const selected = items.some((item) => item.key === this.#chartDisplay)
