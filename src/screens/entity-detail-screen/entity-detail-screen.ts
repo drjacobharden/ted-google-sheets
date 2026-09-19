@@ -762,7 +762,6 @@ export class EntityDetailScreen
       this.#selected.id,
       year - 1,
       new Date(year - 1, 11, 31),
-      previousThroughDate,
     );
     this.#chart.data = entityChartData(
       currentRows,

@@ -1319,8 +1319,16 @@ export class BudgetOverviewScreen
       accounts,
       this.#selectedYear - 1,
       new Date(this.#selectedYear, 11, 31),
-      previousYearThroughDate,
     );
+    const comparisonPreviousRows = previousYearThroughDate
+      ? buildBudgetOverviewChartMonths(
+          transactions,
+          accounts,
+          this.#selectedYear - 1,
+          new Date(this.#selectedYear, 11, 31),
+          previousYearThroughDate,
+        )
+      : previousRows;
     const hasData = rows.some((row) => row.hasData);
     const totals = rows.reduce(
       (total, row) => ({
@@ -1330,7 +1338,7 @@ export class BudgetOverviewScreen
       }),
       { income: 0, spend: 0, savings: 0 },
     );
-    const previousTotals = previousRows.reduce(
+    const previousTotals = comparisonPreviousRows.reduce(
       (total, row) => ({
         income: total.income + (row.hasData ? row.income : 0),
         spend: total.spend + (row.hasData ? row.spend : 0),
@@ -1338,7 +1346,7 @@ export class BudgetOverviewScreen
       }),
       { income: 0, spend: 0, savings: 0 },
     );
-    const hasPreviousData = previousRows.some((row) => row.hasData);
+    const hasPreviousData = comparisonPreviousRows.some((row) => row.hasData);
     this.#totalBalance.textContent = hasData
       ? money(totals.savings, false)
       : "—";
